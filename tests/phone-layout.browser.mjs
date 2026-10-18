@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(process.env.POCKET_PLAYWRIGHT_MODULE || '/tmp/st-tools-browser/package.json')('playwright');
@@ -17,7 +18,7 @@ try {
   check('home uses story time', await page.locator('.home-clock text').textContent(), '2358');
   await page.clock.fastForward(61000);
   check('real minutes do not advance story time', await page.locator('.home-clock text').textContent(), '2358');
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   check('chat fills the phone width', await page.evaluate(() => {
     const root = document.querySelector('.pocket-phone').shadowRoot;
@@ -42,7 +43,7 @@ try {
     return time.bottom <= reply.top;
   }), true);
   check('reply uses the same story time', await page.getByRole('log').locator('.message-row').last().locator('time').textContent(), '23:58');
-  await page.getByRole('button', { name: '论坛', exact: true }).click();
+  await openApp(page, '论坛');
   check('forum fills the phone width without an outer border', await page.evaluate(() => {
     const root = document.querySelector('.pocket-phone').shadowRoot, shell = root.querySelector('.phone-shell'), main = root.querySelector('.phone-main');
     return Math.abs(shell.getBoundingClientRect().width - main.getBoundingClientRect().width) < 1 && getComputedStyle(shell).borderTopWidth === '0px';

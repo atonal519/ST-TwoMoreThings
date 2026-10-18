@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
@@ -31,10 +32,10 @@ try {
   const before = await page.locator('.home-clock text').textContent();
   await page.clock.fastForward(61000);
   assert.notEqual(await page.locator('.home-clock text').textContent(), before, '分钟变化应更新数字');
-  assert.equal(await page.getByRole('button', { name: '短信', exact: true }).count(), 1);
+  assert.equal(await page.getByRole('button', { name: '短信', exact: true }).count(), 0, '锁屏没有应用快捷入口');
   await page.locator('.home-art').evaluate(image => image.decode());
   await page.screenshot({ path: `${output}/local-home.png` });
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   const initialMessages = page.getByRole('log').locator('.message-row');
   assert.equal(await initialMessages.nth(2).locator('.avatar').isVisible(), true, '连续的char短信只在首条显示头像');
@@ -63,8 +64,8 @@ try {
   await page.getByText('我们晚点在书店见。', { exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.previewHarness.requests.length), 0);
   await page.getByRole('textbox', { name: '短信内容' }).fill('这句仍是草稿。');
-  await page.getByRole('button', { name: '论坛', exact: true }).click();
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '论坛');
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   assert.equal(await page.getByRole('textbox', { name: '短信内容' }).inputValue(), '这句仍是草稿。');
   await page.getByRole('button', { name: '继续', exact: true }).click();
@@ -74,9 +75,9 @@ try {
   await page.getByRole('button', { name: '聊天资料', exact: true }).click();
   await page.getByLabel('线上聊天方式', { exact: true }).waitFor();
   assert.equal(await page.getByText('性格', { exact: true }).count(), 0, '性格依据不在编辑页面展示');
-  await page.getByRole('button', { name: '返回', exact: true }).click();
+  await page.locator('.post-heading').getByRole('button', { name: '返回', exact: true }).click();
   await page.screenshot({ path: `${output}/local-chat.png` });
-  await page.getByRole('button', { name: '论坛', exact: true }).click();
+  await openApp(page, '论坛');
   const oldPost = await page.locator('.post-title').first().textContent();
   await page.getByRole('button', { name: '刷新', exact: true }).click();
   await page.waitForFunction(old => document.querySelector('.pocket-phone').shadowRoot.querySelector('.post-title')?.textContent !== old, oldPost);
@@ -85,7 +86,7 @@ try {
   await page.getByRole('heading', { name: /回帖/ }).waitFor();
   assert.equal(await page.evaluate(() => window.previewHarness.requests.length), 2);
   await page.screenshot({ path: `${output}/local-forum.png` });
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await openApp(page, '设置');
   if (await page.getByRole('button', { name: '内容设置', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '内容设置', exact: true }).click();
   await page.getByRole('switch', { name: '短信带入正文' }).check();
   await page.waitForFunction(() => window.previewHarness.metadata.pocketPhone.injectEnabled === true);
@@ -102,13 +103,16 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: `${output}/local-home-mobile.png` });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   await page.screenshot({ path: `${output}/local-chat-mobile.png` });
   const feed = page.getByRole('log', { name: '短信记录' });
   assert.ok(await feed.evaluate(x => x.clientHeight > 150));
   await page.getByRole('button', { name: '关闭手机', exact: true }).click();
   await page.getByRole('button', { name: '打开两三事', exact: true }).click();
+  await page.locator('.view-desktop').waitFor();
+  await openApp(page, '短信');
+  await page.getByRole('button', { name: /林舟/ }).click();
   await page.getByRole('log', { name: '短信记录' }).waitFor();
   assert.deepEqual(errors, []);
   console.log('Browser integration passed: live clock, navigation, drafts, send/continue, profile, forum, shared API selection, prompt switch, reopen, mobile sizing. Simulated host only; no real model calls.');

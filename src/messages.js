@@ -2,10 +2,11 @@ import { parsePayload, parseJsonObject } from './api.js';
 import { CONTACTS_PROMPT, MESSAGES_PROMPT } from './prompts.js';
 import { readTimeline } from './timeline.js';
 import { normalizeContent, RICH_MESSAGES_PROMPT } from './content.js';
+import { CALENDAR_PROMPT } from './calendar.js';
 
 export function record(role, text, clock, translation, batch) {
   const now = new Date();
-  // createdAt 保留实际保存顺序；可见时间和剧情日期在发出时确定，之后不追改历史短信。
+  // createdAt 记录消息创建时间，供通知排序；可见时间和剧情日期在创建时确定，之后不追改历史短信。
   return { id: globalThis.crypto.randomUUID(), role, text, createdAt: now.toISOString(), timeLabel: clock.time,
     ...(translation ? { translation } : {}),
     ...(batch ? { batch: { key: batch.key, label: batch.label } } : {}),
@@ -42,7 +43,7 @@ export function createMessageService({ target, store, contextReader, modelClient
       const context = await contextReader.readForContact(id);
       const clock = context.clock;
       const reply = await modelClient.complete({
-        system: `${MESSAGES_PROMPT}\n${RICH_MESSAGES_PROMPT}`,
+        system: `${MESSAGES_PROMPT}\n${RICH_MESSAGES_PROMPT}${context.calendar ? `\n${CALENDAR_PROMPT}` : ''}`,
         messages: [{ role: 'user', content: JSON.stringify(context) }],
       });
       const answer = parseJsonObject(reply);

@@ -7,10 +7,79 @@ export function renderSettings(state, { ui, busy, apiSettings, entries, control 
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
   const current = sources.find(source => refKey(source.ref) === refKey(selected));
   const manual = ui.manual || !sources.length, background = homeImage(state), preferences = entries.read();
-  const drawer = (key, title, content) => `<section class="settings-drawer"><button type="button" class="settings-drawer-toggle" data-drawer="${key}" aria-expanded="${ui.drawers[key]}"><span>${title}</span>${icon('next')}</button>${ui.drawers[key] ? `<div class="settings-drawer-body">${content}</div>` : ''}</section>`;
-  const entrySwitch = (key, label) => `<label class="compact-switch-row"><span>${label}</span><span class="switch"><input type="checkbox" role="switch" aria-label="${label}" data-entry-preference="${key}" ${preferences[key] ? 'checked' : ''} ${busy.has('entry') ? 'disabled' : ''}><span></span></span></label>`;
-  const connection = `<label class="field-label" for="api-source">使用的配置</label><select id="api-source" aria-label="使用的配置">${!manual && !current ? '<option value="" selected disabled>请选择现有连接</option>' : ''}<option value="manual" ${manual ? 'selected' : ''}>自行填写</option>${sources.map(source => `<option value="${escape(refKey(source.ref))}" ${!manual && refKey(source.ref) === refKey(selected) ? 'selected' : ''}>${escape(source.label)}</option>`).join('')}</select>${!manual ? current ? `<div class="connection-summary"><span class="connection-dot"></span><strong>${escape(current.model || '尚未选择模型')}</strong></div>` : '' : `<form class="api-form"><label class="field-label" for="api-url">接口地址</label><input id="api-url" name="url" type="url" placeholder="https://…/v1" value="${escape(ui.apiDraft.url || '')}" required><label class="field-label" for="api-key">密钥</label><input id="api-key" name="key" type="password" placeholder="输入 API 密钥" value="${escape(ui.apiDraft.key || '')}" autocomplete="off" required>${renderModelPicker(ui, busy)}<button type="submit" class="save-button" ${busy.has('api') ? 'disabled' : ''}>保存</button></form>`}`;
-  const appearance = `<label class="field-label" for="phone-theme">主题</label><select id="phone-theme" aria-label="外观主题"><option value="day" ${state.theme !== 'night' ? 'selected' : ''}>日间 · 回声</option><option value="night" ${state.theme === 'night' ? 'selected' : ''}>夜间 · 深蓝</option></select>${entrySwitch('fabShow', '悬浮球')}${entrySwitch('qrShow', 'QR')}<span class="field-label">主页背景</span><div class="wallpaper-editor"><img src="${escape(background.src)}" alt="主页背景预览"><div><label class="wallpaper-picker ${busy.has('wallpaper') ? 'is-busy' : ''}">${busy.has('wallpaper') ? '保存中…' : '选择图片'}<input id="wallpaper-file" type="file" accept="image/*" aria-label="选择主页背景" ${busy.has('wallpaper') ? 'disabled' : ''}></label>${background.custom ? action('restore-wallpaper', '恢复默认', '', 'quiet-button', busy.has('wallpaper')) : ''}</div></div>`;
-  const content = `<label class="compact-switch-row"><span>短信带入正文</span><span class="switch"><input id="inject-enabled" type="checkbox" role="switch" aria-label="短信带入正文" ${state.injectEnabled ? 'checked' : ''}><span></span></span></label>${action('authoring', '导出随卡包', '', 'quiet-button', !control.isEnabled())}`;
-  return `${pageHeading('设置')}<label class="compact-switch-row master-switch"><span>启用两三事</span><span class="switch"><input id="phone-enabled" type="checkbox" role="switch" aria-label="启用两三事" ${control.isEnabled() ? 'checked' : ''} ${busy.has('enabled') ? 'disabled' : ''}><span></span></span></label><section class="settings-section"><button type="button" class="my-profile" data-action="edit-user" aria-label="编辑我的资料" ${control.isEnabled() ? '' : 'disabled'}>${avatar(state.userProfile || { name: ui.defaultUser })}<span><strong>${escape(displayName(state.userProfile || { name: ui.defaultUser }))}</strong><small>我的资料</small></span>${icon('next')}</button></section>${drawer('connection', '连接设置', connection)}${drawer('appearance', '外观设置', appearance)}${drawer('content', '内容设置', content)}`;
+  const drawer = (key, title, content) => `<section class="settings-drawer">
+    <button type="button" class="settings-drawer-toggle" data-drawer="${key}" aria-expanded="${ui.drawers[key]}">
+      <span>${title}</span>${icon('next')}
+    </button>
+    ${ui.drawers[key] ? `<div class="settings-drawer-body">${content}</div>` : ''}
+  </section>`;
+  const entrySwitch = (key, label) => `<label class="compact-switch-row">
+    <span>${label}</span>
+    <span class="switch">
+      <input type="checkbox" role="switch" aria-label="${label}" data-entry-preference="${key}" ${preferences[key] ? 'checked' : ''} ${busy.has('entry') ? 'disabled' : ''}>
+      <span></span>
+    </span>
+  </label>`;
+  const connectionDetails = manual ? `<form class="api-form">
+    <label class="field-label" for="api-url">接口地址</label>
+    <input id="api-url" name="url" type="url" placeholder="https://…/v1" value="${escape(ui.apiDraft.url || '')}" required>
+    <label class="field-label" for="api-key">密钥</label>
+    <input id="api-key" name="key" type="password" placeholder="输入 API 密钥" value="${escape(ui.apiDraft.key || '')}" autocomplete="off" required>
+    ${renderModelPicker(ui, busy)}
+    <button type="submit" class="save-button" ${busy.has('api') ? 'disabled' : ''}>保存</button>
+  </form>` : current ? `<div class="connection-summary">
+    <span class="connection-dot"></span>
+    <strong>${escape(current.model || '尚未选择模型')}</strong>
+  </div>` : '';
+  const connection = `<label class="field-label" for="api-source">使用的配置</label>
+    <select id="api-source" aria-label="使用的配置">
+      ${!manual && !current ? '<option value="" selected disabled>请选择现有连接</option>' : ''}
+      <option value="manual" ${manual ? 'selected' : ''}>自行填写</option>
+      ${sources.map(source => `<option value="${escape(refKey(source.ref))}" ${!manual && refKey(source.ref) === refKey(selected) ? 'selected' : ''}>${escape(source.label)}</option>`).join('')}
+    </select>
+    ${connectionDetails}`;
+  const appearance = `<label class="field-label" for="phone-theme">主题</label>
+    <select id="phone-theme" aria-label="外观主题">
+      <option value="day" ${state.theme !== 'night' ? 'selected' : ''}>日间 · 回声</option>
+      <option value="night" ${state.theme === 'night' ? 'selected' : ''}>夜间 · 深蓝</option>
+    </select>
+    ${entrySwitch('fabShow', '悬浮球')}
+    ${entrySwitch('qrShow', 'QR')}
+    <span class="field-label">主页背景</span>
+    <div class="wallpaper-editor">
+      <img src="${escape(background.src)}" alt="主页背景预览">
+      <div>
+        <label class="wallpaper-picker ${busy.has('wallpaper') ? 'is-busy' : ''}">${busy.has('wallpaper') ? '保存中…' : '选择图片'}<input id="wallpaper-file" type="file" accept="image/*" aria-label="选择主页背景" ${busy.has('wallpaper') ? 'disabled' : ''}></label>
+        ${background.custom ? action('restore-wallpaper', '恢复默认', '', 'quiet-button', busy.has('wallpaper')) : ''}
+      </div>
+    </div>`;
+  const content = `<label class="compact-switch-row">
+    <span>短信带入正文</span>
+    <span class="switch">
+      <input id="inject-enabled" type="checkbox" role="switch" aria-label="短信带入正文" ${state.injectEnabled ? 'checked' : ''}>
+      <span></span>
+    </span>
+  </label>
+  ${action('authoring', '导出随卡包', '', 'quiet-button', !control.isEnabled())}`;
+  return `${pageHeading('设置')}
+    <label class="compact-switch-row master-switch">
+      <span>启用两三事</span>
+      <span class="switch">
+        <input id="phone-enabled" type="checkbox" role="switch" aria-label="启用两三事" ${control.isEnabled() ? 'checked' : ''} ${busy.has('enabled') ? 'disabled' : ''}>
+        <span></span>
+      </span>
+    </label>
+    <section class="settings-section">
+      <button type="button" class="my-profile" data-action="edit-user" aria-label="编辑我的资料" ${control.isEnabled() ? '' : 'disabled'}>
+        ${avatar(state.userProfile || { name: ui.defaultUser })}
+        <span>
+          <strong>${escape(displayName(state.userProfile || { name: ui.defaultUser }))}</strong>
+          <small>我的资料</small>
+        </span>
+        ${icon('next')}
+      </button>
+    </section>
+    ${drawer('connection', '连接设置', connection)}
+    ${drawer('appearance', '外观设置', appearance)}
+    ${drawer('content', '内容设置', content)}`;
 }

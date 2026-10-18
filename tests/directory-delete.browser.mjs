@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
@@ -15,10 +16,10 @@ try {
     s.conversations['group:keep'] = [{ id: 'from-lin', role: 'assistant', speakerId: 'lin', text: '林舟的群消息', batch }, { id: 'from-zhou', role: 'assistant', speakerId: 'zhou', text: '周予的群消息', batch }];
     s.conversations['group:remove'] = [{ id: 'old-group', role: 'assistant', speakerId: 'lin', text: '整个群删除的存档', batch }];
   });
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.locator('[data-group="group:keep"]').click();
   await page.getByRole('button', { name: '聊天资料', exact: true }).click();
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.locator('[data-group="group:remove"]').click();
   await page.getByRole('button', { name: '聊天选项', exact: true }).click();
   await page.getByRole('button', { name: '删除群聊', exact: true }).click();

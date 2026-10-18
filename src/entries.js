@@ -10,8 +10,8 @@ export function createPhoneEntries({ host, documentRef, open, toggle, defaults =
   launcher.style.cssText = 'display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;white-space:nowrap';
   launcher.setAttribute('role', 'button'); launcher.tabIndex = 0;
   launcher.setAttribute('aria-label', `打开${label}`);
-  launcher.innerHTML = `<span class="extensionsMenuExtensionButton" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;width:20px;height:20px">${icon('phone')}</span><span>${label}</span>`;
-  launcher.querySelector('svg').style.cssText = 'display:block;flex:none;width:18px;height:18px';
+  launcher.innerHTML = `<span class="extensionsMenuExtensionButton" style="flex:none">${icon('phone')}</span><span>${label}</span>`;
+  launcher.querySelector('svg').style.cssText = 'display:block;flex:none;width:.9em;height:.9em';
   const menu = documentRef.querySelector('#sp_wand_container') || documentRef.querySelector('#extensionsMenu') || documentRef.querySelector('#extensions_settings2') || documentRef.body;
   menu.append(launcher);
   const launch = () => { try { open(); } catch (error) { host.reportError(error.message || '两三事暂时无法打开，请刷新页面后重试。'); } };

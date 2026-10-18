@@ -1,5 +1,8 @@
-import { action, avatar, escape, icon, refKey } from './ui/shared.js';
-import { createHomeClock, renderHome } from './ui/home.js';
+import { avatar, refKey } from './ui/shared.js';
+import { renderHome } from './ui/home.js';
+import { createPhoneClock } from './ui/status.js';
+import { renderShell } from './ui/shell.js';
+import { renderDesktop } from './ui/desktop.js';
 import { renderInbox, renderChat } from './ui/messages.js';
 import { renderForum, renderPost } from './ui/forum.js';
 import { renderSettings } from './ui/settings.js';
@@ -8,20 +11,37 @@ import { readImage } from './ui/images.js';
 import { renderGroupProfile } from './ui/groups.js';
 import { renderDeletion } from './ui/deletion.js';
 import { renderModelOptions } from './ui/models.js';
-import { renderPhotoViewer } from './ui/cards.js';
 import { readLockWeather } from './weather.js';
 import { renderAuthoring } from './ui/authoring.js';
 import { LOCAL_CORE_URL, REMOTE_CORE_URL } from './authoring.js';
+import { renderCalendar } from './ui/calendar.js';
+import { createCalendarReader } from './calendar.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
-  { id: 'messages', label: '短信', view: 'inbox', pages: ['inbox', 'chat', 'contact-profile', 'group-chat', 'group-profile', 'delete-confirm'] },
-  { id: 'forum', label: '论坛', view: 'forum', pages: ['forum', 'post'] },
-  { id: 'settings', label: '设置', view: 'settings', pages: ['settings', 'user-profile', 'authoring'] },
+  { id: 'messages', label: '短信', view: 'inbox' },
+  { id: 'forum', label: '论坛', view: 'forum' },
+  { id: 'calendar', label: '日历', view: 'calendar' },
+  { id: 'settings', label: '设置', view: 'settings' },
 ];
-const pages = { home: renderHome, inbox: renderInbox, chat: renderChat, 'group-chat': renderChat, 'group-profile': renderGroupProfile, 'delete-confirm': renderDeletion, forum: renderForum, post: renderPost, settings: renderSettings, 'contact-profile': renderProfile, 'user-profile': renderProfile, authoring: renderAuthoring };
+const pages = {
+  home: renderHome,
+  desktop: renderDesktop,
+  inbox: renderInbox,
+  chat: renderChat,
+  'group-chat': renderChat,
+  'group-profile': renderGroupProfile,
+  'delete-confirm': renderDeletion,
+  forum: renderForum,
+  post: renderPost,
+  settings: renderSettings,
+  'contact-profile': renderProfile,
+  'user-profile': renderProfile,
+  authoring: renderAuthoring,
+  calendar: renderCalendar,
+};
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, apiSettings, wallpaper, entries, images, authoring, mode, control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, apiSettings, wallpaper, entries, images, authoring, mode, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
@@ -41,11 +61,23 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
   surface.setAttribute('aria-label', '两三事');
   root.append(stylesheet, surface);
   mount.append(element);
-  const ui = { view: 'home', contactId: '', groupId: '', groupEditId: '', groupDraft: {}, deletion: null, inboxMenu: false, postId: '', visibleMessages: 60, historyOpen: false, visibleHistory: 60, batch: null, drafts: new Map(), drawers: { connection: true, appearance: false, content: false }, manual: false, apiDraft: {}, models: [], modelSearch: '', modelsOpen: false, feedback: null, defaultUser, profileDraft: {}, editor: '', editId: '', selectedMessage: '', chatMenu: false, confirmClear: false };
+  // 这里只持有未保存的页面状态；联系人和消息始终从 store 读取。
+  const ui = {
+    view: 'home', unlocked: false, feedback: null, defaultUser,
+    contactId: '', groupId: '', postId: '',
+    drafts: new Map(), visibleMessages: 60, batch: null,
+    historyOpen: false, visibleHistory: 60,
+    inboxMenu: false, chatMenu: false, selectedMessage: '', confirmClear: false,
+    editor: '', editId: '', profileDraft: {},
+    groupEditId: '', groupDraft: {}, deletion: null,
+    drawers: { connection: true, appearance: false, content: false },
+    manual: false, apiDraft: {}, models: [], modelSearch: '', modelsOpen: false,
+    attachment: '', attachmentDraft: {}, stickerPack: 'blob', photo: null,
+    calendarOffset: 0, calendarDay: null,
+  };
   const busy = new Set();
-  Object.assign(ui, { attachment: '', attachmentDraft: {}, stickerPack: 'blob', photo: null });
   if (!control.isEnabled()) ui.view = 'settings';
-  const clock = createHomeClock({ root, element, isHome: () => ui.view === 'home', readTime });
+  const clock = createPhoneClock({ root, element, readTime });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
 
@@ -63,11 +95,15 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     element.dataset.theme = state.theme === 'night' ? 'night' : 'day';
     entries.setTheme(state.theme);
     const page = pages[ui.view];
-    const active = apps.find(app => app.pages.includes(ui.view))?.id;
     const weather = ui.view === 'home' ? readWeather() : null;
-    surface.innerHTML = `<div class="phone-tools">${action('close', '关闭手机', 'close', 'icon-button close-button')}</div><main class="phone-main view-${ui.view}">${page(state, { ui, busy, apiSettings, entries, control })}</main>${ui.feedback ? `<div class="feedback ${ui.feedback.error ? 'is-error' : ''}" role="${ui.feedback.error ? 'alert' : 'status'}"><span>${escape(ui.feedback.text)}</span>${action('dismiss', '关闭提示', 'close', 'icon-button')}</div>` : ''}<footer class="phone-footer ${ui.view === 'home' ? 'home-footer' : ''}">${weather ? `<div class="lock-meta"><span class="lock-weather" title="${weather.source === 'decoration' ? '装饰天气' : '构画剧情天气'}">${icon('sun')}<span>${escape(weather.text)} ${escape(weather.temperature)}</span></span><span class="home-date"></span></div>` : ''}<nav class="bottom-nav" aria-label="手机应用">${[...(ui.view === 'home' ? [] : [['home', '锁屏']]), ...apps.map(({ id, label }) => [id, label])].map(([id, label]) => `<button type="button" class="nav-item ${ui.view !== 'home' && active === id ? 'is-active' : ''}" data-tab="${id}" aria-label="${label}" title="${label}" ${!enabled && id !== 'settings' ? 'disabled' : ''} ${ui.view !== 'home' && active === id ? 'aria-current="page"' : ''}>${icon(id)}<span class="sr-only">${label}</span></button>`).join('')}</nav></footer>${renderPhotoViewer(ui.photo)}`;
-    const toolbar = root.querySelector('[data-phone-tools]');
-    if (toolbar) { const tools = root.querySelector('.phone-tools'); toolbar.append(tools.firstElementChild); tools.remove(); }
+    const calendarMonth = ui.view === 'calendar'
+      ? calendar.month(ui.calendarOffset)
+      : ui.view === 'desktop' ? calendar.month(0) : null;
+    surface.innerHTML = renderShell({
+      content: page(state, { ui, busy, apiSettings, entries, control, apps, calendar: calendarMonth }),
+      view: ui.view, enabled, weather,
+      feedback: ui.feedback, photo: ui.photo,
+    });
     clock.refresh();
     resizeDraft();
     if (settingsScroll !== undefined && ui.view === 'settings') root.querySelector('.view-settings').scrollTop = settingsScroll;
@@ -96,6 +132,43 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     element.hidden = true;
     clock.stop();
     onClose?.();
+  }
+  function showPage(view, { bottom = false } = {}) {
+    dismissMenus();
+    ui.view = view;
+    ui.feedback = null;
+    ui.confirmClear = false;
+    ui.attachment = '';
+    ui.photo = null;
+    render({ bottom });
+  }
+  // 返回先收起当前聊天的清空确认，再按页面父级走，不另存应用历史栈。
+  function goBack() {
+    if (inChat() && ui.confirmClear) { ui.confirmClear = false; render(); return; }
+    let parent = 'desktop';
+    switch (ui.view) {
+      case 'chat':
+      case 'group-chat': parent = 'inbox'; break;
+      case 'post': parent = 'forum'; break;
+      case 'contact-profile':
+        parent = ui.editId ? 'chat' : 'inbox';
+        ui.profileDraft = {};
+        break;
+      case 'group-profile':
+        parent = ui.groupEditId ? 'group-chat' : 'inbox';
+        ui.groupDraft = {};
+        break;
+      case 'user-profile':
+        ui.profileDraft = {};
+        parent = 'settings';
+        break;
+      case 'authoring': parent = 'settings'; break;
+      case 'delete-confirm':
+        parent = ui.deletion.from;
+        ui.deletion = null;
+        break;
+    }
+    showPage(parent, { bottom: ['chat', 'group-chat'].includes(parent) });
   }
   function editGroup(id = '') {
     const group = store.read().groups?.find(item => item.id === id);
@@ -154,6 +227,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     if (event.target.matches('.photo-viewer')) { ui.photo = null; render(); return; }
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
+    if (button.dataset.calendarDay) { ui.calendarDay = Number(button.dataset.calendarDay); render(); return; }
     if (button.dataset.stickerPack) { ui.stickerPack = button.dataset.stickerPack; render(); return; }
     if (button.dataset.sticker) {
       const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
@@ -166,13 +240,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     if (button.dataset.model) { ui.apiDraft.model = button.dataset.model; root.querySelector('#api-model').value = button.dataset.model; closeModels(); root.querySelector('[data-action="models-menu"]').focus(); return; }
     if (button.dataset.drawer) { const key = button.dataset.drawer; ui.drawers[key] = !ui.drawers[key]; render(); return; }
     if (button.dataset.tab) {
-      ui.view = apps.find(app => app.id === button.dataset.tab)?.view || button.dataset.tab;
-      ui.feedback = null; ui.chatMenu = false; ui.inboxMenu = false; ui.confirmClear = false; ui.selectedMessage = '';
-      ui.attachment = ''; ui.photo = null;
-      render();
+      showPage(apps.find(app => app.id === button.dataset.tab)?.view || button.dataset.tab);
       return;
     }
     if (button.dataset.contact || button.dataset.group) {
+      ui.unlocked = true;
       if (button.dataset.group) { ui.groupId = button.dataset.group; ui.view = 'group-chat'; }
       else { ui.contactId = button.dataset.contact; ui.view = 'chat'; }
       ui.chatMenu = false; ui.inboxMenu = false; ui.confirmClear = false; ui.selectedMessage = ''; ui.visibleMessages = 60; ui.historyOpen = false; ui.visibleHistory = 60; ui.feedback = null;
@@ -184,8 +256,19 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     if (button.dataset.post) { ui.postId = button.dataset.post; ui.view = 'post'; ui.feedback = null; render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
+      case 'unlock': ui.unlocked = true; showPage('desktop'); break;
+      case 'lock': ui.unlocked = false; showPage('home'); break;
+      case 'system-home': showPage('desktop'); break;
+      case 'system-back': goBack(); break;
+      case 'open-calendar':
+        ui.view = 'calendar'; ui.calendarOffset = 0; ui.calendarDay = null;
+        ui.feedback = null; render(); break;
+      case 'calendar-prev': ui.calendarOffset--; ui.calendarDay = null; render(); break;
+      case 'calendar-next': ui.calendarOffset++; ui.calendarDay = null; render(); break;
+      case 'calendar-today': ui.calendarOffset = 0; ui.calendarDay = null; render(); break;
+      case 'calendar-month': ui.calendarDay = null; render(); break;
       case 'authoring': ui.view = 'authoring'; ui.feedback = null; render(); break;
-      case 'back-authoring': ui.view = 'settings'; render(); break;
+      case 'back-authoring': goBack(); break;
       case 'export-card':
         void perform('export', () => authoring.exportScript({ coreUrl: ui.exportLocal ? LOCAL_CORE_URL : REMOTE_CORE_URL }), result => {
           const url = URL.createObjectURL(new Blob([JSON.stringify(result.script, null, 2)], { type: 'application/json' }));
@@ -206,15 +289,15 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
         else void perform(`image:${button.dataset.photo}`, () => images.generate(id, button.dataset.photo));
         break;
       }
-      case 'back-inbox': ui.view = 'inbox'; ui.feedback = null; render(); break;
-      case 'back-forum': ui.view = 'forum'; render(); break;
+      case 'back-inbox':
+      case 'back-forum': goBack(); break;
       case 'profile': editProfile('contact', id); break;
       case 'edit-user': editProfile('user'); break;
       case 'add-contact': editProfile('contact'); break;
       case 'inbox-menu': ui.inboxMenu = !ui.inboxMenu; render(); break;
       case 'add-group': editGroup(); break;
       case 'edit-group': editGroup(ui.groupId); break;
-      case 'back-group': ui.view = ui.groupEditId ? 'group-chat' : 'inbox'; ui.groupDraft = {}; render({ bottom: inChat() }); break;
+      case 'back-group': goBack(); break;
       case 'organize': ui.inboxMenu = false; void perform('directory', () => directory.organize(), result => { ui.feedback = { text: result.contacts.length || result.groups.length ? `新增 ${result.contacts.length} 位联系人、${result.groups.length} 个群聊。` : '没有需要新增的联系人或群聊。' }; onContextChange(); }); break;
       case 'remove-contact':
       case 'remove-group': {
@@ -224,13 +307,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
         ui.deletion = { kind: group ? 'group' : 'contact', id: key, name: person.name, from: ui.view };
         ui.chatMenu = false; ui.view = 'delete-confirm'; render(); break;
       }
-      case 'cancel-delete': ui.view = ui.deletion.from; ui.deletion = null; render(); break;
+      case 'cancel-delete': goBack(); break;
       case 'confirm-delete': {
         const item = ui.deletion;
         void perform('remove', () => item.kind === 'group' ? store.deleteGroup(item.id) : store.deleteContact(item.id), () => { ui.drafts.delete(item.id); ui.selectedMessage = ''; ui.profileDraft = {}; ui.groupDraft = {}; ui.deletion = null; ui.view = 'inbox'; onContextChange(); });
         break;
       }
-      case 'back-profile': ui.view = ui.editor === 'user' ? 'settings' : ui.editId ? 'chat' : 'inbox'; ui.profileDraft = {}; render({ bottom: ui.view === 'chat' }); break;
+      case 'back-profile': goBack(); break;
       case 'remove-avatar': (ui.view === 'group-profile' ? ui.groupDraft : ui.profileDraft).avatar = ''; render(); break;
       case 'refine-style': {
         const draft = ui.profileDraft, original = draft.expression, contactId = ui.editId;
@@ -365,6 +448,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       void perform('group-profile', () => store.saveGroup(id, draft), result => { ui.groupId = result.id; ui.view = 'group-chat'; ui.groupDraft = {}; ui.selectedMessage = ''; ui.confirmClear = false; });
     }
   }
+  const refreshCalendar = () => {
+    if (!element.hidden && ['calendar', 'desktop'].includes(ui.view)) render();
+  };
+  doc.defaultView.addEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
   root.addEventListener('keydown', keydown);
   root.addEventListener('click', click);
   root.addEventListener('input', input);
@@ -376,17 +463,26 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     get isOpen() { return !element.hidden; },
     isReading(id) { return element.isConnected && !element.hidden && inChat() && conversationId() === id; },
     close,
-    open() { element.hidden = false; render(); if (inChat()) void store.markRead(conversationId()).catch(() => { ui.feedback = { error: true, text: '消息的已读状态保存失败，请检查酒馆连接。' }; render(); }); },
+    open() {
+      // 当前聊天第一次打开先锁屏；同一实例解锁后，关闭再开回桌面。
+      if (element.hidden) {
+        ui.view = ui.unlocked ? 'desktop' : 'home';
+        ui.photo = null;
+        ui.attachment = '';
+      }
+      element.hidden = false;
+      render();
+    },
     refreshTime() {
       clock.refresh();
       if (element.hidden) return;
-      if (inChat()) render();
+      if (inChat() || ['calendar', 'desktop'].includes(ui.view)) render();
       if (ui.view === 'home') {
         const weather = readWeather(), label = root.querySelector('.lock-weather');
         label.title = weather.source === 'decoration' ? '装饰天气' : '构画剧情天气';
         label.lastElementChild.textContent = `${weather.text} ${weather.temperature}`;
       }
     },
-    dispose() { clock.stop(); doc.removeEventListener('pointerdown', dismissMenus, true); root.removeEventListener('keydown', keydown); root.removeEventListener('click', click); root.removeEventListener('input', input); root.removeEventListener('change', change); root.removeEventListener('submit', submit); element.remove(); fontStyle.remove(); },
+    dispose() { clock.stop(); doc.defaultView.removeEventListener('st-sevendayscal:calendar-changed', refreshCalendar); doc.removeEventListener('pointerdown', dismissMenus, true); root.removeEventListener('keydown', keydown); root.removeEventListener('click', click); root.removeEventListener('input', input); root.removeEventListener('change', change); root.removeEventListener('submit', submit); element.remove(); fontStyle.remove(); },
   };
 }

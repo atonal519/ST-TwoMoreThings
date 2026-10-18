@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
@@ -20,15 +21,16 @@ try {
   }
   async function aligned(action) {
    return page.locator(`[data-action="${action}"]`).evaluate(button => {
-    const root=button.getRootNode(), title=root.querySelector('.page-heading h1').getBoundingClientRect(), b=button.getBoundingClientRect(), close=root.querySelector('[data-action="close"]').getBoundingClientRect();
-    return Math.abs(title.y+title.height/2-b.y-b.height/2)<1 && Math.abs(title.y+title.height/2-close.y-close.height/2)<1 && b.right<=close.left;
+    const root=button.getRootNode(), title=root.querySelector('.page-heading h1').getBoundingClientRect(), b=button.getBoundingClientRect();
+    const status=root.querySelector('.phone-status').getBoundingClientRect(), close=root.querySelector('[data-action="close"]').getBoundingClientRect(), home=root.querySelector('[data-action="system-home"]').getBoundingClientRect();
+    return Math.abs(title.y+title.height/2-b.y-b.height/2)<1 && close.left>=home.right && Math.abs(close.y-home.y)<1 && status.bottom<=title.top;
    });
   }
-  await page.getByRole('button', { name:'短信',exact:true }).click();
-  check(`${width}: 通讯录操作和关闭须与短信标题同行居中`, await aligned('inbox-menu'));
-  await page.getByRole('button', { name:'论坛',exact:true }).click();
-  check(`${width}: 刷新和关闭须与论坛标题同行居中`, await aligned('refresh'));
-  await page.getByRole('button', { name:'短信',exact:true }).click();
+  await openApp(page, '短信');
+  check(`${width}: 通讯录操作与短信标题同行，关闭在底部主页旁`, await aligned('inbox-menu'));
+  await openApp(page, '论坛');
+  check(`${width}: 刷新与论坛标题同行，关闭在底部主页旁`, await aligned('refresh'));
+  await openApp(page, '短信');
   await page.getByRole('button', { name:/林舟/ }).click();
   const row=page.getByRole('log').locator('.message-row').nth(1);
   const before=await row.boundingBox();
@@ -43,7 +45,7 @@ try {
   await page.getByRole('button', { name:'聊天选项',exact:true }).click();
   check(`${width}: 打开聊天菜单收起单条删除操作`, await remove.count()===0);
   await page.evaluate(() => { previewHarness.metadata.pocketPhone.conversations.lin.push(...Array.from({length:20},(_,i)=>({batch:previewHarness.metadata.pocketPhone.conversations.lin[0].batch,id:`layout-pad-${i}`,role:i%2?'user':'assistant',text:'查看较长聊天记录的排版。',timeLabel:'23:58'})),{ batch:previewHarness.metadata.pocketPhone.conversations.lin[0].batch, id:'layout-long',role:'assistant',text:'On my way. See you at the bookstore.',translation:'我在路上，书店见。',timeLabel:'23:58' }); });
-  await page.getByRole('button', { name:'短信',exact:true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name:/林舟/ }).click();
   const last=page.getByRole('log').locator('.message-row').last();
   await last.locator('.bubble').click();

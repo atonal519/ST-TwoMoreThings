@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
@@ -5,7 +6,7 @@ const browser = await chromium.launch({ executablePath: '/tmp/st-tools-browsers/
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 1000 } });
   await page.goto('http://127.0.0.1:8917/tests/preview.html');
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   await page.getByRole('button', { name: '聊天选项', exact: true }).click();
   await page.getByRole('textbox', { name: '短信内容' }).click();

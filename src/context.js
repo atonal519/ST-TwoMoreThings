@@ -4,6 +4,7 @@ import { latestAiFloor } from './time.js';
 import { readTimeline, currentMessages } from './timeline.js';
 import { contextMessage, messageText } from './content.js';
 import { stickerChoices } from './stickers.js';
+import { createCalendarReader } from './calendar.js';
 
 function recentStory(messages) {
   const floor = latestAiFloor(messages)?.message;
@@ -24,7 +25,7 @@ function actorIds(people, bridge, snapshot) {
   return ids;
 }
 
-export function createContextReader({ target, store, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1 }) {
+export function createContextReader({ target, store, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader() }) {
   const base = () => {
     const person = store.read().userProfile, batch = readTimeline(target.messages);
     return { character: cardText(target.character), user: person?.name || target.user,
@@ -37,6 +38,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       if (!contact) throw new Error('这个联系人已不存在，请返回短信重新选择。');
       const current = base();
       const history = phoneHistory(state, id, current.batch);
+      const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'));
       let related = '';
       const bridge = qqjBridgeProvider?.();
       const entityId = actorIds([contact], bridge).get(id);
@@ -45,7 +47,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         const context = await bridge.readContext({ query, entityIds: [entityId], maxCharacters: 4000 });
         if (context?.status === 'ready') related = (context.actors || []).filter(x => x.entityId === entityId).map(x => [x.stateText, x.memoryText].filter(Boolean).join('\n')).join('\n').slice(0, 4000);
       }
-      return { ...current, stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, history: history.map(contextMessage), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText)].join('\n') }) };
+      return { ...current, ...(calendarReference ? { calendar: calendarReference } : {}), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, history: history.map(contextMessage), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText)].join('\n') }) };
     },
     async readForForum() { const current = base(); return { ...current, worldbook: await target.readWorldInfo({ scanText: current.story.map(item => item.text).join('\n') }) }; },
     async readDirectorySources() {
@@ -60,6 +62,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       if (!group) throw new Error('这个群聊已不存在，请返回短信重新选择。');
       const current = base();
       const history = phoneHistory(state, id, current.batch);
+      const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'));
       const members = group.memberIds.map(key => {
         const person = state.contacts.find(item => item.id === key);
         if (!person) throw new Error('有群成员不在联系人中，请编辑群聊重新选择。');
@@ -74,7 +77,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       }
       const roster = members.map(({ source, ...person }) => ({ ...person, related: actors.filter(actor => ids.has(person.id) && actor.entityId === ids.get(person.id)).map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n') }));
       if (group.userIsMember) roster.push({ id: '@user', ...current.userProfile });
-      return { ...current, stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, history: history.map(contextMessage), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText)].join('\n') }) };
+      return { ...current, ...(calendarReference ? { calendar: calendarReference } : {}), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, history: history.map(contextMessage), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText)].join('\n') }) };
     },
 
   };

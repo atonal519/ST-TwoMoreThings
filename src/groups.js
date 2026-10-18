@@ -2,6 +2,7 @@ import { parseJsonObject } from './api.js';
 import { record } from './messages.js';
 import { readTimeline } from './timeline.js';
 import { normalizeContent, RICH_MESSAGES_PROMPT } from './content.js';
+import { CALENDAR_PROMPT } from './calendar.js';
 
 const GROUP_PROMPT = `续写指定手机群里的聊天。一次考虑group.members全体成员的性格、线上表达、语言习惯、当前剧情时间与场景、各人正在做什么和实际知道什么。先确定成员、哪些人有动机发言，再拟消息顺序；不要求人人说话，可以无人发言。成员可互相回应，不必回应用户。userIsMember为false时用户只是旁观者，不得让角色向用户说话或知道用户正在旁观。人物私有资料不是群内共享认知。
 遵循各人的线上聊天方式，短句、分条、省略和仅符号回复均可；不输出动作旁白，不代写用户，不增加群外人物。双语环境每条text为英文，translation为对应中文；单语省略translation。
@@ -35,7 +36,7 @@ export function createGroupService({ target, store, contextReader, modelClient }
     async continueChat(id) {
       find(id);
       const context = await contextReader.readForGroup(id);
-      const answer = parseJsonObject(await modelClient.complete({ system: `${GROUP_PROMPT}\n${RICH_MESSAGES_PROMPT}`, messages: [{ role: 'user', content: JSON.stringify(context) }], maxTokens: 2600 }));
+      const answer = parseJsonObject(await modelClient.complete({ system: `${GROUP_PROMPT}\n${RICH_MESSAGES_PROMPT}${context.calendar ? `\n${CALENDAR_PROMPT}` : ''}`, messages: [{ role: 'user', content: JSON.stringify(context) }], maxTokens: 2600 }));
       const roster = context.group.members.map(person => person.id), speakers = answer.anchor?.speakerIds;
       if (!sameMembers(answer.anchor?.memberIds, roster) || !Array.isArray(speakers) || speakers.some(key => key === '@user' || !roster.includes(key))) throw new Error('回答中的群成员或发言者无法对应，请点继续重试。');
       if (!Array.isArray(answer.messages)) throw new Error('回答中没有可读取的群聊消息，请点继续重试。');

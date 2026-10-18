@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -10,11 +11,13 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${kind}&clock=story`);
   await page.locator('.phone-shell').waitFor();
-  assert.equal(await page.locator('.bottom-nav').getByRole('button', { name: '设置', exact: true }).count(), 1, '设置应在底部导航');
-  assert.equal(await page.locator('.phone-tools button').count(), 1, '顶部只保留关闭');
+  assert.equal(await page.locator('.system-nav').count(), 0, '锁屏不显示系统导航');
+  for (const label of ['短信', '论坛', '日历', '设置']) assert.equal(await page.getByRole('button', { name: label, exact: true }).count(), 0, '锁屏不显示应用入口');
+  assert.equal(await page.locator('.phone-status [data-action="close"]').count(), 0, '关闭移到手机底部');
+  assert.equal(await page.locator('.home-footer [data-action="close"]').count(), 1, '锁屏右下角可关闭');
   const dayArt = await page.locator('.home-art').getAttribute('src');
   const dayClockHeight = await page.locator('.home-clock').evaluate(x => x.getBoundingClientRect().height);
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await openApp(page, '设置');
   assert.equal(await page.getByRole('heading', { name: '联系人资料', exact: true }).count(), 0);
   if (await page.getByRole('button', { name: '外观设置', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '外观设置', exact: true }).click();
   await page.getByLabel('外观主题').selectOption('night');
@@ -23,14 +26,14 @@ try {
   assert.notEqual(await page.locator('.home-art').getAttribute('src'), dayArt, '夜间使用独立折带前景');
   assert.ok(await page.locator('.home-clock').evaluate(x => x.getBoundingClientRect().height) > dayClockHeight * 1.5, '夜间采用独立的长数字构图');
   assert.equal(await page.locator('.phone-shell').evaluate(x => getComputedStyle(x).backgroundColor), 'rgb(13, 32, 44)');
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await openApp(page, '设置');
   await page.getByRole('button', { name: '编辑我的资料', exact: true }).click();
   await page.getByLabel('姓名', { exact: true }).fill('我的本名');
   await page.getByLabel('网名', { exact: true }).fill('小满');
   await page.getByLabel('头像地址', { exact: true }).fill('https://example.invalid/me.png');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('heading', { name: '设置', exact: true }).waitFor();
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: '通讯录操作', exact: true }).click();
   await page.getByRole('button', { name: '添加联系人', exact: true }).click();
   await page.getByLabel('姓名', { exact: true }).fill('新的朋友');
@@ -41,10 +44,10 @@ try {
   await page.waitForFunction(() => document.querySelector('.pocket-phone').shadowRoot.querySelector('.profile-avatar img')?.src.startsWith('data:image/'));
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('heading', { name: '晚风', exact: true }).waitFor();
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await openApp(page, '设置');
   if (await page.getByRole('button', { name: '内容设置', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '内容设置', exact: true }).click();
   await page.getByRole('switch', { name: '短信带入正文' }).check();
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /晚风/ }).click();
   await page.getByRole('textbox', { name: '短信内容' }).fill('删除这句测试');
   await page.getByRole('button', { name: '发送', exact: true }).click();
@@ -72,6 +75,9 @@ try {
   assert.equal(await page.evaluate(() => previewHarness.requests.length), 1);
   await page.getByRole('button', { name: '关闭手机', exact: true }).click();
   await page.getByRole('button', { name: '打开两三事', exact: true }).click();
+  await page.locator('.view-desktop').waitFor();
+  await openApp(page, '短信');
+  await page.getByRole('button', { name: /晚风/ }).click();
   assert.equal(await page.getByRole('heading', { name: '晚风', exact: true }).count(), 1);
   assert.equal(await page.locator('.pocket-phone').getAttribute('data-theme'), 'night');
   await page.getByRole('button', { name: '聊天资料', exact: true }).click();
@@ -82,7 +88,7 @@ try {
   await page.getByRole('heading', { name: '暮色', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => previewHarness.metadata.pocketPhone.contacts.length), 4);
   await page.evaluate(() => { const batch = previewHarness.metadata.pocketPhone.conversations.lin[0].batch; previewHarness.metadata.pocketPhone.conversations.lin = Array.from({ length: 80 }, (_, i) => ({ batch, id: `long-${i}`, role: i % 2 ? 'assistant' : 'user', text: `长记录${i}`, timeLabel: '23:58' })); });
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   const feed = page.getByRole('log');
   const scrollBefore = await feed.evaluate(x => x.scrollTop);
@@ -96,14 +102,16 @@ try {
   assert.ok(await feed.evaluate(x => x.scrollTop) <= beforeDelete + 100, '删除较早的消息后应留在阅读位置');
   for (const width of [320, 390]) {
    await page.setViewportSize({ width, height: 844 });
-   await page.getByRole('button', { name: '短信', exact: true }).click();
+   await openApp(page, '短信');
    assert.ok(await page.getByRole('button', { name: '通讯录操作', exact: true }).evaluate(x => {
-    const b=x.getBoundingClientRect(), close=x.getRootNode().querySelector('[data-action="close"]').getBoundingClientRect(); return b.right <= close.left && b.width >= 30 && b.width <= 36;
+    const b=x.getBoundingClientRect(), root=x.getRootNode();
+    const heading=x.closest('.page-heading').getBoundingClientRect(), status=root.querySelector('.phone-status').getBoundingClientRect();
+    return b.right <= heading.right && b.top >= status.bottom && b.width >= 30 && b.width <= 36;
    }));
    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   }
   assert.deepEqual(errors, []);
   await page.close();
  }
- console.log('Profile editing, avatar upload, bilingual SMS, permanent delete/clear, settings tab and night theme passed on native/Luker simulated hosts.');
+ console.log('Profile editing, avatar upload, bilingual SMS, permanent delete/clear, settings navigation and night theme passed on native/Luker simulated hosts.');
 } finally { await browser.close(); }

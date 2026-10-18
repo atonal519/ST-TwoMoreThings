@@ -15,6 +15,7 @@ import { createPhoneControl } from './control.js';
 import { createPhoneImageService } from './phone-images.js';
 import { readLockWeather } from './weather.js';
 import { createAuthoringService, stateFromPreset } from './authoring.js';
+import { createCalendarReader } from './calendar.js';
 export { createPhoneControl, createPhoneImageService };
 
 export function initialize({ host = createHostAdapter(), documentRef = document, qqjBridgeProvider, preset } = {}) {
@@ -47,12 +48,13 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
     const apiSettings = createApiSettings({ host, onBusyChange });
     const client = createModelClient({ host, sourceProvider: apiSettings, onBusyChange });
     const modelClient = { async complete(request) { control.assertEnabled(); const answer = await client.complete(request); control.assertEnabled(); return answer; } };
-    const contextReader = createContextReader({ target, store, qqjBridgeProvider });
+    const calendar = createCalendarReader();
+    const contextReader = createContextReader({ target, store, qqjBridgeProvider, calendar });
     currentPhone = mountPhone({ mount: documentRef.documentElement, store, defaultUser: target.user, readTime: () => readPhoneTime(target.messages), readTimeline: () => readTimeline(target.messages),
       messages: createMessageService({ target, store, contextReader, modelClient }),
       groups: createGroupService({ target, store, contextReader, modelClient }),
       directory: createDirectoryService({ store, contextReader, modelClient }),
-      forum: createForumService({ store, contextReader, modelClient }), apiSettings,
+      forum: createForumService({ store, contextReader, modelClient }), apiSettings, calendar,
       wallpaper: createWallpaperService({ host, store }), entries, authoring: createAuthoringService({ host, store, readEntries: entries.read }), mode: host.mode,
       control, images: createPhoneImageService({ store, modelClient, assertEnabled: control.assertEnabled, readBatch: () => readTimeline(target.messages), onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
       onContextChange: () => host.setPrompt(''),

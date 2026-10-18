@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
@@ -35,7 +36,7 @@ try {
       state.groups = [{ id: 'friends', name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true }];
       state.theme = 'night'; state.wallpapers = { night: '/assets/stickers/sepia-0.png' };
     });
-    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await openApp(page, '设置');
     await page.getByRole('button', { name: '内容设置', exact: true }).click();
     await page.getByRole('button', { name: '导出随卡包', exact: true }).click();
     await page.getByRole('heading', { name: '随卡包', exact: true }).waitFor();
@@ -52,7 +53,7 @@ try {
     assert.equal(JSON.stringify(script).includes('刚从书店出来'), false);
     assert.equal(await page.evaluate(() => previewHarness.requests.length), 0);
     await page.locator('#pocket-phone-host .phone-shell').screenshot({ path: `${output}/${kind}-authoring.png` });
-    await page.getByRole('button', { name: '返回', exact: true }).click();
+    await page.locator('[data-action="back-authoring"]').click();
     await page.getByRole('switch', { name: '启用两三事', exact: true }).uncheck();
     await page.getByRole('button', { name: '关闭手机', exact: true }).click();
     await page.evaluate(({ script, kind }) => {
@@ -72,7 +73,7 @@ try {
     await embedded.locator('.home-wallpaper').waitFor();
     assert.equal(await embedded.getAttribute('data-theme'), 'night');
     assert.equal(await page.evaluate(() => previewHarness.metadata.pocketPhone), undefined, 'reading defaults does not save');
-    await embedded.getByRole('button', { name: '短信', exact: true }).click();
+    await openApp(embedded, '短信');
     await embedded.getByRole('button', { name: /林舟/ }).click();
     assert.equal(await embedded.locator('.bubble').count(), 0);
     await embedded.getByRole('textbox', { name: '短信内容' }).fill('随卡手机测试');
@@ -81,7 +82,7 @@ try {
     await embedded.getByText('收到，晚点见。', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => previewHarness.mainMessages.length), 1);
     assert.equal(await page.evaluate(() => previewHarness.metadata.pocketPhone.contacts[0].expression), script.data.twoMoreThings.contacts[0].expression);
-    await embedded.getByRole('button', { name: '设置', exact: true }).click();
+    await openApp(embedded, '设置');
     await embedded.getByRole('button', { name: '外观设置', exact: true }).click();
     await embedded.getByRole('switch', { name: 'QR', exact: true }).check();
     await page.waitForFunction(() => quickReplyApi.getSetByName('两三事 · 随卡')?.qrList[0]?.message === '/tmt-card-open');

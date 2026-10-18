@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -10,7 +11,7 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${kind}&clock=story`);
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: '通讯录操作', exact: true }).click();
   await page.getByRole('heading', { name: '短信', exact: true }).click();
   assert.equal(await page.locator('.chat-menu').count(), 0);
@@ -57,17 +58,17 @@ try {
   await page.getByRole('button', { name: '确认清空', exact: true }).click();
   await page.waitForFunction(() => Object.values(previewHarness.metadata.pocketPhone.conversations).some(items => items.length === 0));
   assert.equal(await page.getByRole('log').locator('.bubble').count(), 0);
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   assert.equal(await page.locator('[data-group] .avatar img').getAttribute('src'), 'https://example.invalid/group.png');
   await page.evaluate(() => { previewHarness.reply = { contacts: [], groups: [] }; });
   await page.getByRole('button', { name: '通讯录操作', exact: true }).click();
   await page.getByRole('button', { name: '整理通讯录', exact: true }).click();
   await page.getByRole('status').filter({ hasText: '没有需要新增' }).waitFor();
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await openApp(page, '设置');
   if (await page.getByRole('button', { name: '外观设置', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '外观设置', exact: true }).click();
   await page.getByLabel('外观主题', { exact: true }).selectOption('night');
   await page.waitForFunction(() => document.querySelector('.pocket-phone').dataset.theme === 'night');
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.locator('[data-group]').click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   assert.deepEqual(errors, []);

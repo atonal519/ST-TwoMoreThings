@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
@@ -43,7 +44,7 @@ try {
       }), expected);
     }
     await page.setViewportSize({ width: 1200, height: 1000 });
-    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await openApp(page, '设置');
     await page.getByRole('button', { name: '编辑我的资料', exact: true }).click();
     check(`${kind}: unsaved user profile defaults to the host user name`, await page.getByLabel('姓名', { exact: true }).inputValue(), '小满');
     await page.getByRole('button', { name: '锁屏', exact: true }).click();
@@ -65,7 +66,7 @@ try {
       const s = getComputedStyle(x); return { shadow: s.textShadow, spacing: s.letterSpacing, size: s.fontSize };
     }), { shadow: 'none', spacing: '1.65px', size: '11px' });
     check(`${kind}: host palette does not replace phone background`, await page.locator('.phone-shell').evaluate(x => getComputedStyle(x).backgroundColor), 'rgb(243, 241, 232)');
-    await page.getByRole('button', { name: '短信', exact: true }).click();
+    await openApp(page, '短信');
     await page.getByRole('button', { name: /林舟/ }).click();
     const draft = page.getByRole('textbox', { name: '短信内容' });
     await draft.fill('键盘隔离');

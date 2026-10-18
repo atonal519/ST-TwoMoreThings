@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -15,7 +16,7 @@ try {
   assert.equal(await fab.evaluate(host=>host.shadowRoot.mode),'open');
   await page.getByRole('button',{name:'关闭手机',exact:true}).click();
   await ball.click(); await page.locator('.phone-shell').waitFor({state:'visible'});
-  await page.getByRole('button',{name:'设置',exact:true}).click();
+  await openApp(page, '设置');
   assert.deepEqual(await page.locator('.settings-drawer-toggle span').allTextContents(),['连接设置','外观设置','内容设置']);
   assert.equal(await page.locator('.view-settings p').count(),0,'设置没有解释文案');
   await page.getByRole('button',{name:'外观设置',exact:true}).click();
@@ -26,7 +27,8 @@ try {
   assert.equal(await page.evaluate(()=>quickReplyApi.getSetByName('两三事').qrList.length),1);
   await page.getByRole('button',{name:'关闭手机',exact:true}).click();
   await page.evaluate(()=>previewHarness.runQuickReply());
-  await page.locator('.phone-shell').waitFor({state:'visible'});
+  await page.locator('.view-desktop').waitFor({state:'visible'});
+  await openApp(page, '设置');
   await page.getByLabel('选择主页背景').setInputFiles({name:'wallpaper.png',mimeType:'image/png',buffer:readFileSync(new URL('../assets/echo-foreground.png',import.meta.url))});
   await page.waitForFunction(()=>previewHarness.metadata.pocketPhone.wallpapers?.day);
   assert.equal(await page.evaluate(()=>JSON.stringify(previewHarness.metadata.pocketPhone).includes('base64')),false);
@@ -37,7 +39,7 @@ try {
   assert.equal(await page.locator('.home-art').count(),0,'自定义背景不会再叠内置前景');
   assert.equal(await page.locator('.home-clock').getAttribute('aria-label'),'当前时间 23:58');
   assert.equal(await page.locator('.home-wallpaper').evaluate(img=>getComputedStyle(img).objectFit),'cover');
-  await page.getByRole('button',{name:'设置',exact:true}).click();
+  await openApp(page, '设置');
   await page.getByRole('button',{name:'恢复默认',exact:true}).click();
   await page.waitForFunction(()=>previewHarness.metadata.pocketPhone.wallpapers.day==='');
   await page.getByLabel('外观主题').selectOption('night');
@@ -74,7 +76,7 @@ try {
   assert.equal(await page.evaluate(()=>previewHarness.settings.pocketPhone.qrShow),true);
   await page.getByRole('switch',{name:'悬浮球',exact:true}).check();
   await page.waitForFunction(()=>!document.querySelector('#tmt-fab-host').hidden);
-  await page.getByRole('button',{name:'短信',exact:true}).click();
+  await openApp(page, '短信');
   await page.locator('[data-contact="lin"]').click();
   await page.evaluate(()=>{previewHarness.replyWait=new Promise(resolve=>previewHarness.finishReply=resolve);});
   await page.getByRole('button',{name:'继续',exact:true}).click();

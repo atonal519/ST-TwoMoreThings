@@ -21,6 +21,17 @@ const state = {
   },
   forum: { posts: createPosts(false) },
 };
+const previewQuery = new URLSearchParams(location.search);
+if (previewQuery.get('notifications') === '1') {
+  state.theme = previewQuery.get('theme') === 'night' ? 'night' : 'day';
+  state.groups = [{ id: 'preview-friends', name: '书店碰头小组', memberIds: ['lin', 'zhou'], userIsMember: true }];
+  state.conversations.lin.push(
+    { id: 'notice-1', role: 'assistant', text: '我到书店门口了。', read: false, timeLabel: '16:55', createdAt: '2026-10-18T08:55:00.000Z' },
+    { id: 'notice-2', role: 'assistant', text: '不急，慢慢来，我替你留了靠窗的位置。', read: false, timeLabel: '16:56', createdAt: '2026-10-18T08:56:00.000Z' },
+  );
+  state.conversations['preview-friends'] = [{ id: 'notice-3', role: 'assistant', speakerId: 'zhou', text: '我买好咖啡了，你们喝什么？', read: false, timeLabel: '16:54', createdAt: '2026-10-18T08:54:00.000Z' }];
+  document.querySelector('.preview-bar p').textContent = '未读通知示例 · 点击卡片查看，返回锁屏后消失 · 刷新恢复 · 不使用真实数据';
+}
 function createPosts(fresh) {
   return [
     { id: 'p1', category: '街坊闲聊', author: '今天也想早睡', title: fresh ? '有人去过新开的旧书交换角吗？' : '谁把银杏路的路牌画了一只猫？', content: '今天经过银杏路，发现路牌边上多了一只小猫。画得还挺认真，旁边写着“慢一点，前面有好事发生”。\n\n不是，有没有人知道是谁画的？我已经连续三天绕路去看它了。', comments: [

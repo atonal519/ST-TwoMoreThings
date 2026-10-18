@@ -19,8 +19,8 @@ export function createPhoneImageService({ store, modelClient, apiProvider = () =
       const sender = message.role === 'user' ? state.userProfile || { name: defaultUser } : state.contacts.find(person => person.id === (group ? message.speakerId : id));
       const recipe = parseJsonObject(await modelClient.complete({ system: IMAGE_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ description: message.image.description, sender: { name: sender?.name || '', nickname: sender?.nickname || '' }, user: state.userProfile?.name || defaultUser, characters: library.map(({ name }) => name) }) }], maxTokens: 1200 }));
       if (typeof recipe.prompt !== 'string' || !recipe.prompt.trim()) throw new Error('没有生成可用的图片描述，请重新点图片。');
-      const names = Array.isArray(recipe.characters) ? recipe.characters : [];
-      const characters = [...new Set(names)].map(name => {
+      if (!Array.isArray(recipe.characters)) throw new Error('图片描述中的人物列表缺失或格式不正确，请重新点图片。');
+      const characters = [...new Set(recipe.characters)].map(name => {
         const matching = library.filter(item => item.name === name), person = matching[0];
         if (matching.length !== 1 || !person?.tag?.trim()) throw new Error('照片人物没有对应到完整的柏宝绘角色档案，请先在柏宝绘补充人物外貌和衣着。');
         return { name: person.name, tag: person.tag, nl: person.nl || '' };

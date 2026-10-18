@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
@@ -23,7 +24,7 @@ try {
       { id: 'u2', role: 'user', speakerId: '@user', text: '我也快到了。', timeLabel: '23:58', batch },
     ];
   }, theme);
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   check(`${width}: 整理操作应收进加号`, await page.locator('.heading-actions [data-action="identify"]').count() === 0);
   await page.locator('[data-group]').click();
   const rows = page.getByRole('log').locator('.message-row');
@@ -62,7 +63,7 @@ try {
   await profileCheck(page.locator('.group-form'));
   check(`${width}: 保存按钮不高过字段`, await page.locator('.group-form').evaluate(form => form.querySelector('.save-button').getBoundingClientRect().height <= form.querySelector('#group-name').getBoundingClientRect().height));
   check(`${width}: 成员行足够紧凑`, await page.locator('.group-member').first().evaluate(node => node.getBoundingClientRect().height <= 38));
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.locator('[data-contact="lin"]').click();
   check(`${width}/${theme}: 私聊不重复显示姓名`, await page.locator('.message-sender').count() === 0);
   await page.getByRole('button', { name: '聊天资料', exact: true }).click();

@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
@@ -25,7 +26,7 @@ try {
   await page.addScriptTag({ path: new URL('../../RecentRequestLog/index.js', import.meta.url).pathname });
   await page.evaluate(() => loggerReady());
   await page.waitForFunction(() => typeof window.__rlogDebug?.getRecords === 'function');
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   await page.getByRole('button', { name: '继续', exact: true }).click();
   await page.getByText('日志联动示例回复', { exact: true }).waitFor();

@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
@@ -12,7 +13,7 @@ try {
     const person = previewHarness.metadata.pocketPhone.contacts[0]; person.edited = true; person.expression = '烦躁时敲桌面';
     previewHarness.reply = { contacts: [{ sourceId: 'lin', name: '林舟', expression: '短句，烦躁时只回问号' }] };
   });
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   await page.getByRole('button', { name: '聊天资料', exact: true }).click();
   await page.getByRole('button', { name: '重新提炼线上方式', exact: true }).click();

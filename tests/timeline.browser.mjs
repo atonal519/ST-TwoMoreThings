@@ -1,3 +1,4 @@
+import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
@@ -9,7 +10,7 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${kind}&clock=story`);
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   await page.getByRole('textbox', { name: '短信内容' }).fill('上一楼聊过的约定');
   await page.getByRole('button', { name: '发送', exact: true }).click();
@@ -26,7 +27,7 @@ try {
   await page.getByText('上一楼聊过的约定', { exact: true }).click();
   await page.getByRole('button', { name: '删除这条短信', exact: true }).click();
   await page.waitForFunction(() => !previewHarness.metadata.pocketPhone.conversations.lin.some(x => x.text === '上一楼聊过的约定'));
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await openApp(page, '设置');
   if (await page.getByRole('button', { name: '内容设置', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '内容设置', exact: true }).click();
   await page.getByRole('switch', { name: '短信带入正文' }).check();
   assert.equal(await page.evaluate(() => previewHarness.requests.length), 0, '开关不调用摘要');
@@ -36,7 +37,7 @@ try {
   assert.ok(await page.evaluate(() => previewHarness.prompt.includes('用户与林舟约好晚点在书店见面。')));
   const summaryInput = await page.evaluate(() => JSON.parse(previewHarness.requests[0].body.messages[1].content));
   assert.deepEqual(summaryInput.conversations[0].messages.map(item => item.text), ['吃饭吗？']);
-  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   await page.getByRole('button', { name: '聊天选项', exact: true }).click();
   await page.getByRole('button', { name: '清空聊天', exact: true }).click();

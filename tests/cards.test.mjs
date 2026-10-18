@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parsePayload } from '../src/api.js';
 import { createPhoneStore } from '../src/store.js';
 import { createMessageService } from '../src/messages.js';
+import { createPhoneImageService } from '../src/phone-images.js';
 import { createContextReader, createBackflowService } from '../src/context.js';
 import { readTimeline } from '../src/timeline.js';
 import { createHarness } from './harness.mjs';
@@ -12,6 +13,43 @@ function setup() {
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   return { h, target, store, batch: readTimeline(target.messages) };
 }
+
+for (const [label, fields] of [['missing', {}], ['string', { characters: '林舟' }], ['null', { characters: null }]]) {
+  test(`photo generation rejects a ${label} character list before drawing or saving`, async () => {
+    const { h, store, batch } = setup();
+    await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
+    await store.appendMessage('lin', { id: 'photo', role: 'assistant', type: 'image', image: { description: '林舟在窗边的自拍' }, batch });
+    const before = structuredClone(store.read()), saves = h.metadataSaves;
+    let drawings = 0;
+    const service = createPhoneImageService({ store, modelClient: { complete: async () => JSON.stringify({ prompt: 'selfie, window', size: 'portrait', ...fields }) }, apiProvider: () => ({
+      apiVersion: 1,
+      getBackendStatus: () => ({ configured: true, supportsCharacters: true }),
+      getCharacters: () => ({ characters: [{ name: '林舟', tag: 'black hair, white shirt', nl: '黑发白衬衫' }] }),
+      generate: async () => { drawings++; return { path: '/images/photo.png', seed: 123 }; },
+    }) });
+    await assert.rejects(service.generate('lin', 'photo'), /人物列表/);
+    assert.equal(drawings, 0);
+    assert.equal(h.metadataSaves, saves);
+    assert.deepEqual(store.read(), before);
+  });
+}
+
+test('an explicit empty character list generates and saves a photo without people', async () => {
+  const { h, store, batch } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
+  await store.appendMessage('lin', { id: 'photo', role: 'assistant', type: 'image', image: { description: '窗边的一杯咖啡' }, batch });
+  const saves = h.metadataSaves, requests = [];
+  const service = createPhoneImageService({ store, modelClient: { complete: async () => '{"prompt":"coffee, window","characters":[],"size":"landscape"}' }, apiProvider: () => ({
+    apiVersion: 1,
+    getBackendStatus: () => ({ configured: true, supportsCharacters: true }),
+    getCharacters: () => ({ characters: [] }),
+    generate: async request => { requests.push(request); return { path: '/images/coffee.png', seed: 456 }; },
+  }) });
+  await service.generate('lin', 'photo');
+  assert.deepEqual(requests, [{ prompt: 'coffee, window', nl: '', characters: [], size: 'landscape', save: true }]);
+  assert.equal(h.metadataSaves, saves + 1);
+  assert.deepEqual(store.read().conversations.lin[0].image, { description: '窗边的一杯咖啡', path: '/images/coffee.png', seed: 456 });
+});
 
 test('model message parser keeps sticker, location, transfer and photo semantics without accepting arbitrary sticker URLs', () => {
   const result = parsePayload(JSON.stringify({ messages: [
