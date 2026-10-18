@@ -45,6 +45,7 @@ export async function saveManualPreset(settings, draft, saveSettings) {
 }
 
 export function createApiSettings({ host, onBusyChange = () => {} }) {
+  const settingsKey = host.phoneSettingsKey || 'pocketPhone';
   const api = {
     listSources: () => listApiSources(host.readSettings()),
     async fetchModels(draft) {
@@ -66,7 +67,8 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
       } finally { onBusyChange(false); }
     },
     getSelected() {
-      const selected = host.readSettings().pocketPhone?.apiSourceRef;
+      const settings = host.readSettings();
+      const selected = settings[settingsKey]?.apiSourceRef || settings.pocketPhone?.apiSourceRef;
       if (selected) return selected;
       const sources = api.listSources();
       return sources.find(x => x.ref.kind === 'qqj-current')?.ref || sources.find(x => x.ref.kind === 'gouhua-current')?.ref || (sources.length === 1 ? sources[0].ref : null);
@@ -74,10 +76,10 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
     async select(ref) {
       if (!api.listSources().some(x => refKey(x.ref) === refKey(ref))) throw new Error('这条连接已不存在，请重新选择。');
       const settings = host.readSettings();
-      const previous = settings.pocketPhone;
-      settings.pocketPhone = { ...previous, apiSourceRef: { ...ref } };
+      const previous = settings[settingsKey];
+      settings[settingsKey] = { ...previous, apiSourceRef: { ...ref } };
       try { await host.saveSettings(); }
-      catch { settings.pocketPhone = previous; throw new Error('连接选择保存失败，请重试。'); }
+      catch { settings[settingsKey] = previous; throw new Error('连接选择保存失败，请重试。'); }
     },
     async saveManual(draft) {
       const ref = await saveManualPreset(host.readSettings(), draft, host.saveSettings);

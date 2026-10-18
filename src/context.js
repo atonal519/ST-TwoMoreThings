@@ -12,6 +12,18 @@ function recentStory(messages) {
 const phoneHistory = (state, id, batch) => currentMessages(state.conversations[id] || [], batch);
 const cardText = character => character ? `${character.name}\n${character.description}\n${character.personality}\n${character.scenario}`.slice(0, 10000) : '';
 
+function actorIds(people, bridge, snapshot) {
+  const ids = new Map(people.filter(person => person.source?.kind === 'qqj').map(person => [person.id, person.source.entityId]));
+  if (!people.some(person => person.source?.kind === 'card')) return ids;
+  snapshot ||= bridge?.getPeopleSnapshot?.();
+  const names = new Map();
+  if (snapshot?.status !== 'ready') return ids;
+  // 作者实体编号不属于读者；仅用读者快照中唯一的同名人物建立本次召回归属。
+  for (const person of snapshot.people?.items || []) names.set(person.displayName, names.has(person.displayName) ? null : person.entityId);
+  for (const person of people) if (person.source?.kind === 'card' && names.get(person.name)) ids.set(person.id, names.get(person.name));
+  return ids;
+}
+
 export function createContextReader({ target, store, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1 }) {
   const base = () => {
     const person = store.read().userProfile, batch = readTimeline(target.messages);
@@ -27,18 +39,20 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       const history = phoneHistory(state, id, current.batch);
       let related = '';
       const bridge = qqjBridgeProvider?.();
-      if (contact.source?.kind === 'qqj' && bridge?.readContext) {
+      const entityId = actorIds([contact], bridge).get(id);
+      if (entityId && bridge?.readContext) {
         const query = [contact.name, ...current.story.map(item => item.text), history.at(-1)?.text || ''].join('\n').slice(-8000);
-        const context = await bridge.readContext({ query, entityIds: [contact.source.entityId], maxCharacters: 4000 });
-        if (context?.status === 'ready') related = (context.actors || []).filter(x => x.entityId === contact.source.entityId).map(x => [x.stateText, x.memoryText].filter(Boolean).join('\n')).join('\n').slice(0, 4000);
+        const context = await bridge.readContext({ query, entityIds: [entityId], maxCharacters: 4000 });
+        if (context?.status === 'ready') related = (context.actors || []).filter(x => x.entityId === entityId).map(x => [x.stateText, x.memoryText].filter(Boolean).join('\n')).join('\n').slice(0, 4000);
       }
       return { ...current, stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, history: history.map(contextMessage), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText)].join('\n') }) };
     },
     async readForForum() { const current = base(); return { ...current, worldbook: await target.readWorldInfo({ scanText: current.story.map(item => item.text).join('\n') }) }; },
     async readDirectorySources() {
       const snapshot = qqjBridgeProvider?.()?.getPeopleSnapshot?.();
-      const people = snapshot?.status === 'ready' ? (snapshot.people?.items || []).filter(person => person.entityId && person.profile).map(person => ({ sourceId: `qqj:${person.entityId}`, entityId: person.entityId, name: person.displayName, personality: person.profile.personality || '', expression: person.profile.expression || '' })) : [];
       const state = store.read();
+      const knownActors = new Map([...actorIds(state.contacts, null, snapshot)].map(([id, entityId]) => [entityId, id]));
+      const people = snapshot?.status === 'ready' ? (snapshot.people?.items || []).filter(person => person.entityId && person.profile).map(person => ({ sourceId: knownActors.get(person.entityId) || `qqj:${person.entityId}`, entityId: person.entityId, name: person.displayName, personality: person.profile.personality || '', expression: person.profile.expression || '' })) : [];
       return { ...base(), people, contacts: state.contacts.map(({ id, name, nickname }) => ({ id, name, nickname })), groups: (state.groups || []).map(({ id, name, memberIds, userIsMember }) => ({ id, name, memberIds, userIsMember })), worldbook: await target.readWorldInfo() };
     },
     async readForGroup(id) {
@@ -51,14 +65,14 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         if (!person) throw new Error('有群成员不在联系人中，请编辑群聊重新选择。');
         return { id: person.id, name: person.name, nickname: person.nickname || '', personality: person.personality || '', expression: person.expression || '', language: person.language || '', source: person.source };
       });
-      const bridge = qqjBridgeProvider?.(), entityIds = members.filter(person => person.source?.kind === 'qqj').map(person => person.source.entityId);
+      const bridge = qqjBridgeProvider?.(), ids = actorIds(members, bridge), entityIds = [...new Set(ids.values())];
       let actors = [];
       if (entityIds.length && bridge?.readContext) {
         const query = [group.name, ...current.story.map(item => item.text), history.at(-1)?.text || ''].join('\n').slice(-8000);
         const related = await bridge.readContext({ query, entityIds, maxCharacters: 6000 });
         if (related?.status === 'ready') actors = related.actors || [];
       }
-      const roster = members.map(({ source, ...person }) => ({ ...person, related: actors.filter(actor => actor.entityId === source?.entityId).map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n') }));
+      const roster = members.map(({ source, ...person }) => ({ ...person, related: actors.filter(actor => ids.has(person.id) && actor.entityId === ids.get(person.id)).map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n') }));
       if (group.userIsMember) roster.push({ id: '@user', ...current.userProfile });
       return { ...current, stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, history: history.map(contextMessage), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText)].join('\n') }) };
     },

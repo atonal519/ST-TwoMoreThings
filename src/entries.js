@@ -2,45 +2,47 @@ import { createFab } from './ui/fab.js';
 import { icon } from './ui/shared.js';
 import { syncQuickReply } from './quick-reply.js';
 
-export function createPhoneEntries({ host, documentRef, open, toggle }) {
+export function createPhoneEntries({ host, documentRef, open, toggle, defaults = {}, initialTheme }) {
+  const embedded = host.mode === 'embedded', label = embedded ? '两三事 · 随卡' : '两三事', settingsKey = host.phoneSettingsKey || 'pocketPhone';
+  const qr = embedded ? { setName: label, label, command: host.openCommand } : {};
   const launcher = documentRef.createElement('div');
-  launcher.id = 'pocket-phone-launch'; launcher.className = 'list-group-item flex-container flexGap5';
+  launcher.id = embedded ? 'pocket-phone-card-launch' : 'pocket-phone-launch'; launcher.className = 'list-group-item flex-container flexGap5';
   launcher.style.cssText = 'display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;white-space:nowrap';
   launcher.setAttribute('role', 'button'); launcher.tabIndex = 0;
-  launcher.setAttribute('aria-label', '打开两三事');
-  launcher.innerHTML = `<span class="extensionsMenuExtensionButton" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;width:20px;height:20px">${icon('phone')}</span><span>两三事</span>`;
+  launcher.setAttribute('aria-label', `打开${label}`);
+  launcher.innerHTML = `<span class="extensionsMenuExtensionButton" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;width:20px;height:20px">${icon('phone')}</span><span>${label}</span>`;
   launcher.querySelector('svg').style.cssText = 'display:block;flex:none;width:18px;height:18px';
   const menu = documentRef.querySelector('#sp_wand_container') || documentRef.querySelector('#extensionsMenu') || documentRef.querySelector('#extensions_settings2') || documentRef.body;
   menu.append(launcher);
   const launch = () => { try { open(); } catch (error) { host.reportError(error.message || '两三事暂时无法打开，请刷新页面后重试。'); } };
   const keyOpen = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); launch(); } };
   launcher.addEventListener('click', launch); launcher.addEventListener('keydown', keyOpen);
-  const fab = createFab({ documentRef, windowRef: documentRef.defaultView, onClick: () => { try { toggle(); } catch (error) { host.reportError(error.message); } } });
+  const fab = createFab({ documentRef, windowRef: documentRef.defaultView, ...(embedded ? { id: 'tmt-card-fab-host', storageKey: 'tmt-card-fab-pos', offset: 46, label: '打开两三事 · 随卡（悬浮球）' } : {}), onClick: () => { try { toggle(); } catch (error) { host.reportError(error.message); } } });
   const setTheme = theme => fab.setAppearance({ mode: theme || 'day', effectiveTheme: theme || 'day' });
-  setTheme(host.captureChat().metadata.pocketPhone?.theme);
+  setTheme(host.captureChat().metadata.pocketPhone?.theme || initialTheme);
   documentRef.documentElement.append(fab.host);
   const unregisterCommand = host.registerOpenCommand(launch);
-  const read = () => { const value = host.readSettings().pocketPhone || {}; return { fabShow: value.fabShow !== false, qrShow: value.qrShow === true }; };
+  const read = () => { const value = { ...defaults, ...host.readSettings()[settingsKey] }; return { fabShow: value.fabShow !== false, qrShow: value.qrShow === true }; };
   const syncFab = () => { fab.host.hidden = !read().fabShow; };
   syncFab();
-  const unsubscribeReady = host.onReady(() => { if (read().qrShow) void syncQuickReply(host.readQuickReplies(), true).catch(error => host.reportError(error.message)); });
+  const unsubscribeReady = host.onReady(() => { if (read().qrShow) void syncQuickReply(host.readQuickReplies(), true, qr).catch(error => host.reportError(error.message)); });
   return {
     launcher, fab, read,
     async set(key, enabled) {
       const qrApi = key === 'qrShow' ? host.readQuickReplies() : null;
       if (key === 'qrShow') {
         if (enabled && !unregisterCommand) throw new Error('当前酒馆没有提供快捷命令入口。');
-        await syncQuickReply(qrApi, enabled);
+        await syncQuickReply(qrApi, enabled, qr);
       }
-      const settings = host.readSettings(), previous = settings.pocketPhone;
-      settings.pocketPhone = { ...previous, [key]: enabled };
+      const settings = host.readSettings(), previous = settings[settingsKey];
+      settings[settingsKey] = { ...previous, [key]: enabled };
       try { await host.saveSettings(); }
-      catch { settings.pocketPhone = previous; throw new Error('入口设置保存失败，请重试。'); }
+      catch { settings[settingsKey] = previous; throw new Error('入口设置保存失败，请重试。'); }
       syncFab();
       if (enabled && qrApi?.settings?.isEnabled === false) return { notice: 'QR入口已保存，开启酒馆的快速回复功能后显示。' };
     },
     setTheme,
     focus() { launcher.focus({ preventScroll: true }); },
-    dispose() { unregisterCommand?.(); unsubscribeReady(); fab.destroy(); fab.host.remove(); launcher.removeEventListener('click', launch); launcher.removeEventListener('keydown', keyOpen); launcher.remove(); },
+    dispose() { unregisterCommand?.(); unsubscribeReady(); fab.destroy(); fab.host.remove(); launcher.removeEventListener('click', launch); launcher.removeEventListener('keydown', keyOpen); launcher.remove(); if (embedded && read().qrShow) void syncQuickReply(host.readQuickReplies(), false, qr).catch(() => host.reportError('随卡快捷按钮移除失败，请在快速回复中手动删除“两三事 · 随卡”。')); },
   };
 }

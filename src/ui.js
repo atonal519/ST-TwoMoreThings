@@ -10,19 +10,22 @@ import { renderDeletion } from './ui/deletion.js';
 import { renderModelOptions } from './ui/models.js';
 import { renderPhotoViewer } from './ui/cards.js';
 import { readLockWeather } from './weather.js';
+import { renderAuthoring } from './ui/authoring.js';
+import { LOCAL_CORE_URL, REMOTE_CORE_URL } from './authoring.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
   { id: 'messages', label: '短信', view: 'inbox', pages: ['inbox', 'chat', 'contact-profile', 'group-chat', 'group-profile', 'delete-confirm'] },
   { id: 'forum', label: '论坛', view: 'forum', pages: ['forum', 'post'] },
-  { id: 'settings', label: '设置', view: 'settings', pages: ['settings', 'user-profile'] },
+  { id: 'settings', label: '设置', view: 'settings', pages: ['settings', 'user-profile', 'authoring'] },
 ];
-const pages = { home: renderHome, inbox: renderInbox, chat: renderChat, 'group-chat': renderChat, 'group-profile': renderGroupProfile, 'delete-confirm': renderDeletion, forum: renderForum, post: renderPost, settings: renderSettings, 'contact-profile': renderProfile, 'user-profile': renderProfile };
+const pages = { home: renderHome, inbox: renderInbox, chat: renderChat, 'group-chat': renderChat, 'group-profile': renderGroupProfile, 'delete-confirm': renderDeletion, forum: renderForum, post: renderPost, settings: renderSettings, 'contact-profile': renderProfile, 'user-profile': renderProfile, authoring: renderAuthoring };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, apiSettings, wallpaper, entries, images, control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, apiSettings, wallpaper, entries, images, authoring, mode, control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
-  element.id = 'pocket-phone-host';
+  element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
+  element.dataset.mode = mode || 'standalone';
   element.className = 'pocket-phone';
   const root = element.attachShadow({ mode: 'open' });
   const fontStyle = doc.createElement('style');
@@ -181,6 +184,16 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     if (button.dataset.post) { ui.postId = button.dataset.post; ui.view = 'post'; ui.feedback = null; render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
+      case 'authoring': ui.view = 'authoring'; ui.feedback = null; render(); break;
+      case 'back-authoring': ui.view = 'settings'; render(); break;
+      case 'export-card':
+        void perform('export', () => authoring.exportScript({ coreUrl: ui.exportLocal ? LOCAL_CORE_URL : REMOTE_CORE_URL }), result => {
+          const url = URL.createObjectURL(new Blob([JSON.stringify(result.script, null, 2)], { type: 'application/json' }));
+          const link = doc.createElement('a'); link.href = url; link.download = result.filename; doc.body.append(link); link.click(); link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+          ui.feedback = { text: '随卡包已导出。' };
+        });
+        break;
       case 'attachments': ui.attachment = ui.attachment ? '' : 'menu'; ui.selectedMessage = ''; ui.chatMenu = false; render(); break;
       case 'choose-stickers': ui.attachment = 'stickers'; render(); break;
       case 'choose-location': ui.attachment = 'location'; ui.attachmentDraft = {}; render(); break;
@@ -292,6 +305,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     }
   }
   function change(event) {
+    if (event.target.id === 'export-source') { ui.exportLocal = event.target.value === 'local'; render(); }
     if (event.target.id === 'phone-enabled') {
       const enabled = event.target.checked;
       void perform('enabled', () => control.setEnabled(enabled), () => { ui.view = 'settings'; onContextChange(); });

@@ -3,8 +3,8 @@ import { messageText } from './content.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
 
-export function createPhoneStore({ target, assertEnabled = () => {}, isReading = () => false }) {
-  const empty = emptyState();
+export function createPhoneStore({ target, assertEnabled = () => {}, isReading = () => false, initialState }) {
+  const empty = initialState || emptyState();
   const read = () => target.metadata.pocketPhone || empty;
   // Serialize normal phone saves so sending while a reply arrives keeps both changes.
   let saving = Promise.resolve();

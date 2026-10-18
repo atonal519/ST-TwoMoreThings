@@ -42,3 +42,14 @@ test('an empty generated QR set is removed; a conflicting user button is preserv
   assert.equal(sets.get('两三事').qrList[0].message, '/echo 自己的按钮');
   await assert.rejects(syncQuickReply(null, true), /快速回复/);
 });
+
+test('embedded QR uses its own command and removal leaves the standalone launcher intact', async () => {
+  const { api, sets } = fixture();
+  const card = { setName: '两三事 · 随卡', label: '两三事 · 随卡', command: 'tmt-card-open' };
+  await syncQuickReply(api, true);
+  await syncQuickReply(api, true, card);
+  assert.equal(sets.get(card.setName).qrList[0].message, '/tmt-card-open');
+  await syncQuickReply(api, false, card);
+  assert.equal(sets.has(card.setName), false);
+  assert.equal(sets.get('两三事').qrList[0].message, '/tmt-open');
+});

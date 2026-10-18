@@ -1,22 +1,25 @@
 import { selectWorldEntries } from './worldbook.js';
 import { OPEN_COMMAND } from './quick-reply.js';
+import { readCardPreset } from './authoring.js';
 
 const PROMPT_ID = 'pocket-phone-context';
 
-export function createHostAdapter({ contextProvider = () => (globalThis.SillyTavern || globalThis.Luker)?.getContext(), fetchImpl = (...args) => globalThis.fetch(...args), worldInfoBindings } = {}) {
+export function createHostAdapter({ contextProvider = () => (globalThis.SillyTavern || globalThis.Luker)?.getContext(), fetchImpl = (...args) => globalThis.fetch(...args), worldInfoBindings, mode = 'standalone' } = {}) {
+  const embedded = mode === 'embedded', promptId = embedded ? `${PROMPT_ID}-card` : PROMPT_ID, openCommand = embedded ? 'tmt-card-open' : OPEN_COMMAND;
   const context = () => {
     const value = contextProvider();
     if (!value) throw new Error('暂时无法读取酒馆，请刷新页面后再打开小手机。');
     return value;
   };
   const host = {
+    mode, phoneSettingsKey: embedded ? 'twoMoreThingsEmbedded' : 'pocketPhone', openCommand,
     captureChat() {
       const ctx = context();
       const character = ctx.characters?.[ctx.characterId];
       const target = {
         id: ctx.chatId ?? ctx.getCurrentChatId?.(),
         groupId: ctx.groupId,
-        embeddedPhone: character?.data?.extensions?.twoMoreThings || null,
+        embeddedPhone: readCardPreset(character),
         metadata: ctx.chatMetadata || {}, messages: ctx.chat || [],
         character: character ? { name: character.name, avatar: character.avatar, description: character.description || character.data?.description || '', personality: character.personality || character.data?.personality || '', scenario: character.scenario || character.data?.scenario || '', world: character.data?.extensions?.world || '' } : null,
         user: ctx.name1 || '我', personaWorld: ctx.powerUserSettings?.persona_description_lorebook || '',
@@ -39,10 +42,10 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
     registerOpenCommand(open) {
       const { SlashCommandParser: parser, SlashCommand: Command } = context();
       if (!parser?.addCommandObject || !Command?.fromProps) return null;
-      if (parser.commands?.[OPEN_COMMAND]) throw new Error('两三事的快捷命令已被占用。');
-      const command = Command.fromProps({ name: OPEN_COMMAND, helpString: '打开两三事。', callback: () => { open(); return ''; } });
+      if (parser.commands?.[openCommand]) throw new Error('两三事的快捷命令已被占用。');
+      const command = Command.fromProps({ name: openCommand, helpString: '打开两三事。', callback: () => { open(); return ''; } });
       parser.addCommandObject(command);
-      return () => { if (parser.commands?.[OPEN_COMMAND] === command) delete parser.commands[OPEN_COMMAND]; };
+      return () => { if (parser.commands?.[openCommand] === command) delete parser.commands[openCommand]; };
     },
     onReady(callback) {
       const ctx = context(), name = ctx.eventTypes?.APP_READY;
@@ -51,7 +54,8 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       return () => ctx.eventSource.removeListener(name, callback);
     },
     async readWorldInfo(target, { scanText } = {}) {
-      const bindings = worldInfoBindings || await import('/scripts/world-info.js').then(world => ({
+      // 核心可从CDN加载，宿主模块仍必须从当前酒馆页面的地址读取。
+      const bindings = worldInfoBindings || await import(new URL('/scripts/world-info.js', globalThis.location.href).href).then(world => ({
         getNames: current => [...(world.selected_world_info || []), ...[current.metadata.world_info || []].flat(), ...(world.world_info?.charLore?.find(x => x.name === current.character?.avatar?.replace(/\.[^.]+$/, ''))?.extraBooks || [])],
         load: world.loadWorldInfo,
         defaults: { caseSensitive: world.world_info_case_sensitive, matchWholeWords: world.world_info_match_whole_words },
@@ -73,7 +77,7 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       }
       return parts.join('\n\n');
     },
-    setPrompt(text) { context().setExtensionPrompt(PROMPT_ID, text, 1, 0, false, 0); },
+    setPrompt(text) { context().setExtensionPrompt(promptId, text, 1, 0, false, 0); },
     reportError(message) { if (globalThis.toastr) globalThis.toastr.error(message); else globalThis.alert?.(message); },
     reportNotice(message) { if (globalThis.toastr) globalThis.toastr.warning(message); else globalThis.alert?.(message); },
     onBeforeMainGeneration(callback) {

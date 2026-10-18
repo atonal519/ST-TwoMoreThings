@@ -32,4 +32,8 @@ globalThis.STSevenDaysCal = {
 
 设置页顶部总开关控制当前角色卡的独立版，按头像文件名标识角色卡；角色群聊使用群组标识，没有角色时使用当前聊天标识。保存于本插件全局设置的 `pocketPhone.disabledCards`；不影响其他卡、卡内版或现有档案。停用后阻止手机业务保存与正文回流；已发出的宿主/柏宝绘请求不承诺中止。
 
-此标记与开关不是完整的随卡加载器。作者全部初始内容/外观的配置读取和统一核心加载入口仍待后续实现，不能仅放一个标记就声称已经内置手机。
+0.1.0包含随卡加载与导出，制作步骤见AUTHORING.md。酒馆助手脚本的data.twoMoreThings为作者预设的唯一来源；直接放在data.extensions.twoMoreThings的配置也可作为标记。独立版检测两种存放位置，检测仅表示配置存在，不跟踪运行状态。
+
+卡内入口embed.js导出mountEmbedded({preset})，只显式启动，不触发独立版自动注册；共享逻辑在src/runtime.js。加载脚本在宿主realm运行核心，脚本真实pagehide时释放自己的实例、命令、悬浮球及QR，不设置切聊任务或恢复系统。
+
+独立版仍使用pocketPhone偏好、tmt-open命令和pocket-phone-context摘要槽；卡内版使用twoMoreThingsEmbedded偏好、tmt-card-open命令和pocket-phone-context-card摘要槽。两者手机档案统一保存在当前聊天pocketPhone，作者预设仅作为无档案时的初始值，不复制第二份存档。

@@ -58,14 +58,15 @@ const ctx = {
   saveMetadata: async () => { if (h.saveWait) await h.saveWait; h.metadataSaves++; }, saveSettingsDebounced: () => { h.settingsSaves++; }, getRequestHeaders: () => ({ 'Content-Type': 'application/json' }),
   setExtensionPrompt: (id, text) => { h.prompt = text; },
   eventTypes: { GENERATION_AFTER_COMMANDS: 'before-main', GENERATION_ENDED: 'main-ended', MESSAGE_UPDATED: 'main-edited', MESSAGE_SWIPED: 'main-swiped' },
-  eventSource: { on: (name, fn) => listeners.set(name, fn), removeListener: name => listeners.delete(name) },
+  eventSource: { on(name, fn) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(fn); }, removeListener: (name, fn) => listeners.get(name)?.delete(fn) },
 };
 if (new URLSearchParams(location.search).get('host') === 'luker') {
   ctx.saveChatMetadata = async () => { await ctx.saveMetadata(); return true; };
 }
 h.context = ctx;
-h.beforeGeneration = () => listeners.get('before-main')?.();
-h.storyUpdated = () => listeners.get('main-ended')?.();
+const emit = async name => { for (const callback of listeners.get(name) || []) await callback(); };
+h.beforeGeneration = () => emit('before-main');
+h.storyUpdated = () => emit('main-ended');
 if (new URLSearchParams(location.search).get('clock') === 'story') {
   h.mainMessages[0].mes += '\n<!-- QQJ-end | date=大陆历1686年10月4日 | weekday=周二 | time=23:58 -->';
 }
@@ -73,6 +74,7 @@ for (const history of Object.values(h.metadata.pocketPhone.conversations)) for (
 const host = createHostAdapter({ contextProvider: () => ctx,
   worldInfoBindings: { getNames: () => ['示例世界书'], load: async () => ({ entries: { 0: { content: '林舟和周予有一个朋友群，用户也在其中。', disable: false } } }) },
   fetchImpl: async (path, init) => {
+    if (init.method === 'GET') return fetch(path);
     const body = JSON.parse(init.body); h.requests.push({ path, body });
     if (path.endsWith('/status')) return Response.json(h.models || { data: [{ id: '示例模型-A' }, { id: '示例模型-B' }] }, { status: h.modelsStatus || 200 });
     if (path === '/api/images/upload') { h.lastUpload = body; return Response.json({ path: '/user/images/pocket-phone/preview.webp' }); }
