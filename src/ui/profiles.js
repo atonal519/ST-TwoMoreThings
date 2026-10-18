@@ -4,9 +4,11 @@ export function renderProfile(state, { ui, busy }) {
   const person = ui.profileDraft;
   const contact = ui.editor === 'contact';
   const contactFields = contact ? `
-    <label class="field-label" for="profile-expression">线上聊天方式</label>
+    <div class="field-label profile-expression-heading">
+      <label for="profile-expression">线上聊天方式</label>
+      ${ui.editId ? action('refine-style', busy.has('style') ? '刷新中…' : '刷新线上聊天方式', 'refresh', 'field-refresh', busy.has('style')) : ''}
+    </div>
     <textarea id="profile-expression" name="expression" rows="4" placeholder="句长、分条、标点、称呼、符号或表情习惯">${escape(person.expression)}</textarea>
-    ${ui.editId ? action('refine-style', busy.has('style') ? '提炼中…' : '重新提炼线上方式', 'refresh', 'quiet-button', busy.has('style')) : ''}
     <label class="field-label" for="profile-language">语言习惯</label>
     <input id="profile-language" name="language" value="${escape(person.language)}" placeholder="例如：英语，附中文翻译；不填则按剧情判断">` : '';
   return `<header class="post-heading">

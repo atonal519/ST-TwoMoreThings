@@ -16,7 +16,7 @@ try {
   await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   await page.getByRole('button', { name: '聊天资料', exact: true }).click();
-  await page.getByRole('button', { name: '重新提炼线上方式', exact: true }).click();
+  await page.getByRole('button', { name: '刷新线上聊天方式', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('.pocket-phone').shadowRoot.querySelector('#profile-expression')?.value === '短句，烦躁时只回问号');
   assert.equal(await page.evaluate(() => previewHarness.metadata.pocketPhone.contacts[0].expression), '烦躁时敲桌面');
   assert.equal(await page.evaluate(() => previewHarness.metadataSaves), 0, '先检查，不自动改存档');

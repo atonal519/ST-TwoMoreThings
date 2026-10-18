@@ -16,6 +16,7 @@ import { renderAuthoring } from './ui/authoring.js';
 import { LOCAL_CORE_URL, REMOTE_CORE_URL } from './authoring.js';
 import { renderCalendar } from './ui/calendar.js';
 import { createCalendarReader } from './calendar.js';
+import { mountChatParticles } from './ui/particles.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
@@ -80,9 +81,12 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
   const clock = createPhoneClock({ root, element, readTime });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
+  let stopParticles = null;
 
   // 导航、草稿、事件与服务调用由控制器统一持有，页面只负责展示。
   function render({ bottom = false } = {}) {
+    stopParticles?.();
+    stopParticles = null;
     const scrollTop = inChat() ? root.querySelector('.message-feed')?.scrollTop : undefined;
     const settingsScroll = root.querySelector('.view-settings')?.scrollTop;
     const state = store.read();
@@ -111,6 +115,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       const feed = root.querySelector('.message-feed');
       if (feed) feed.scrollTop = feed.scrollHeight;
     } else if (scrollTop !== undefined) root.querySelector('.message-feed').scrollTop = scrollTop;
+    const chatStage = root.querySelector('.chat-stage');
+    if (chatStage && !element.hidden) stopParticles = mountChatParticles(chatStage);
   }
   async function perform(key, task, after) {
     if (busy.has(key)) return;
@@ -131,6 +137,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     dismissMenus();
     element.hidden = true;
     clock.stop();
+    stopParticles?.();
+    stopParticles = null;
     onClose?.();
   }
   function showPage(view, { bottom = false } = {}) {
@@ -483,6 +491,17 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
         label.lastElementChild.textContent = `${weather.text} ${weather.temperature}`;
       }
     },
-    dispose() { clock.stop(); doc.defaultView.removeEventListener('st-sevendayscal:calendar-changed', refreshCalendar); doc.removeEventListener('pointerdown', dismissMenus, true); root.removeEventListener('keydown', keydown); root.removeEventListener('click', click); root.removeEventListener('input', input); root.removeEventListener('change', change); root.removeEventListener('submit', submit); element.remove(); fontStyle.remove(); },
+    dispose() {
+      clock.stop();
+      stopParticles?.();
+      doc.defaultView.removeEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
+      doc.removeEventListener('pointerdown', dismissMenus, true);
+      root.removeEventListener('keydown', keydown);
+      root.removeEventListener('click', click);
+      root.removeEventListener('input', input);
+      root.removeEventListener('change', change);
+      root.removeEventListener('submit', submit);
+      element.remove(); fontStyle.remove();
+    },
   };
 }

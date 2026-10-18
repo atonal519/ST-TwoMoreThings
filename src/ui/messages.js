@@ -150,17 +150,19 @@ export function renderChat(state, { ui, busy }) {
       </div>
     </header>
     ${clearConfirmation}
-    <div class="message-feed" role="log" aria-label="短信记录" aria-live="polite">
-      ${pastCount ? `<button type="button" class="history-fold" data-action="history" aria-expanded="${ui.historyOpen}"><span>${ui.historyOpen ? '收起过去' : '查看过去'}</span></button>` : ''}
-      ${ui.historyOpen && pastCount > ui.visibleHistory ? action('earlier-history', '查看更早的历史', '', 'earlier-button') : ''}
-      ${historySections.join('')}
-      ${history.length > visible.length ? action('earlier', '查看更早的短信', '', 'earlier-button') : ''}
-      ${visible.length ? `<div class="message-date current-batch-label"><span>${escape(ui.batch.label)}</span></div>` : ''}
-      ${renderList(visible)}
-      ${generating ? `<div class="message-row is-theirs">
-        ${avatar(contact, true)}
-        <div class="typing" role="status" aria-label="正在生成回复"><i></i><i></i><i></i></div>
-      </div>` : ''}
+    <div class="chat-stage">
+      <div class="message-feed" role="log" aria-label="短信记录" aria-live="polite">
+        ${pastCount ? `<button type="button" class="history-fold" data-action="history" aria-expanded="${ui.historyOpen}"><span>${ui.historyOpen ? '收起过去' : '查看过去'}</span></button>` : ''}
+        ${ui.historyOpen && pastCount > ui.visibleHistory ? action('earlier-history', '查看更早的历史', '', 'earlier-button') : ''}
+        ${historySections.join('')}
+        ${history.length > visible.length ? action('earlier', '查看更早的短信', '', 'earlier-button') : ''}
+        ${visible.length ? `<div class="message-date current-batch-label"><span>${escape(ui.batch.label)}</span></div>` : ''}
+        ${renderList(visible)}
+        ${generating ? `<div class="message-row is-theirs">
+          ${avatar(contact, true)}
+          <div class="typing" role="status" aria-label="正在生成回复"><i></i><i></i><i></i></div>
+        </div>` : ''}
+      </div>
     </div>
     ${composer}`;
 }
