@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
+const browser = await chromium.launch({ executablePath: '/tmp/st-tools-browsers/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell', args: ['--no-sandbox'], env: { ...process.env, LD_LIBRARY_PATH: '/tmp/st-tools-browser-libs/root/usr/lib/x86_64-linux-gnu' } });
+try {
+ for (const kind of ['native', 'luker']) {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  page.setDefaultTimeout(8000);
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${kind}&clock=story`);
+  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await page.getByRole('button', { name: /林舟/ }).click();
+  await page.getByRole('textbox', { name: '短信内容' }).fill('上一楼聊过的约定');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await page.getByText('上一楼聊过的约定', { exact: true }).waitFor();
+  await page.evaluate(() => { previewHarness.mainMessages.push({ is_user: false, mes: '新的主楼，时间相同。<!-- QQJ-end | date=大陆历1686年10月4日 | weekday=周二 | time=23:58 -->' }); previewHarness.storyUpdated(); });
+  const history = page.getByRole('button', { name: '查看过去', exact: true });
+  await history.waitFor();
+  assert.equal(await page.getByText('上一楼聊过的约定', { exact: true }).count(), 0);
+  await history.click();
+  await page.getByText('上一楼聊过的约定', { exact: true }).waitFor();
+  await page.getByRole('textbox', { name: '短信内容' }).fill('吃饭吗？');
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await page.getByText('吃饭吗？', { exact: true }).waitFor();
+  await page.getByText('上一楼聊过的约定', { exact: true }).click();
+  await page.getByRole('button', { name: '删除这条短信', exact: true }).click();
+  await page.waitForFunction(() => !previewHarness.metadata.pocketPhone.conversations.lin.some(x => x.text === '上一楼聊过的约定'));
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  if (await page.getByRole('button', { name: '内容设置', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '内容设置', exact: true }).click();
+  await page.getByRole('switch', { name: '短信带入正文' }).check();
+  assert.equal(await page.evaluate(() => previewHarness.requests.length), 0, '开关不调用摘要');
+  assert.equal(await page.evaluate(() => previewHarness.prompt), '');
+  await page.evaluate(() => previewHarness.beforeGeneration());
+  assert.equal(await page.evaluate(() => previewHarness.requests.length), 1);
+  assert.ok(await page.evaluate(() => previewHarness.prompt.includes('用户与林舟约好晚点在书店见面。')));
+  const summaryInput = await page.evaluate(() => JSON.parse(previewHarness.requests[0].body.messages[1].content));
+  assert.deepEqual(summaryInput.conversations[0].messages.map(item => item.text), ['吃饭吗？']);
+  await page.getByRole('button', { name: '短信', exact: true }).click();
+  await page.getByRole('button', { name: /林舟/ }).click();
+  await page.getByRole('button', { name: '聊天选项', exact: true }).click();
+  await page.getByRole('button', { name: '清空聊天', exact: true }).click();
+  await page.getByRole('button', { name: '确认清空', exact: true }).click();
+  await page.waitForFunction(() => !previewHarness.metadata.pocketPhone.conversations.lin.some(item => item.text === '吃饭吗？'));
+  assert.equal(await page.getByRole('log').locator('.current-batch-label').count(), 0);
+  assert.equal(await page.evaluate(() => previewHarness.prompt), '');
+  assert.ok(await page.evaluate(() => previewHarness.metadata.pocketPhone.conversations.lin.length > 0));
+  await page.getByRole('button', { name: '查看过去', exact: true }).click();
+  await page.getByText('这么巧，我正想问你。', { exact: true }).waitFor();
+  await page.evaluate(() => previewHarness.beforeGeneration());
+  assert.equal(await page.evaluate(() => previewHarness.requests.length), 1, '只剩历史记录不再摘要');
+  assert.deepEqual(errors, []);
+  await page.close();
+ }
+ console.log('Native/Luker timeline folding, read-only history deletion, current-only clear and awaited main-generation summary passed. Simulated hosts/model only.');
+} finally { await browser.close(); }

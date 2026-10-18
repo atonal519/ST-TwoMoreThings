@@ -1,0 +1,146 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { parsePayload } from '../src/api.js';
+import { createPhoneStore } from '../src/store.js';
+import { createMessageService } from '../src/messages.js';
+import { createContextReader, createBackflowService } from '../src/context.js';
+import { readTimeline } from '../src/timeline.js';
+import { createHarness } from './harness.mjs';
+
+function setup() {
+  const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }] });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  return { h, target, store, batch: readTimeline(target.messages) };
+}
+
+test('model message parser keeps sticker, location, transfer and photo semantics without accepting arbitrary sticker URLs', () => {
+  const result = parsePayload(JSON.stringify({ messages: [
+    { type: 'sticker', stickerId: 'sepia.happy' },
+    { type: 'location', location: { name: '街角咖啡店', address: '广场东侧' } },
+    { type: 'transfer', transfer: { amount: '20.00', currency: 'CNY', note: '咖啡', recipientId: '@user' } },
+    { type: 'image', image: { description: '窗边的一杯热咖啡' } },
+    { type: 'sticker', stickerId: 'https://invalid.example/a.svg', text: '笑了' },
+  ] }), 'messages');
+  assert.equal(result[0].type, 'sticker');
+  assert.equal(result[0].stickerId, 'sepia.happy');
+  assert.equal(result[1].location.address, '广场东侧');
+  assert.equal(result[2].transfer.status, 'pending');
+  assert.equal(result[3].image.description, '窗边的一杯热咖啡');
+  assert.equal(result[4].type, undefined);
+  assert.equal(result[4].text, '笑了');
+});
+
+test('sending a sticker and receiving rich replies use the same stored batch and semantic context', async () => {
+  const { target, store, batch } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
+  const contextReader = createContextReader({ target, store, qqjBridgeProvider: () => null });
+  const service = createMessageService({ target, store, contextReader, modelClient: { complete: async () => '{"messages":[{"type":"location","location":{"name":"咖啡店","address":"广场东侧"}}]}' } });
+  assert.equal(typeof service.sendCard, 'function');
+  await service.sendCard('lin', { type: 'sticker', stickerId: 'sepia.happy' });
+  await service.continueChat('lin');
+  const saved = store.read().conversations.lin;
+  assert.equal(saved.length, 2);
+  assert.ok(saved.every(message => message.batch.key === batch.key));
+  const context = await contextReader.readForContact('lin');
+  assert.ok(context.history[0].text.includes('开心'));
+  assert.ok(context.history[1].text.includes('广场东侧'));
+  await store.deleteMessage('lin', saved[1].id);
+  assert.equal((await contextReader.readForContact('lin')).history.length, 1);
+});
+
+test('accepting or returning a received transfer updates its record and is included in the main-story summary', async () => {
+  const { target, store, batch } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
+  const service = createMessageService({ target, store, contextReader: createContextReader({ target, store }), modelClient: { complete: async () => '{"messages":[{"type":"transfer","transfer":{"amount":"20","recipientId":"@user","note":"咖啡"}}]}' } });
+  await service.continueChat('lin');
+  const message = store.read().conversations.lin[0];
+  assert.equal(typeof store.respondTransfer, 'function');
+  await store.respondTransfer('lin', message.id, 'accepted', '@user', batch);
+  assert.equal(store.read().conversations.lin.length, 1);
+  assert.equal(store.read().conversations.lin[0].transfer.status, 'accepted');
+  await store.setInjectionEnabled(true);
+  let summaryInput;
+  const backflow = createBackflowService({ target, store, modelClient: { complete: async request => { summaryInput = JSON.parse(request.messages[0].content); return '{"summary":"林舟给用户转账20元，用户已收下。"}'; } } });
+  await backflow.prepare();
+  assert.ok(summaryInput.conversations[0].messages[0].text.includes('已收下'));
+  await assert.rejects(store.respondTransfer('lin', message.id, 'returned', '@user', batch), /处理/);
+});
+
+test('unread notifications merge each conversation and disappear after reading without deleting messages', async () => {
+  const { store } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
+  await store.appendMessages('lin', [{ id: 'a', role: 'assistant', text: '你好' }, { id: 'b', role: 'assistant', text: '在吗' }]);
+  assert.equal(typeof store.markRead, 'function');
+  const { unreadConversations } = await import('../src/notifications.js');
+  assert.equal(unreadConversations(store.read())[0].count, 2);
+  await store.markRead('lin');
+  assert.equal(unreadConversations(store.read()).length, 0);
+  assert.equal(store.read().conversations.lin.length, 2);
+  await store.appendMessage('lin', { id: 'c', role: 'assistant', text: '再见' });
+  assert.equal(unreadConversations(store.read())[0].count, 1);
+  await store.deleteMessage('lin', 'c');
+  assert.equal(unreadConversations(store.read()).length, 0);
+});
+
+test('group transfer summaries retain the named recipient and settlement result', async () => {
+  const { target, store, batch } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
+  const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true });
+  await store.appendMessage(group.id, { id: 't', role: 'user', speakerId: '@user', type: 'transfer', transfer: { amount: '20.00', currency: 'CNY', recipientId: 'zhou', status: 'accepted' }, batch });
+  await store.setInjectionEnabled(true);
+  let summaryInput;
+  const backflow = createBackflowService({ target, store, modelClient: { complete: async request => { summaryInput = JSON.parse(request.messages[0].content); return '{"summary":"用户给周予转账20元，周予已收下。"}'; } } });
+  await backflow.prepare();
+  const message = summaryInput.conversations[0].messages[0];
+  assert.equal(message.recipient, '周予');
+  assert.ok(message.text.includes('已收下'));
+});
+
+test('old archives do not become new notifications and visible replies are read in the same save', async () => {
+  const { h, target } = setup();
+  target.metadata.pocketPhone = { contacts: [{ id: 'lin', name: '林舟' }], groups: [], conversations: { lin: [{ id: 'old', role: 'assistant', text: '旧短信' }] } };
+  const store = createPhoneStore({ target, isReading: () => true });
+  const { unreadConversations } = await import('../src/notifications.js');
+  assert.equal(unreadConversations(store.read()).length, 0);
+  await store.markRead('lin');
+  assert.equal(h.metadataSaves, 0);
+  await store.appendMessage('lin', { id: 'new', role: 'assistant', text: '正看到的回复' });
+  assert.equal(store.read().conversations.lin.at(-1).read, true);
+  assert.equal(h.metadataSaves, 1);
+});
+
+test('a transfer result changed during summarization is not injected as an obsolete fact', async () => {
+  const { target, store, batch } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
+  await store.appendMessage('lin', { id: 't', role: 'assistant', type: 'transfer', transfer: { amount: '20.00', currency: 'CNY', recipientId: '@user', status: 'pending' }, batch });
+  await store.setInjectionEnabled(true);
+  const backflow = createBackflowService({ target, store, modelClient: { complete: async () => { await store.respondTransfer('lin', 't', 'accepted', '@user', batch); return '{"summary":"林舟给用户转账20元，尚未收款。"}'; } } });
+  await assert.rejects(backflow.prepare(), /改变|变更|变化/);
+});
+
+test('a removed group recipient cannot settle a transfer using an earlier reply', async () => {
+  const { store, batch } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
+  const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true });
+  await store.appendMessage(group.id, { id: 't', role: 'user', speakerId: '@user', type: 'transfer', transfer: { amount: '20.00', currency: 'CNY', recipientId: 'lin', status: 'pending' }, batch });
+  await store.deleteContact('lin');
+  await assert.rejects(store.respondTransfer(group.id, 't', 'accepted', 'lin', batch), /群/);
+});
+
+test('group rich replies retain each speaker and a character can return a user transfer without creating a fake user message', async () => {
+  const { target, store } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
+  const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true });
+  const { createGroupService } = await import('../src/groups.js');
+  let reply;
+  const service = createGroupService({ target, store, contextReader: createContextReader({ target, store, qqjBridgeProvider: () => null }), modelClient: { complete: async () => JSON.stringify(reply) } });
+  await service.sendCard(group.id, { type: 'transfer', transfer: { amount: '12.50', recipientId: 'lin', note: '咖啡' } });
+  const sent = store.read().conversations[group.id][0];
+  reply = { anchor: { memberIds: ['lin', 'zhou', '@user'], speakerIds: ['lin'] }, messages: [], transferActions: [{ speakerId: 'lin', transferId: sent.id, status: 'returned' }] };
+  await service.continueChat(group.id);
+  assert.equal(store.read().conversations[group.id].length, 1);
+  assert.equal(store.read().conversations[group.id][0].transfer.status, 'returned');
+  reply = { anchor: { memberIds: ['lin', 'zhou', '@user'], speakerIds: ['lin', 'zhou'] }, messages: [{ speakerId: 'lin', type: 'sticker', stickerId: 'sepia.happy' }, { speakerId: 'zhou', type: 'location', location: { name: '书店', address: '广场' } }] };
+  await service.continueChat(group.id);
+  assert.deepEqual(store.read().conversations[group.id].slice(1).map(message => [message.speakerId, message.type]), [['lin', 'sticker'], ['zhou', 'location']]);
+});

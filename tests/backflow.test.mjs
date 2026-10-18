@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHarness } from './harness.mjs';
+import { createPhoneStore } from '../src/store.js';
+import { createApiSettings, createModelClient } from '../src/api.js';
+
+test('backflow summarizes every current message including short exchanges and never includes old or observer records', async () => {
+  const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }], settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test', apiModel: 'm' } }, completion: { choices: [{ message: { content: '{"summary":"用户问林舟是否一起吃饭，林舟答应。"}' } }] } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
+  const { readTimeline } = await import('../src/timeline.js');
+  const batch = readTimeline(target.messages);
+  await store.appendMessages('lin', [{ id: 'old', role: 'user', text: '旧批次秘密', batch: { key: 'old', label: '过去' } }, ...Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', text: i % 2 ? '吃' : '吃饭吗？', batch }))]);
+  const observer = await store.saveGroup('', { name: '旁观', memberIds: ['lin', 'zhou'], userIsMember: false });
+  await store.appendMessage(observer.id, { role: 'assistant', speakerId: 'zhou', text: '旁观内容', batch });
+  const mod = await import('../src/context.js');
+  assert.equal(typeof mod.createBackflowService, 'function', '回流须经摘要服务');
+  const service = mod.createBackflowService({ target, store, modelClient: createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) }) });
+  assert.equal(await service.prepare(), '');
+  assert.equal(h.modelRequests.length, 0);
+  await store.setInjectionEnabled(true);
+  const text = await service.prepare();
+  assert.ok(text.includes('用户问林舟是否一起吃饭，林舟答应。'));
+  assert.equal(h.modelRequests.length, 1);
+  const input = JSON.parse(h.modelRequests[0].body.messages[1].content);
+  assert.equal(input.conversations[0].messages.length, 200);
+  assert.ok(!JSON.stringify(input).includes('旧批次秘密'));
+  assert.ok(!JSON.stringify(input).includes('旁观内容'));
+  await store.clearConversation('lin', batch);
+  assert.equal(await service.prepare(), '');
+  assert.equal(h.modelRequests.length, 1, '没有当前消息不请求摘要');
+});

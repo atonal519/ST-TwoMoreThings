@@ -1,0 +1,46 @@
+import { createFab } from './ui/fab.js';
+import { icon } from './ui/shared.js';
+import { syncQuickReply } from './quick-reply.js';
+
+export function createPhoneEntries({ host, documentRef, open, toggle }) {
+  const launcher = documentRef.createElement('div');
+  launcher.id = 'pocket-phone-launch'; launcher.className = 'list-group-item flex-container flexGap5';
+  launcher.style.cssText = 'display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;white-space:nowrap';
+  launcher.setAttribute('role', 'button'); launcher.tabIndex = 0;
+  launcher.setAttribute('aria-label', '打开两三事');
+  launcher.innerHTML = `<span class="extensionsMenuExtensionButton" style="display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;width:20px;height:20px">${icon('phone')}</span><span>两三事</span>`;
+  launcher.querySelector('svg').style.cssText = 'display:block;flex:none;width:18px;height:18px';
+  const menu = documentRef.querySelector('#sp_wand_container') || documentRef.querySelector('#extensionsMenu') || documentRef.querySelector('#extensions_settings2') || documentRef.body;
+  menu.append(launcher);
+  const launch = () => { try { open(); } catch (error) { host.reportError(error.message || '两三事暂时无法打开，请刷新页面后重试。'); } };
+  const keyOpen = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); launch(); } };
+  launcher.addEventListener('click', launch); launcher.addEventListener('keydown', keyOpen);
+  const fab = createFab({ documentRef, windowRef: documentRef.defaultView, onClick: () => { try { toggle(); } catch (error) { host.reportError(error.message); } } });
+  const setTheme = theme => fab.setAppearance({ mode: theme || 'day', effectiveTheme: theme || 'day' });
+  setTheme(host.captureChat().metadata.pocketPhone?.theme);
+  documentRef.documentElement.append(fab.host);
+  const unregisterCommand = host.registerOpenCommand(launch);
+  const read = () => { const value = host.readSettings().pocketPhone || {}; return { fabShow: value.fabShow !== false, qrShow: value.qrShow === true }; };
+  const syncFab = () => { fab.host.hidden = !read().fabShow; };
+  syncFab();
+  const unsubscribeReady = host.onReady(() => { if (read().qrShow) void syncQuickReply(host.readQuickReplies(), true).catch(error => host.reportError(error.message)); });
+  return {
+    launcher, fab, read,
+    async set(key, enabled) {
+      const qrApi = key === 'qrShow' ? host.readQuickReplies() : null;
+      if (key === 'qrShow') {
+        if (enabled && !unregisterCommand) throw new Error('当前酒馆没有提供快捷命令入口。');
+        await syncQuickReply(qrApi, enabled);
+      }
+      const settings = host.readSettings(), previous = settings.pocketPhone;
+      settings.pocketPhone = { ...previous, [key]: enabled };
+      try { await host.saveSettings(); }
+      catch { settings.pocketPhone = previous; throw new Error('入口设置保存失败，请重试。'); }
+      syncFab();
+      if (enabled && qrApi?.settings?.isEnabled === false) return { notice: 'QR入口已保存，开启酒馆的快速回复功能后显示。' };
+    },
+    setTheme,
+    focus() { launcher.focus({ preventScroll: true }); },
+    dispose() { unregisterCommand?.(); unsubscribeReady(); fab.destroy(); fab.host.remove(); launcher.removeEventListener('click', launch); launcher.removeEventListener('keydown', keyOpen); launcher.remove(); },
+  };
+}

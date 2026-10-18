@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>两三事 · 界面预览</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100svh; background: #e5e5da; color: #222a29; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+    .preview-bar { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 24px 32px; }
+    .preview-bar h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .03em; }
+    .preview-bar p { margin: 5px 0 0; font-size: 12px; color: #79859a; }
+    .preview-bar button { border: 1px solid #cfd7e4; background: transparent; border-radius: 9px; padding: 9px 14px; color: inherit; cursor: pointer; }
+    #preview { display: flex; justify-content: center; align-items: flex-start; padding: 4px 16px 28px; }
+    @media (max-width: 520px) { .preview-bar { padding: 13px 17px; } .preview-bar p { font-size: 11px; } #preview { padding: 0 8px 8px; } }
+  </style>
+</head>
+<body>
+  <header class="preview-bar">
+    <div><h1>两三事 · 界面预览</h1><p>模拟宿主与示例回复 · 不调用真实模型，不保存到真实聊天</p></div>
+
+  </header>
+  <main id="preview"></main>
+  <script type="module" src="./preview.js"></script>
+</body>
+</html>

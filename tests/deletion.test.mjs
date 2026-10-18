@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHarness } from './harness.mjs';
+import { createPhoneStore } from '../src/store.js';
+
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: deleting a contact removes all private history and their group posts, retaining everyone else`, async () => {
+  const h = createHarness({ hostKind, metadata: { foreign: { keep: true } } });
+  const store = createPhoneStore({ target: h.host.captureChat() });
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
+  const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true });
+  await store.appendMessages('lin', [{ id: 'old', text: '过去的私聊', batch: { key: 'old' } }, { id: 'new', text: '当前的私聊' }]);
+  await store.appendMessage('zhou', { id: 'other', text: '其他私聊' });
+  await store.appendMessages(group.id, [{ id: 'g1', speakerId: 'lin', text: '被删成员的群消息' }, { id: 'g2', speakerId: 'zhou', text: '其他成员的群消息' }]);
+  assert.equal(typeof store.deleteContact, 'function');
+  await store.deleteContact('lin');
+  assert.equal(store.read().contacts.some(person => person.id === 'lin'), false);
+  assert.equal(store.read().conversations.lin, undefined);
+  assert.deepEqual(store.read().groups[0].memberIds, ['zhou']);
+  assert.deepEqual(store.read().conversations[group.id].map(message => message.id), ['g2']);
+  assert.equal(store.read().conversations.zhou[0].id, 'other');
+  assert.deepEqual(h.persistedMetadata.foreign, { keep: true });
+  await assert.rejects(store.appendMessage('lin', { id: 'late', text: '不能复活已删除会话' }), /已删除|不存在/);
+  await assert.rejects(store.appendMessage(group.id, { id: 'late-group', role: 'assistant', speakerId: 'lin', text: '不能保存已移出成员的新发言' }), /群成员/);
+  await store.upsertContacts([{ id: 'lin', name: '林舟', expression: '再次整理可添加' }]);
+  assert.equal(store.read().contacts.some(person => person.id === 'lin'), true);
+  assert.equal(store.read().conversations.lin, undefined);
+  await store.deleteGroup(group.id);
+  assert.equal(store.read().groups.length, 0);
+  assert.equal(store.read().conversations[group.id], undefined);
+});

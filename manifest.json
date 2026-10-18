@@ -1,0 +1,11 @@
+{
+  "display_name": "两三事",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "author": "两三事",
+  "version": "0.1.0",
+  "homePage": "https://github.com/atonal519/ST-TwoMoreThings",
+  "auto_update": false
+}

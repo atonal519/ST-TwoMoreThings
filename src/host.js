@@ -1,0 +1,96 @@
+import { selectWorldEntries } from './worldbook.js';
+import { OPEN_COMMAND } from './quick-reply.js';
+
+const PROMPT_ID = 'pocket-phone-context';
+
+export function createHostAdapter({ contextProvider = () => (globalThis.SillyTavern || globalThis.Luker)?.getContext(), fetchImpl = (...args) => globalThis.fetch(...args), worldInfoBindings } = {}) {
+  const context = () => {
+    const value = contextProvider();
+    if (!value) throw new Error('暂时无法读取酒馆，请刷新页面后再打开小手机。');
+    return value;
+  };
+  const host = {
+    captureChat() {
+      const ctx = context();
+      const character = ctx.characters?.[ctx.characterId];
+      const target = {
+        id: ctx.chatId ?? ctx.getCurrentChatId?.(),
+        groupId: ctx.groupId,
+        embeddedPhone: character?.data?.extensions?.twoMoreThings || null,
+        metadata: ctx.chatMetadata || {}, messages: ctx.chat || [],
+        character: character ? { name: character.name, avatar: character.avatar, description: character.description || character.data?.description || '', personality: character.personality || character.data?.personality || '', scenario: character.scenario || character.data?.scenario || '', world: character.data?.extensions?.world || '' } : null,
+        user: ctx.name1 || '我', personaWorld: ctx.powerUserSettings?.persona_description_lorebook || '',
+        async saveMetadata() {
+          if (!target.id) throw new Error('请先打开一个角色聊天，再保存手机内容。');
+          try {
+            if (typeof ctx.saveChatMetadata === 'function') {
+              if (await ctx.saveChatMetadata() !== true) throw new Error('未能保存');
+            } else if (typeof ctx.saveMetadata === 'function') await ctx.saveMetadata();
+            else throw new Error('当前酒馆未提供保存接口');
+          } catch { throw new Error('手机内容保存失败，请检查酒馆连接后重试。'); }
+        },
+      };
+      target.readWorldInfo = options => host.readWorldInfo(target, options);
+      return target;
+    },
+    readSettings: () => context().extensionSettings,
+    saveSettings: () => context().saveSettingsDebounced(),
+    readQuickReplies: () => globalThis.quickReplyApi,
+    registerOpenCommand(open) {
+      const { SlashCommandParser: parser, SlashCommand: Command } = context();
+      if (!parser?.addCommandObject || !Command?.fromProps) return null;
+      if (parser.commands?.[OPEN_COMMAND]) throw new Error('两三事的快捷命令已被占用。');
+      const command = Command.fromProps({ name: OPEN_COMMAND, helpString: '打开两三事。', callback: () => { open(); return ''; } });
+      parser.addCommandObject(command);
+      return () => { if (parser.commands?.[OPEN_COMMAND] === command) delete parser.commands[OPEN_COMMAND]; };
+    },
+    onReady(callback) {
+      const ctx = context(), name = ctx.eventTypes?.APP_READY;
+      if (!name || !ctx.eventSource) { callback(); return () => {}; }
+      ctx.eventSource.on(name, callback);
+      return () => ctx.eventSource.removeListener(name, callback);
+    },
+    async readWorldInfo(target, { scanText } = {}) {
+      const bindings = worldInfoBindings || await import('/scripts/world-info.js').then(world => ({
+        getNames: current => [...(world.selected_world_info || []), ...[current.metadata.world_info || []].flat(), ...(world.world_info?.charLore?.find(x => x.name === current.character?.avatar?.replace(/\.[^.]+$/, ''))?.extraBooks || [])],
+        load: world.loadWorldInfo,
+        defaults: { caseSensitive: world.world_info_case_sensitive, matchWholeWords: world.world_info_match_whole_words },
+      }));
+      const names = [...new Set([target.character?.world, target.personaWorld, ...(bindings.getNames?.(target) || [])].filter(Boolean))];
+      const parts = [];
+      let remaining = 24000;
+      for (const name of names) {
+        const book = await bindings.load(name);
+        if (!book) throw new Error('关联世界书读取失败，请检查世界书是否可用。');
+        const rows = Object.values(book.entries || {});
+        const entries = scanText === undefined ? rows : selectWorldEntries(rows, scanText, { defaults: bindings.defaults, user: target.user, char: target.character?.name });
+        for (const entry of entries) {
+          if (entry.disable || typeof entry.content !== 'string') continue;
+          const text = `${entry.comment || ''}\n${entry.content}`.slice(0, remaining);
+          parts.push(text); remaining -= text.length;
+          if (!remaining) return parts.join('\n\n');
+        }
+      }
+      return parts.join('\n\n');
+    },
+    setPrompt(text) { context().setExtensionPrompt(PROMPT_ID, text, 1, 0, false, 0); },
+    reportError(message) { if (globalThis.toastr) globalThis.toastr.error(message); else globalThis.alert?.(message); },
+    reportNotice(message) { if (globalThis.toastr) globalThis.toastr.warning(message); else globalThis.alert?.(message); },
+    onBeforeMainGeneration(callback) {
+      const ctx = context();
+      const name = ctx.eventTypes?.GENERATION_AFTER_COMMANDS;
+      if (!name || !ctx.eventSource) throw new Error('当前酒馆未提供正文参考接口。');
+      ctx.eventSource.on(name, callback);
+      return () => ctx.eventSource.removeListener(name, callback);
+    },
+    onStoryChanged(callback) {
+      const ctx = context();
+      const names = ['GENERATION_ENDED', 'MESSAGE_UPDATED', 'MESSAGE_SWIPED'].map(key => ctx.eventTypes[key]);
+      for (const name of names) ctx.eventSource.on(name, callback);
+      globalThis.addEventListener?.('st-sevendayscal:display-changed', callback);
+      return () => { for (const name of names) ctx.eventSource.removeListener(name, callback); globalThis.removeEventListener?.('st-sevendayscal:display-changed', callback); };
+    },
+    request(path, init) { return fetchImpl(path, { ...init, headers: { ...context().getRequestHeaders(), ...init.headers } }); },
+  };
+  return host;
+}
