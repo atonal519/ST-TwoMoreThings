@@ -31,6 +31,29 @@ export function stateFromPreset(preset) {
   };
 }
 
+// 此函数会写入随卡脚本，必须自包含；只更新核心地址，不发送或改写作者配置与读者档案。
+async function loadEmbedded(nodeId, coreUrl, followUpdates) {
+  const node = document.getElementById(nodeId);
+  try {
+    if (followUpdates) {
+      try {
+        const response = await fetch('https://api.github.com/repos/atonal519/ST-TwoMoreThings/git/ref/heads/main', { cache: 'no-store', credentials: 'omit' });
+        if (!response.ok) throw new Error();
+        const { object } = await response.json();
+        if (object?.type !== 'commit' || typeof object.sha !== 'string' || !/^[a-f0-9]{40}$/i.test(object.sha)) throw new Error();
+        // 固定整套相对依赖的提交地址，避免 main 的长期缓存或混用新旧模块。
+        coreUrl = coreUrl.replace('@main/', `@${object.sha}/`);
+      } catch { throw new Error('无法读取手机最新版本，请检查 GitHub 连接后重新加载脚本。'); }
+    }
+    const { mountEmbedded } = await import(coreUrl).catch(() => { throw new Error('卡内手机核心加载失败，请检查网络后重新加载脚本。'); });
+    const app = mountEmbedded({ preset: node.preset });
+    node.owner.addEventListener('pagehide', () => app.dispose(), { once: true });
+  } catch (error) {
+    globalThis.toastr?.error(error.message || '卡内手机加载失败，请重新加载脚本。');
+    console.error('两三事随卡加载失败', error);
+  } finally { node.remove(); }
+}
+
 function bootstrap(coreUrl) {
   return `const coreUrl = ${JSON.stringify(coreUrl)};
 const node = window.parent.document.createElement('script');
@@ -38,7 +61,7 @@ node.type = 'module';
 node.id = 'tmt-card-loader-' + crypto.randomUUID();
 node.owner = window;
 node.preset = getVariables({ type: 'script' }).twoMoreThings;
-node.textContent = 'const node=document.getElementById(' + JSON.stringify(node.id) + ');try{const {mountEmbedded}=await import(' + JSON.stringify(coreUrl) + ');const app=mountEmbedded({preset:node.preset});node.owner.addEventListener("pagehide",()=>app.dispose(),{once:true});}catch(error){globalThis.toastr?.error(error.message||"卡内手机加载失败，请检查网络后重新加载脚本。");console.error("两三事随卡加载失败",error);}finally{node.remove();}';
+node.textContent = '(' + ${JSON.stringify(loadEmbedded.toString())} + ')(' + JSON.stringify(node.id) + ',' + JSON.stringify(coreUrl) + ',${coreUrl === REMOTE_CORE_URL})';
 window.parent.document.head.append(node);`;
 }
 

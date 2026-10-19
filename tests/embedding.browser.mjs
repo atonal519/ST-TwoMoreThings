@@ -10,9 +10,14 @@ try {
   for (const style of ['stacked', 'rounded']) for (const kind of ['native', 'luker']) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, acceptDownloads: true });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
-    const unexpected = [];
+    const unexpected = [], revision = 'a'.repeat(40);
+    let updateChecks = 0;
+    await page.route('https://api.github.com/repos/atonal519/ST-TwoMoreThings/git/ref/heads/main', route => {
+      updateChecks++;
+      return route.fulfill({ json: { object: { type: 'commit', sha: revision } }, headers: { 'Access-Control-Allow-Origin': '*' } });
+    });
     await page.route('https://cdn.jsdelivr.net/**', route => {
-      const prefix = '/gh/atonal519/ST-TwoMoreThings@main/', pathname = new URL(route.request().url()).pathname;
+      const prefix = `/gh/atonal519/ST-TwoMoreThings@${revision}/`, pathname = new URL(route.request().url()).pathname;
       if (!pathname.startsWith(prefix)) { unexpected.push(route.request().url()); return route.abort(); }
       const path = resolve(import.meta.dirname, '..', pathname.slice(prefix.length));
       const types = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.woff2': 'font/woff2' };
@@ -59,8 +64,13 @@ try {
     await page.locator('[data-action="back-authoring"]').click();
     await page.getByRole('switch', { name: '启用两三事', exact: true }).uncheck();
     await page.getByRole('button', { name: '关闭手机', exact: true }).click();
-    await page.evaluate(({ script, kind }) => {
+    await page.evaluate(async ({ script, kind }) => {
       previewHarness.exportedScript = script;
+      previewHarness.context.eventTypes.APP_READY = 'host-ready';
+      await previewHarness.context.eventSource.emit('host-ready');
+      previewHarness.settings.twoMoreThingsEmbedded = { qrShow: true };
+      await quickReplyApi.createSet('两三事 · 随卡');
+      quickReplyApi.createQuickReply('两三事 · 随卡', '两三事 · 随卡', { message: '/tmt-card-open', automationId: '' });
       previewHarness.metadata.pocketPhone = undefined;
       previewHarness.context.characters[0].data = { extensions: { tavern_helper: { scripts: [script] } } };
       globalThis[kind === 'native' ? 'SillyTavern' : 'Luker'] = { getContext: () => previewHarness.context };
@@ -70,6 +80,9 @@ try {
       document.body.append(frame);
     }, { script, kind });
     await page.getByRole('button', { name: '打开两三事 · 随卡', exact: true }).waitFor();
+    await page.waitForFunction(() => quickReplyApi.getSetByName('两三事 · 随卡')?.qrList.some(qr => qr.label === '手机'), undefined, { timeout: 3000 });
+    assert.equal(await page.evaluate(() => quickReplyApi.getSetByName('两三事 · 随卡').qrList.length), 1, '启动后加载的随卡版也替换旧QR，不等待已结束的启动事件');
+    assert.equal(updateChecks, kind === 'native' ? 0 : 1, '本机测试不访问云端，正式加载器只检查一次最新提交');
     assert.equal(await page.evaluate(() => document.getElementById('helper-script').contentDocument.querySelector('.pocket-phone')), null, 'phone mounts in the host realm');
     await page.getByRole('button', { name: '打开两三事 · 随卡', exact: true }).click();
     const embedded = page.locator('#pocket-phone-card-host');

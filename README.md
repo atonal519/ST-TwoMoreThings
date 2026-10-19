@@ -24,7 +24,7 @@
 
 角色卡作者可以配好人物、群聊、头像、聊天风格与背景，再导出随卡手机。制作方法见 [作者说明](./AUTHORING.md)。
 
-当前版本：**0.3.0**。插件联动说明见 [INTEGRATIONS.md](./INTEGRATIONS.md)。
+当前版本：**0.3.1**。插件联动说明见 [INTEGRATIONS.md](./INTEGRATIONS.md)。
 
 ---
 

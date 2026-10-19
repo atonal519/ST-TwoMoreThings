@@ -3,6 +3,7 @@ import { homeImage } from './home.js';
 import { action, avatar, escape, icon, pageHeading, refKey } from './shared.js';
 import { displayName } from '../profiles.js';
 import { renderBackgroundPicker } from './backgrounds.js';
+import { VERSION } from '../version.js';
 
 export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, control }) {
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
@@ -98,5 +99,6 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
     </section>
     ${drawer('connection', '连接设置', connection)}
     ${drawer('appearance', '外观设置', appearance)}
-    ${drawer('content', '内容设置', content)}`;
+    ${drawer('content', '内容设置', content)}
+    <small class="app-version">两三事 ${VERSION}</small>`;
 }

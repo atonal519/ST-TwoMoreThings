@@ -411,6 +411,7 @@ h3 { font-size: 14px; font-weight: 600; }
 .settings-drawer-toggle svg { width: 15px; height: 15px; }
 .settings-drawer-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
 .settings-drawer-body { padding: 0 0 12px; }
+.app-version { display: block; padding-top: 10px; color: var(--pp-muted); font-size: 11px; }
 .settings-drawer-body > .field-label:first-child { margin-top: 0; }
 .compact-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; font-size: 12px; cursor: pointer; }
 .settings-export-row { cursor: default; }

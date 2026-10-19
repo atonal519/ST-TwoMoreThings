@@ -25,7 +25,11 @@ export function createPhoneEntries({ host, documentRef, open, toggle, defaults =
   const read = () => { const value = { ...defaults, ...host.readSettings()[settingsKey] }; return { fabShow: value.fabShow !== false, qrShow: value.qrShow === true }; };
   const syncFab = () => { fab.host.hidden = !read().fabShow; };
   syncFab();
-  const unsubscribeReady = host.onReady(() => { if (read().qrShow) void syncQuickReply(host.readQuickReplies(), true, qr).catch(error => host.reportError(error.message)); });
+  const syncQr = () => { if (read().qrShow) void syncQuickReply(host.readQuickReplies(), true, qr).catch(error => host.reportError(error.message)); };
+  // 随卡脚本常在 APP_READY 后加载；QR 已可用时直接同步，不再等待旧事件。
+  let unsubscribeReady = () => {};
+  if (host.readQuickReplies()) syncQr();
+  else unsubscribeReady = host.onReady(syncQr);
   return {
     launcher, fab, read,
     async set(key, enabled) {
