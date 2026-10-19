@@ -1,9 +1,10 @@
 import { chatColors, wallpaperPresets } from '../backgrounds.js';
 import { action, escape, icon } from './shared.js';
 
-export function renderBackgroundPicker({ value = '', theme, busy, chat = false, preview }) {
+export function renderBackgroundPicker({ value = '', theme, busy, chat = false, preview, defaultPreset }) {
+  if (value === `builtin:${defaultPreset}`) value = '';
   const entries = chat ? chatColors.map(item => ({ value: `color:${item.id}`, name: item.name, color: item[theme === 'night' ? 'night' : 'day'] }))
-    : wallpaperPresets.map(item => ({ value: `builtin:${item.id}`, name: item.name, src: item[theme === 'night' ? 'night' : 'day'] }));
+    : wallpaperPresets.filter(item => item.id !== defaultPreset).map(item => ({ value: `builtin:${item.id}`, name: item.name, src: item[theme === 'night' ? 'night' : 'day'] }));
   const attribute = chat ? 'data-chat-background' : 'data-wallpaper';
   const choices = entries.map(item => `<button type="button" class="background-choice" ${attribute}="${escape(item.value)}" aria-label="${item.name}" aria-pressed="${value === item.value}" ${busy ? 'disabled' : ''} ${item.color ? `style="background-color:${item.color}"` : ''}>${item.src ? `<img src="${escape(item.src)}" alt="" draggable="false">` : ''}</button>`).join('');
   const custom = value && !entries.some(item => item.value === value);

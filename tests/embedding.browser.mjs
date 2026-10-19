@@ -7,7 +7,7 @@ const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwr
 const output = '/tmp/mobile-plugin-reference-research/card-embedding'; mkdirSync(output, { recursive: true });
 const browser = await chromium.launch({ executablePath: '/tmp/st-tools-browsers/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell', args: ['--no-sandbox'], env: { ...process.env, LD_LIBRARY_PATH: '/tmp/st-tools-browser-libs/root/usr/lib/x86_64-linux-gnu' } });
 try {
-  for (const kind of ['native', 'luker']) {
+  for (const style of ['stacked', 'rounded']) for (const kind of ['native', 'luker']) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, acceptDownloads: true });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const unexpected = [];
@@ -15,7 +15,7 @@ try {
       const prefix = '/gh/atonal519/ST-TwoMoreThings@main/', pathname = new URL(route.request().url()).pathname;
       if (!pathname.startsWith(prefix)) { unexpected.push(route.request().url()); return route.abort(); }
       const path = resolve(import.meta.dirname, '..', pathname.slice(prefix.length));
-      const types = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.ttf': 'font/ttf' };
+      const types = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.woff2': 'font/woff2' };
       return route.fulfill({ body: readFileSync(path), contentType: types[extname(path)] || 'text/plain', headers: { 'Access-Control-Allow-Origin': '*' } });
     });
     await page.route('http://127.0.0.1:8917/scripts/world-info.js', route => route.fulfill({ contentType: 'text/javascript', body: 'export const selected_world_info=[]; export const world_info={}; export const loadWorldInfo=async()=>({entries:{}});' }));
@@ -31,11 +31,12 @@ try {
     await page.evaluate(css => { const face = document.createElement('style'); face.textContent = css; document.head.append(face); const style = document.createElement('style'); style.textContent = ':host{font-family:PocketPreviewCJK,sans-serif}'; document.querySelector('.pocket-phone').shadowRoot.append(style); }, css);
     await page.evaluate(async () => { await document.fonts.load('15px PocketPreviewCJK', '两三事酒馆助手脚本核心来源本机测试导出返回联系人群聊'); await document.fonts.ready; });
     await page.locator('.phone-shell').waitFor();
-    await page.evaluate(() => {
+    await page.evaluate(style => {
       const state = previewHarness.metadata.pocketPhone;
       state.groups = [{ id: 'friends', name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true }];
       state.theme = 'night'; state.wallpapers = { night: '/assets/stickers/sepia-0.png' };
-    });
+      state.lockStyle = style;
+    }, style);
     await openApp(page, '设置');
     await page.getByRole('button', { name: '内容设置', exact: true }).click();
     await page.getByRole('button', { name: '导出酒馆助手脚本', exact: true }).click();
@@ -49,6 +50,7 @@ try {
     const script = JSON.parse(readFileSync(path, 'utf8'));
     assert.equal(script.data.twoMoreThings.contacts.length, 3);
     assert.equal(script.data.twoMoreThings.groups.length, 1);
+    assert.equal(script.data.twoMoreThings.lockStyle, style);
     assert.ok(script.data.twoMoreThings.wallpapers.night.startsWith('data:image/png;base64,'));
     assert.equal(JSON.stringify(script).includes('preview-only'), false);
     assert.equal(JSON.stringify(script).includes('刚从书店出来'), false);
@@ -73,6 +75,7 @@ try {
     const embedded = page.locator('#pocket-phone-card-host');
     await embedded.locator('.home-wallpaper').waitFor();
     assert.equal(await embedded.getAttribute('data-theme'), 'night');
+    assert.equal(await embedded.locator(style === 'stacked' ? '.stack-clock > span' : '.round-clock > span').count(), 4);
     assert.equal(await page.evaluate(() => previewHarness.metadata.pocketPhone), undefined, 'reading defaults does not save');
     await openApp(embedded, '短信');
     await embedded.getByRole('button', { name: /林舟/ }).click();
@@ -87,9 +90,11 @@ try {
     await embedded.getByRole('button', { name: '外观设置', exact: true }).click();
     await embedded.getByRole('switch', { name: 'QR', exact: true }).check();
     await page.waitForFunction(() => quickReplyApi.getSetByName('两三事 · 随卡')?.qrList[0]?.message === '/tmt-card-open');
+    assert.equal(await page.evaluate(() => quickReplyApi.getSetByName('两三事 · 随卡').qrList[0].label), '手机');
     await embedded.getByRole('button', { name: '关闭手机', exact: true }).click();
     await page.getByRole('button', { name: '打开两三事', exact: true }).click();
-    assert.equal(await page.evaluate(() => previewHarness.notices.length), 1);
+    assert.equal(await page.evaluate(() => (previewHarness.notices || []).length), 0);
+    assert.equal(await page.locator('#pocket-phone-host').getByRole('alertdialog').count(), 0, '插件版已关闭，不报双开');
     assert.equal(await page.locator('#pocket-phone-host').getByRole('switch', { name: '启用两三事', exact: true }).isChecked(), false);
     await page.locator('#pocket-phone-host').getByRole('button', { name: '关闭手机', exact: true }).click();
     await page.evaluate(() => { const frame = document.getElementById('helper-script'); frame.contentWindow.dispatchEvent(new frame.contentWindow.Event('pagehide')); });

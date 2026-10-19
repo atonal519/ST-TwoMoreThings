@@ -1,5 +1,5 @@
 const SET = '两三事';
-const LABEL = '两三事';
+const LABEL = '手机';
 export const OPEN_COMMAND = 'tmt-open';
 
 // 复用构画的快捷入口约定：只维护本插件按钮，不改 Quick Replies 总开关。
@@ -14,6 +14,9 @@ export async function syncQuickReply(api, enabled, { setName = SET, label = LABE
   if (!set) set = await api.createSet(setName);
   const existing = set.qrList.find(qr => qr.label === label);
   if (existing && (existing.message !== message || existing.automationId)) throw new Error('快速回复组中已有同名按钮，请先将它改名。');
+  // 旧版按钮与组同名；仅替换仍指向本实例的入口，保留用户自己的按钮。
+  const legacy = setName !== label && set.qrList.find(qr => qr.label === setName && qr.message === message && !qr.automationId);
+  if (legacy) api.deleteQuickReply(setName, legacy.label);
   if (enabled) {
     if (!existing) api.createQuickReply(setName, label, { message, title: `打开${label}`, showLabel: true, executeOnStartup: false, executeOnUser: false, executeOnAi: false, executeOnChatChange: false, executeOnGroupMemberDraft: false, executeOnNewChat: false, executeBeforeGeneration: false, automationId: '' });
     if (!api.settings?.config?.hasSet?.(set)) api.addGlobalSet(setName, true);

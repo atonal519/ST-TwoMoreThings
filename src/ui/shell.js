@@ -1,6 +1,7 @@
-import { action, escape, icon } from './shared.js';
+import { action, escape } from './shared.js';
 import { renderPhotoViewer } from './cards.js';
-import { renderStatusBar } from './status.js';
+import { renderLockMeta, renderStatusBar } from './status.js';
+import { renderConflict } from './conflict.js';
 
 function renderNavigation(view, enabled) {
   return `<nav class="bottom-nav system-nav" aria-label="手机导航">
@@ -17,21 +18,17 @@ export function renderFeedback(feedback) {
   </div>` : '';
 }
 
-export function renderShell({ content, view, enabled, weather, feedback, photo }) {
-  const locked = view === 'home';
+export function renderShell({ content, view, enabled, weather, feedback, photo, conflict, mode, conflictBusy, lockStyle }) {
+  const locked = view === 'home', themed = locked && ['stacked', 'rounded'].includes(lockStyle);
   const footer = `<footer class="phone-footer ${locked ? 'home-footer' : ''}">
     ${locked ? `${action('unlock', '进入桌面', 'fingerprint', 'icon-button unlock-button')}
-    <div class="lock-meta">
-      <span class="lock-weather" title="${weather.source === 'decoration' ? '装饰天气' : '构画剧情天气'}">
-        ${icon('sun')}<span>${escape(weather.text)} ${escape(weather.temperature)}</span>
-      </span>
-      <span class="home-date"></span>
-    </div>
+    ${themed ? '' : renderLockMeta(weather)}
     ${action('close', '关闭手机', 'phone-close', 'icon-button close-button lock-close')}` : renderNavigation(view, enabled)}
   </footer>`;
 
   return `${renderStatusBar()}
-    <main class="phone-main view-${view}">${content}</main>
-    ${renderFeedback(feedback)}
-    ${footer}${renderPhotoViewer(photo)}`;
+    <main class="phone-main view-${view}${themed ? lockStyle === 'rounded' ? ' is-rounded' : ' is-stacked' : ''}">${content}${themed ? footer : ''}</main>
+    ${conflict ? '' : renderFeedback(feedback)}
+    ${themed ? '' : footer}${renderPhotoViewer(photo)}
+    ${conflict ? renderConflict({ mode, busy: conflictBusy, feedback }) : ''}`;
 }

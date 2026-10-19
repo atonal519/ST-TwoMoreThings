@@ -58,7 +58,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const root = element.attachShadow({ mode: 'open' });
   const fontStyle = doc.createElement('style');
   fontStyle.dataset.pocketPhoneFont = '';
-  fontStyle.textContent = `@font-face { font-family: PocketPhoneClock; src: url("${new URL('../assets/clock-dorsa.ttf', import.meta.url).href}") format("truetype"); font-display: block; }`;
+  fontStyle.textContent = `@font-face { font-family: PocketPhoneClock; src: url("${new URL('../assets/clock-dorsa.ttf', import.meta.url).href}") format("truetype"); font-display: block; }
+    @font-face { font-family: PocketPhoneRoundClock; src: url("${new URL('../assets/clock-fredoka.woff2', import.meta.url).href}") format("woff2"); font-weight: 500; font-display: block; }`;
   doc.head.append(fontStyle);
   const stylesheet = doc.createElement('link');
   stylesheet.rel = 'stylesheet';
@@ -73,7 +74,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const chatScroll = createChatScroll(root);
   // 这里只持有未保存的页面状态；联系人和消息始终从 store 读取。
   const ui = {
-    view: 'home', feedback: null, defaultUser,
+    view: 'home', feedback: null, defaultUser, conflict: control.hasConflict?.(doc) === true,
     contactId: '', groupId: '', postId: '',
     drafts: new Map(), visibleMessages: 60, batch: null,
     historyOpen: false, visibleHistory: 60,
@@ -110,14 +111,22 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     entries.setTheme(state.theme);
     const page = pages[ui.view];
     const weather = ui.view === 'home' ? readWeather() : null;
+    surface.classList.toggle('is-stacked-lock', ui.view === 'home' && state.lockStyle === 'stacked');
+    surface.classList.toggle('is-rounded-theme', ['home', 'desktop'].includes(ui.view) && state.lockStyle === 'rounded');
     const calendarMonth = ui.view === 'calendar'
       ? calendar.month(ui.calendarOffset)
       : ui.view === 'desktop' ? calendar.month(0) : null;
     surface.innerHTML = renderShell({
-      content: page(state, { ui, busy, apiSettings, imageProviders, entries, control, apps, calendar: calendarMonth }),
+      content: page(state, { ui, busy, apiSettings, imageProviders, entries, control, apps, calendar: calendarMonth, weather }),
       view: ui.view, enabled, weather,
       feedback: ui.feedback, photo: ui.photo,
+      conflict: ui.conflict, mode, conflictBusy: busy.has('conflict'),
+      lockStyle: state.lockStyle,
     });
+    if (ui.conflict) {
+      for (const child of surface.children) child.inert = !child.classList.contains('phone-dialog-backdrop');
+      root.querySelector('[data-action="conflict-continue"]').focus({ preventScroll: true });
+    }
     clock.refresh();
     resizeDraft();
     chatScroll.attach();
@@ -266,6 +275,16 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.view = `${kind}-profile`; ui.chatMenu = false; ui.inboxMenu = false; ui.feedback = null; render();
   }
   function keydown(event) {
+    if (ui.conflict) {
+      event.stopPropagation();
+      if (event.key === 'Escape' && !busy.has('conflict')) { ui.conflict = false; render(); }
+      if (event.key === 'Tab') {
+        const buttons = [...root.querySelectorAll('.phone-dialog button:not(:disabled)')], index = buttons.indexOf(root.activeElement);
+        event.preventDefault();
+        buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
+      }
+      return;
+    }
     const modelOption = event.target.closest('[data-model]');
     if (ui.modelsOpen && (modelOption || event.target.id === 'model-search')) {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeModels(); root.querySelector('[data-action="models-menu"]')?.focus(); return; }
@@ -289,6 +308,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
   }
   function click(event) {
+    if (ui.conflict) {
+      const button = event.target.closest('button');
+      if (!button || button.disabled) return;
+      if (button.dataset.action === 'conflict-continue') { ui.conflict = false; ui.feedback = null; render(); }
+      if (button.dataset.action === 'conflict-disable') void perform('conflict', () => control.setEnabled(false), () => { ui.conflict = false; ui.view = 'settings'; onContextChange(); });
+      return;
+    }
     if (event.target.matches('.photo-viewer')) { ui.photo = null; render(); return; }
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
@@ -504,6 +530,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       void perform('entry', () => entries.set(key, value), result => { if (result?.notice) ui.feedback = { text: result.notice }; });
     }
     if (event.target.id === 'phone-theme') void perform('theme', () => store.setTheme(event.target.value));
+    if (event.target.id === 'phone-lock-style') void perform('lock-style', () => store.setLockStyle(event.target.value));
     if (event.target.id === 'wallpaper-file' && event.target.files[0]) {
       const file = event.target.files[0], theme = store.read().theme;
       void perform('wallpaper', async () => wallpaper.upload(theme, await readImage(file, doc, 1600)));
@@ -567,6 +594,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     isReading(id) { return element.isConnected && !element.hidden && inChat() && conversationId() === id; },
     close,
     open() {
+      ui.conflict = control.hasConflict?.(doc) === true;
       // 关闭后重开统一进入锁屏；已显示时调用 open 只刷新当前页。
       if (element.hidden) {
         ui.view = 'home';

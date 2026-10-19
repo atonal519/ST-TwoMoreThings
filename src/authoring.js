@@ -26,6 +26,7 @@ export function stateFromPreset(preset) {
   if (new Set(groups.map(group => group.id)).size !== groups.length || groups.some(group => !group.id || !group.name.trim() || ids.has(group.id) || group.memberIds.some(id => !ids.has(id)))) throw new Error('卡内手机的群聊资料或成员无法对应，请让作者重新导出。');
   return { schemaVersion: 1, contacts, groups, conversations: {}, forum: { posts: [] }, injectEnabled: preset.injectEnabled === true, theme: preset.theme === 'night' ? 'night' : 'day',
     wallpapers: { day: cleanBackground(preset.wallpapers?.day), night: cleanBackground(preset.wallpapers?.night) },
+    ...(['stacked', 'rounded'].includes(preset.lockStyle) ? { lockStyle: preset.lockStyle } : {}),
     ...(preset.userProfile ? { userProfile: profile(preset.userProfile) } : {}),
   };
 }
@@ -67,6 +68,7 @@ export function createAuthoringService({ store, host, readEntries = () => host.r
       const userProfile = state.userProfile ? { ...profile(state.userProfile), avatar: await portable(state.userProfile.avatar) } : undefined;
       const preferences = readEntries();
       const preset = { schemaVersion: 1, theme: state.theme === 'night' ? 'night' : 'day', injectEnabled: state.injectEnabled === true, contacts, groups, entries: { fabShow: preferences.fabShow !== false, qrShow: preferences.qrShow === true },
+        ...(['stacked', 'rounded'].includes(state.lockStyle) ? { lockStyle: state.lockStyle } : {}),
         wallpapers: { day: await portable(state.wallpapers?.day), night: await portable(state.wallpapers?.night) }, ...(userProfile ? { userProfile } : {}),
       };
       stateFromPreset(preset);

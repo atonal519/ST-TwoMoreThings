@@ -44,11 +44,20 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
       <option value="day" ${state.theme !== 'night' ? 'selected' : ''}>日间 · 回声</option>
       <option value="night" ${state.theme === 'night' ? 'selected' : ''}>夜间 · 深蓝</option>
     </select>
+    <label class="compact-switch-row" for="phone-lock-style">
+      <span>锁屏样式</span>
+      <select id="phone-lock-style" class="lock-style-select" aria-label="锁屏样式" ${busy.has('lock-style') ? 'disabled' : ''}>
+        <option value="classic" ${!['stacked', 'rounded'].includes(state.lockStyle) ? 'selected' : ''}>默认</option>
+        <option value="stacked" ${state.lockStyle === 'stacked' ? 'selected' : ''}>纵时</option>
+        <option value="rounded" ${state.lockStyle === 'rounded' ? 'selected' : ''}>圆时</option>
+      </select>
+    </label>
     ${entrySwitch('fabShow', '悬浮球')}
     ${entrySwitch('qrShow', 'QR')}
     <span class="field-label">锁屏背景</span>
     <div class="wallpaper-editor">
       ${renderBackgroundPicker({ value: state.wallpapers?.[state.theme === 'night' ? 'night' : 'day'], theme: state.theme,
+        defaultPreset: state.lockStyle === 'stacked' ? 'glass-lake' : state.lockStyle === 'rounded' ? 'paper-petals' : undefined,
         busy: busy.has('wallpaper'), preview: homeImage({ ...state, wallpapers: {} }).src })}
     </div>`;
   const content = `<label class="compact-switch-row">

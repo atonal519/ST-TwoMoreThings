@@ -22,9 +22,14 @@ try {
   await page.getByRole('button',{name:'外观设置',exact:true}).click();
   await page.getByRole('switch',{name:'悬浮球',exact:true}).uncheck();
   await page.waitForFunction(()=>document.querySelector('#tmt-fab-host').hidden);
+  await page.evaluate(async () => {
+    await quickReplyApi.createSet('两三事');
+    quickReplyApi.createQuickReply('两三事', '两三事', { message: '/tmt-open', automationId: '' });
+  });
   await page.getByRole('switch',{name:'QR',exact:true}).check();
   await page.waitForFunction(()=>previewHarness.settings.pocketPhone.qrShow===true);
   assert.equal(await page.evaluate(()=>quickReplyApi.getSetByName('两三事').qrList.length),1);
+  assert.equal(await page.evaluate(()=>quickReplyApi.getSetByName('两三事').qrList[0].label),'手机');
   await page.getByRole('button',{name:'关闭手机',exact:true}).click();
   await page.evaluate(()=>previewHarness.runQuickReply());
   await page.locator('.view-home').waitFor({state:'visible'});

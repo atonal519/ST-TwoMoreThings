@@ -4,6 +4,12 @@ export function createPhoneControl({ host, target }) {
   const isEnabled = () => host.readSettings()[settingsKey]?.disabledCards?.[key] !== true;
   return {
     isEnabled,
+    hasConflict(documentRef) {
+      const other = settingsKey === 'pocketPhone' ? 'twoMoreThingsEmbedded' : 'pocketPhone';
+      // 入口随实例创建/销毁；卡内预设本身不表示另一份已运行。
+      return Boolean(documentRef.getElementById('pocket-phone-launch') && documentRef.getElementById('pocket-phone-card-launch')
+        && isEnabled() && host.readSettings()[other]?.disabledCards?.[key] !== true);
+    },
     assertEnabled() { if (!isEnabled()) throw new Error('当前角色卡的两三事已关闭，请在设置顶部开启。'); },
     async setEnabled(enabled) {
       const settings = host.readSettings(), previous = settings[settingsKey];

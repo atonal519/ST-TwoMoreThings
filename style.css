@@ -78,6 +78,39 @@ h3 { font-size: 14px; font-weight: 600; }
 .lock-meta { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .lock-weather { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--pp-muted); white-space: nowrap; }
 .lock-weather svg { width: 14.95px; height: 14.95px; }
+/* 纵时：每个数字共用固定列，时钟区按剩余高度缩放，通知和入口保留正常布局空间。 */
+.phone-shell.is-stacked-lock { --pp-paper: #e9f0ed; --pp-ink: #233e43; --pp-muted: #536b70; --pp-active: #397584; --pp-mineral: #397584; --pp-pale: #dce9e7; --pp-surface: #f2f6f3; --pp-divider-soft: #bacdca; color: var(--pp-ink); background: var(--pp-paper); }
+:host([data-theme="night"]) .phone-shell.is-stacked-lock { --pp-paper: #102b38; --pp-ink: #edf1e9; --pp-muted: #b5c8cd; --pp-active: #a2cdd5; --pp-mineral: #a2cdd5; --pp-pale: #284853; --pp-surface: #1b3947; --pp-divider-soft: #3c5b67; }
+.view-home:is(.is-stacked, .is-rounded) { display: flex; flex-direction: column; }
+.stack-stage { position: relative; flex: 1; min-height: 0; container-type: size; }
+.view-home.is-stacked .stack-clock { top: 4%; left: 9%; width: max-content; height: auto; display: grid; grid-template-columns: repeat(2, .22em); grid-template-rows: repeat(2, .88em); column-gap: .015em; font: 400 min(55cqw, 52cqh)/.88 PocketPhoneClock, sans-serif; letter-spacing: 0; font-kerning: none; color: var(--pp-ink); }
+.stack-clock > span:nth-child(n+3) { color: var(--pp-active); }
+.stack-stage .lock-meta { position: absolute; top: 52%; right: 7%; max-width: 44%; gap: 8px; }
+.stack-stage .home-date { padding-top: 9px; border-top: 1px solid var(--pp-divider-soft); margin-right: 0; letter-spacing: .01em; white-space: normal; overflow-wrap: anywhere; }
+.stack-stage .home-weekday { display: inline-block; white-space: nowrap; }
+.view-home:is(.is-stacked, .is-rounded) .lock-notifications { position: relative; flex: 0 0 auto; left: auto; right: auto; bottom: auto; max-height: 25%; margin: 0 16px; }
+.view-home:is(.is-stacked, .is-rounded) .lock-notification { background: var(--pp-surface); border-color: transparent; border-radius: 13px; }
+.view-home:is(.is-stacked, .is-rounded) .home-footer { padding-top: 0; margin-top: 8px; flex-shrink: 0; }
+@container (max-height: 180px) { .stack-stage .lock-meta { top: 10%; } }
+/* 圆时：花瓣背景与锁屏/桌面共用配色，四个字位沿用同一剧情时钟。 */
+.phone-shell.is-rounded-theme { --pp-paper: #f3e9d8; --pp-ink: #4d5b43; --pp-muted: #6c705c; --pp-active: #8d6240; --pp-mineral: #d0d1ba; --pp-pale: #e8e9d7; --pp-surface: #fffaf0; --pp-divider-soft: #d0d1ba; color: var(--pp-ink); background: var(--pp-paper); }
+:host([data-theme="night"]) .phone-shell.is-rounded-theme { --pp-paper: #172e37; --pp-ink: #f2e4cd; --pp-muted: #b4c4c5; --pp-active: #d1b78f; --pp-mineral: #526b70; --pp-pale: #344e54; --pp-surface: #243d46; --pp-divider-soft: #526b70; }
+.round-stage { position: relative; flex: 1; min-height: 0; container-type: size; display: grid; grid-template-rows: minmax(0, 1fr) auto auto auto minmax(0, 3fr); justify-items: center; }
+.round-stage .lock-meta { display: contents; }
+.round-stage .home-date { grid-row: 2; max-width: 92%; margin: 0 0 13px; font-size: 13px; line-height: 1.5; letter-spacing: .06em; white-space: normal; overflow-wrap: anywhere; text-align: center; }
+.round-stage .home-weekday { display: inline-block; white-space: nowrap; }
+.view-home.is-rounded .round-clock { position: static; grid-row: 3; width: max-content; height: auto; display: grid; grid-template-columns: repeat(2, .61em) .28em repeat(2, .61em); font: 500 min(30cqw, 28cqh)/1 PocketPhoneRoundClock, sans-serif; font-kerning: none; letter-spacing: 0; text-align: center; }
+.round-clock > span { grid-row: 1; }
+.round-clock > span:nth-child(3) { grid-column: 4; }
+.round-clock > span:nth-child(4) { grid-column: 5; }
+.round-clock::after { content: ':'; grid-row: 1; grid-column: 3; color: var(--pp-active); }
+.round-stage .lock-weather { grid-row: 4; margin-top: 17px; font-size: 12px; gap: 6px; }
+.round-stage .lock-weather svg { width: 17px; height: 17px; }
+.view-home.is-rounded .lock-notification { min-height: 62px; padding: 10px 12px; border-radius: 16px; }
+.view-home.is-rounded .lock-notification .avatar { width: 31px; height: 31px; color: var(--pp-active); border-color: var(--pp-divider-soft); background: var(--pp-pale); }
+.view-home.is-rounded .lock-notification > small { font-size: 11px; }
+.view-home.is-rounded .unlock-button svg { border-radius: 50%; background: var(--pp-surface); }
+.is-rounded-theme .desktop-wallpaper { opacity: 1; }
 /* 应用桌面：保留壁纸上部留白，小组件和应用集中在中下部。 */
 .view-desktop { padding: 0; overflow-y: auto; position: relative; isolation: isolate; }
 .desktop-wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .4; pointer-events: none; }
@@ -381,7 +414,7 @@ h3 { font-size: 14px; font-weight: 600; }
 .settings-drawer-body > .field-label:first-child { margin-top: 0; }
 .compact-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; font-size: 12px; cursor: pointer; }
 .settings-export-row { cursor: default; }
-.compact-switch-row .image-provider-select { flex: 0 0 88px; width: 88px; min-height: 24px; height: 24px; padding: 1px 5px; font-size: 11px; }
+.compact-switch-row .image-provider-select, .compact-switch-row .lock-style-select { flex: 0 0 88px; width: 88px; min-height: 24px; height: 24px; padding: 1px 5px; font-size: 11px; }
 .master-switch { min-height: 42px; border-bottom: 1px solid var(--pp-divider-soft); font-size: 13px; }
 .field-label { display: block; font-size: 11px; color: var(--pp-muted); margin: 9px 0 4px; }
 .profile-expression-heading { display: flex; align-items: center; gap: 6px; }
@@ -440,6 +473,13 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
 /* 删除确认沿用本机表单，不另套弹窗外框。 */
 .delete-confirm { padding: 12px 0; font-size: 12px; line-height: 1.7; }
 .delete-confirm p + p { margin-top: 8px; color: var(--pp-muted); }
+/* 双开提示位于手机内部，两份入口和开关仍各自独立。 */
+.phone-dialog-backdrop { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; padding: 18px; background: rgb(0 0 0 / 38%); }
+.phone-dialog { width: 100%; max-width: 300px; max-height: 100%; overflow-y: auto; padding: 18px; border-radius: 14px; background: var(--pp-surface); color: var(--pp-ink); box-shadow: var(--pp-elevation-soft); font-size: 12px; line-height: 1.7; }
+.phone-dialog h2 { font-size: 16px; font-weight: 500; margin-bottom: 10px; }
+.phone-dialog-current { margin-top: 10px; color: var(--pp-active); }
+.phone-dialog-error { margin-top: 8px; color: var(--pp-error); }
+.phone-dialog .form-actions { justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 /* 空状态、反馈与可访问标签。 */
 .empty-state { text-align: center; padding: 52px 20px; color: var(--pp-muted); }
 .empty-symbol { margin-bottom: 15px; }

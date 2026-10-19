@@ -4,7 +4,7 @@ import { syncQuickReply } from './quick-reply.js';
 
 export function createPhoneEntries({ host, documentRef, open, toggle, defaults = {}, initialTheme }) {
   const embedded = host.mode === 'embedded', label = embedded ? '两三事 · 随卡' : '两三事', settingsKey = host.phoneSettingsKey || 'pocketPhone';
-  const qr = embedded ? { setName: label, label, command: host.openCommand } : {};
+  const qr = embedded ? { setName: label, command: host.openCommand } : {};
   const launcher = documentRef.createElement('div');
   launcher.id = embedded ? 'pocket-phone-card-launch' : 'pocket-phone-launch'; launcher.className = 'list-group-item flex-container flexGap5';
   launcher.style.cssText = 'display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;white-space:nowrap';
@@ -43,6 +43,6 @@ export function createPhoneEntries({ host, documentRef, open, toggle, defaults =
     },
     setTheme,
     focus() { launcher.focus({ preventScroll: true }); },
-    dispose() { unregisterCommand?.(); unsubscribeReady(); fab.destroy(); fab.host.remove(); launcher.removeEventListener('click', launch); launcher.removeEventListener('keydown', keyOpen); launcher.remove(); if (embedded && read().qrShow) void syncQuickReply(host.readQuickReplies(), false, qr).catch(() => host.reportError('随卡快捷按钮移除失败，请在快速回复中手动删除“两三事 · 随卡”。')); },
+    dispose() { unregisterCommand?.(); unsubscribeReady(); fab.destroy(); fab.host.remove(); launcher.removeEventListener('click', launch); launcher.removeEventListener('keydown', keyOpen); launcher.remove(); if (embedded && read().qrShow) void syncQuickReply(host.readQuickReplies(), false, qr).catch(() => host.reportError('随卡快捷按钮移除失败，请在快速回复的“两三事 · 随卡”组中删除“手机”按钮。')); },
   };
 }

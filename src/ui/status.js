@@ -1,4 +1,13 @@
-import { icon } from './shared.js';
+import { escape, icon } from './shared.js';
+
+export function renderLockMeta(weather) {
+  return `<div class="lock-meta">
+    <span class="lock-weather" title="${weather.source === 'decoration' ? '装饰天气' : '构画剧情天气'}">
+      ${icon('sun')}<span>${escape(weather.text)} ${escape(weather.temperature)}</span>
+    </span>
+    <span class="home-date"></span>
+  </div>`;
+}
 
 export function renderStatusBar() {
   return `<header class="phone-status" aria-label="手机状态栏">
@@ -20,7 +29,7 @@ export function createPhoneClock({ root, element, readTime }) {
     const clock = readTime();
     const status = root.querySelector('.status-time');
     if (status) status.textContent = clock.time;
-    const digits = root.querySelector('.home-clock text');
+    const digits = root.querySelector('[data-clock-digits]');
     if (digits) {
       const values = clock.time.replace(':', '');
       for (let i = 0; i < 4; i++) digits.children[i].textContent = values[i];
@@ -29,7 +38,12 @@ export function createPhoneClock({ root, element, readTime }) {
     const date = root.querySelector('.home-date');
     if (date) {
       const label = clock.source === 'real' ? clock.date.slice(5).replace('-', '.') : clock.date || '日期未明确';
-      date.textContent = [label, clock.weekday].filter(Boolean).join(' / ');
+      date.textContent = label;
+      if (clock.weekday) {
+        const weekday = date.ownerDocument.createElement('span');
+        weekday.className = 'home-weekday'; weekday.textContent = `${label ? ' / ' : ''}${clock.weekday}`;
+        date.append(weekday);
+      }
       date.title = date.textContent;
     }
     if (clock.source === 'real') timer = setTimeout(refresh, 60000 - Date.now() % 60000);

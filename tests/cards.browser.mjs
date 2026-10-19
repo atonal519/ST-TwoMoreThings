@@ -107,7 +107,8 @@ try {
     await openApp(page, '短信');
     await page.getByRole('heading', { name: '短信', exact: true }).waitFor();
     await page.evaluate(() => { previewHarness.notices = []; globalThis.toastr = { warning: value => previewHarness.notices.push(value) }; previewHarness.context.characters[0].data = { extensions: { twoMoreThings: { version: 1 } } }; previewHarness.app.open(); previewHarness.app.open(); });
-    assert.equal(await page.evaluate(() => previewHarness.notices.length), 2, 'card conflict reminder is shown on every open');
+    assert.equal(await page.evaluate(() => previewHarness.notices.length), 0, '卡内标记本身不触发双开提醒');
+    assert.equal(await page.getByRole('alertdialog').count(), 0);
     assert.equal(await page.getByRole('button', { name: '打开两三事', exact: true }).count(), 1, 'conflict does not hide the standalone entry');
     assert.deepEqual(errors, []);
     await page.close();

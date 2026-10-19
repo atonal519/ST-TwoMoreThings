@@ -18,6 +18,10 @@ export const wallpaperPresets = [{
   id: 'glass-lake', name: '湖蓝玻璃',
   day: glassArtwork(['#e9f0ed', '#90bdc7', '#e8b9ab', '#d0dfd9']),
   night: glassArtwork(['#102b38', '#315e6b', '#8d676d', '#25434c']),
+}, {
+  id: 'paper-petals', name: '花瓣剪纸',
+  day: new URL('../assets/lock-petals-day.png', import.meta.url).href,
+  night: new URL('../assets/lock-petals-night.png', import.meta.url).href,
 }];
 
 export const wallpaperPreset = value => wallpaperPresets.find(item => `builtin:${item.id}` === value);

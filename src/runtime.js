@@ -43,7 +43,6 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
   const unsubscribeTime = host.onStoryChanged(() => phone?.refreshTime());
   function open() {
     const target = host.captureChat();
-    if (host.mode !== 'embedded' && target.embeddedPhone) host.reportNotice('这张角色卡也带有两三事。建议在设置顶部关闭其中一份；同时开启可能重复生成或回流。');
     if (phone && targetId === target.id) { phone.open(); return; }
     phone?.dispose();
     targetId = target.id;

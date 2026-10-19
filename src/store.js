@@ -189,6 +189,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       return read().groups.find(group => group.id === groupId);
     },
     setTheme(theme) { return update(state => ({ ...state, theme: theme === 'night' ? 'night' : 'day' })); },
+    setLockStyle(lockStyle) { return update(state => ({ ...state, lockStyle: ['stacked', 'rounded'].includes(lockStyle) ? lockStyle : 'classic' })); },
     setWallpaper(theme, path) { const value = cleanBackground(path); return update(state => ({ ...state, wallpapers: { ...state.wallpapers, [theme === 'night' ? 'night' : 'day']: value } })); },
     setChatBackground(id, value) {
       const background = cleanBackground(value, true);

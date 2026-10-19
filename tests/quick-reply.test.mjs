@@ -22,6 +22,7 @@ test('QR is opt-in, creates one manual launcher, and disabling removes only that
   await syncQuickReply(api, true); await syncQuickReply(api, true);
   const set = sets.get('两三事');
   assert.equal(set.qrList.length, 1);
+  assert.equal(set.qrList[0].label, '手机');
   assert.equal(set.qrList[0].message, '/tmt-open');
   assert.equal(set.qrList[0].executeBeforeGeneration, false);
   assert.equal(set.qrList[0].executeOnAi, false);
@@ -37,7 +38,7 @@ test('an empty generated QR set is removed; a conflicting user button is preserv
   await syncQuickReply(api, true); await syncQuickReply(api, false);
   assert.equal(sets.size, 0); assert.equal(active.size, 0);
   await api.createSet('两三事');
-  sets.get('两三事').qrList.push({ label: '两三事', message: '/echo 自己的按钮' });
+  sets.get('两三事').qrList.push({ label: '手机', message: '/echo 自己的按钮' });
   await assert.rejects(syncQuickReply(api, true), /同名按钮/);
   assert.equal(sets.get('两三事').qrList[0].message, '/echo 自己的按钮');
   await assert.rejects(syncQuickReply(null, true), /快速回复/);
@@ -45,11 +46,37 @@ test('an empty generated QR set is removed; a conflicting user button is preserv
 
 test('embedded QR uses its own command and removal leaves the standalone launcher intact', async () => {
   const { api, sets } = fixture();
-  const card = { setName: '两三事 · 随卡', label: '两三事 · 随卡', command: 'tmt-card-open' };
+  const card = { setName: '两三事 · 随卡', command: 'tmt-card-open' };
   await syncQuickReply(api, true);
   await syncQuickReply(api, true, card);
   assert.equal(sets.get(card.setName).qrList[0].message, '/tmt-card-open');
+  assert.equal(sets.get(card.setName).qrList[0].label, '手机');
   await syncQuickReply(api, false, card);
   assert.equal(sets.has(card.setName), false);
   assert.equal(sets.get('两三事').qrList[0].message, '/tmt-open');
+});
+
+test('existing standalone and embedded launchers become 手机 without leaving duplicate buttons', async () => {
+  for (const options of [{}, { setName: '两三事 · 随卡', command: 'tmt-card-open' }]) {
+    const { api, sets } = fixture(), setName = options.setName || '两三事';
+    const set = await api.createSet(setName);
+    set.qrList.push({ label: setName, message: `/${options.command || 'tmt-open'}`, automationId: '' });
+    set.qrList.push({ label: '用户按钮', message: '/echo 保留' });
+    await syncQuickReply(api, true, options);
+    await syncQuickReply(api, true, options);
+    assert.deepEqual(set.qrList.map(qr => qr.label), ['用户按钮', '手机']);
+    await syncQuickReply(api, false, options);
+    assert.deepEqual(sets.get(setName).qrList.map(qr => qr.label), ['用户按钮']);
+  }
+});
+
+test('turning off an old launcher removes it while an unrelated old-label button stays untouched', async () => {
+  const { api, sets } = fixture(), set = await api.createSet('两三事');
+  set.qrList.push({ label: '两三事', message: '/tmt-open' });
+  await syncQuickReply(api, false);
+  assert.equal(sets.size, 0);
+  const userSet = await api.createSet('两三事');
+  userSet.qrList.push({ label: '两三事', message: '/echo 保留' });
+  await syncQuickReply(api, true);
+  assert.deepEqual(userSet.qrList.map(qr => qr.message), ['/echo 保留', '/tmt-open']);
 });
