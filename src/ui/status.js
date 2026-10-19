@@ -1,12 +1,13 @@
-import { action, icon } from './shared.js';
+import { icon } from './shared.js';
 
-export function renderStatusBar({ locked, enabled }) {
+export function renderStatusBar() {
   return `<header class="phone-status" aria-label="手机状态栏">
     <time class="status-time"></time>
     <span class="status-indicators" aria-hidden="true" title="装饰状态">
-      ${icon('signal')}${icon('wifi')}${icon('battery')}
+      <span class="status-indicator">${icon('signal')}</span>
+      <span class="status-indicator">${icon('wifi')}</span>
+      <span class="status-indicator">${icon('battery')}</span>
     </span>
-    ${locked ? '' : `<div class="phone-tools">${action('lock', '锁屏', 'lock', 'icon-button status-lock', !enabled)}</div>`}
   </header>`;
 }
 

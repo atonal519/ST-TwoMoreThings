@@ -45,3 +45,21 @@ test('without QQJ, directory reads card/worldbook and permits an empty result wi
   assert.equal(h.metadataSaves, before, '无新增不重复写档');
   assert.equal(store.read().contacts.length, 1);
 });
+
+test('card/worldbook source IDs preserve a new contact and its group without guessing unknown IDs', async () => {
+  const h = createHarness();
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
+  const { createDirectoryService } = await import('../src/directory.js');
+  const service = createDirectoryService({ store,
+    contextReader: createContextReader({ target, store, qqjBridgeProvider: () => null }),
+    modelClient: { complete: async () => JSON.stringify({ contacts: [
+      { sourceId: 'card-world:周予', name: '周予', expression: '短句' },
+      { sourceId: 'qqj:unknown', name: '不明归属' },
+    ], groups: [{ name: '读书小组', memberIds: ['lin', 'card-world:周予'], userIsMember: true }] }) },
+  });
+  const added = await service.organize();
+  assert.deepEqual(added.contacts.map(person => person.id), ['card-world:周予']);
+  assert.equal(added.groups.length, 1);
+  assert.deepEqual(store.read().groups[0].memberIds, ['lin', 'card-world:周予']);
+});

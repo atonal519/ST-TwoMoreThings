@@ -21,15 +21,23 @@ try {
     await page.addInitScript(() => {
       // Count actual paints without replacing the renderer or animation scheduler.
       window.particlePaints = new Map();
+      window.particlePositions = new Map();
       const getContext = HTMLCanvasElement.prototype.getContext;
       HTMLCanvasElement.prototype.getContext = function (...args) {
         const context = getContext.apply(this, args);
         if (context && this.classList.contains('chat-particles') && !particlePaints.has(this)) {
           particlePaints.set(this, 0);
+          particlePositions.set(this, []);
           const clear = context.clearRect;
           context.clearRect = (...values) => {
             particlePaints.set(this, particlePaints.get(this) + 1);
+            particlePositions.set(this, []);
             return clear.apply(context, values);
+          };
+          const arc = context.arc;
+          context.arc = (...values) => {
+            particlePositions.get(this).push(values.slice(0, 3));
+            return arc.apply(context, values);
           };
         }
         return context;
@@ -74,8 +82,28 @@ try {
     });
     await page.waitForTimeout(140);
     assert.equal(await page.evaluate(() => liveParticles.toDataURL() !== particleSnapshot), true, 'particles move rather than remaining static');
+    const continuous = async action => {
+      const before = await page.locator('.chat-particles').evaluate(canvas => {
+        window.expectedParticles = canvas;
+        return particlePositions.get(canvas);
+      });
+      await action();
+      assert.equal(await page.locator('.chat-particles').evaluate(canvas => canvas === expectedParticles), true, 'chat UI updates keep the existing particle canvas');
+      await page.waitForTimeout(50);
+      const after = await page.locator('.chat-particles').evaluate(canvas => particlePositions.get(canvas));
+      const size = await page.locator('.chat-particles').boundingBox();
+      assert.equal(before.length, 12);
+      assert.deepEqual(after.map(point => point[2]), before.map(point => point[2]), 'rendering a menu does not randomize the particles again');
+      assert.ok(after.every(([x, y], i) => {
+        const dx = Math.abs(x - before[i][0]), dy = Math.abs(y - before[i][1]);
+        return Math.hypot(Math.min(dx, Math.abs(dx - size.width)), Math.min(dy, Math.abs(dy - size.height))) < 12;
+      }), 'particles continue drifting instead of jumping to new positions, including normal edge wrapping');
+    };
+    await continuous(() => page.getByRole('button', { name: '聊天选项', exact: true }).click());
+    await continuous(() => page.getByRole('textbox', { name: '短信内容' }).click());
+    await continuous(() => page.getByRole('button', { name: '聊天选项', exact: true }).click());
     await page.getByRole('textbox', { name: '短信内容' }).fill('尚未发送的草稿');
-    await page.locator('.message-row .bubble').first().click();
+    await continuous(() => page.locator('.message-row .bubble').first().click());
     assert.equal(await page.getByRole('button', { name: '删除这条短信', exact: true }).count(), 1, 'message selection remains clickable');
     assert.equal(await page.getByRole('textbox', { name: '短信内容' }).inputValue(), '尚未发送的草稿');
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -84,11 +112,14 @@ try {
     await page.waitForTimeout(100);
     assert.deepEqual(await page.evaluate(() => [...particlePaints.values()]), stopped, 'reduced motion stops painting');
     assert.equal(await page.locator('.chat-particles').isVisible(), false);
+    await page.getByRole('button', { name: '聊天选项', exact: true }).click();
+    assert.equal(await page.locator('.chat-particles').isVisible(), false, 'rendering while reduced motion is active keeps the effect hidden');
+    const pausedPaints = await page.locator('.chat-particles').evaluate(canvas => particlePaints.get(canvas));
     await page.emulateMedia({ reducedMotion: 'no-preference' });
-    await page.waitForFunction(() => {
+    await page.waitForFunction(previous => {
       const canvas = document.querySelector('.pocket-phone').shadowRoot.querySelector('.chat-particles');
-      return !canvas.hidden && particlePaints.get(canvas) > 2;
-    });
+      return !canvas.hidden && particlePaints.get(canvas) > previous;
+    }, pausedPaints);
     await page.setViewportSize({ width, height: 560 });
     await page.waitForTimeout(80);
     assert.equal(await page.locator('.chat-particles').evaluate(canvas => Math.abs(canvas.height - canvas.getBoundingClientRect().height * 2) <= 1), true, 'canvas resizes with the chat viewport');
@@ -101,13 +132,14 @@ try {
     await page.locator('[data-group="glow-group"]').click();
     assert.equal(await page.locator('.view-group-chat .chat-particles').count(), 1, 'groups share the same effect');
     await page.waitForTimeout(100);
+    await continuous(() => page.getByRole('button', { name: '聊天选项', exact: true }).click());
     await page.locator('.phone-shell').screenshot({ path: `${output}/${host}-${width}-${theme}.png` });
     await page.getByRole('button', { name: '关闭手机', exact: true }).click();
     const closedPaints = await page.evaluate(() => [...particlePaints.values()]);
     await page.waitForTimeout(100);
     assert.deepEqual(await page.evaluate(() => [...particlePaints.values()]), closedPaints, 'closed phone stops painting');
     await page.evaluate(() => previewHarness.app.open());
-    assert.equal(await page.locator('.view-desktop').count(), 1);
+    assert.equal(await page.locator('.view-home').count(), 1);
     assert.equal(await page.locator('.chat-particles').count(), 0);
     await openApp(page, '短信');
     await page.locator('[data-contact="lin"]').click();
@@ -119,5 +151,5 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log('Chat particles: native/Luker, day/night, 320/390, real moving theme pixels, resize, clicks, drafts, reduced motion and lifecycle cleanup; no model calls or saves.');
+  console.log('Chat particles: native/Luker, day/night, 320/390, moving theme pixels, continuous menu/bubble interactions, resize, drafts, reduced motion and cleanup; no model calls or saves.');
 } finally { await browser.close(); }

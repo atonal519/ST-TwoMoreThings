@@ -14,6 +14,72 @@ function setup() {
   return { h, target, store, batch: readTimeline(target.messages) };
 }
 
+test('social photo generation is explicit, updates the existing post and reuses its saved image', async () => {
+  const { h, store } = setup();
+  await store.upsertContacts([{ id: 'lin', name: '林舟', nickname: '舟' }]);
+  await store.updateSocial(social => ({ ...social, posts: [
+    { id: 'photo-post', authorId: 'lin', text: '午后的窗边', image: { description: '我在窗边的自拍' }, likes: 12, comments: [{ name: '邻居', text: '下午好' }] },
+    { id: 'other-post', authorId: 'lin', text: '今天晴朗' },
+  ], feedIds: ['photo-post', 'other-post'] }));
+  const before = structuredClone(store.read()), saves = h.metadataSaves;
+  const calls = [], recipes = [], drawings = [];
+  const service = createPhoneImageService({ store, modelClient: { complete: async request => {
+    calls.push('recipe'); recipes.push(JSON.parse(request.messages[0].content));
+    return '{"prompt":"selfie, window","characters":["林舟"],"size":"portrait"}';
+  } }, apiProvider: () => ({
+    apiVersion: 1,
+    getBackendStatus: () => ({ configured: true, supportsCharacters: true }),
+    getCharacters: () => ({ characters: [{ name: '林舟', tag: 'black hair, white shirt', nl: '黑发白衬衫' }] }),
+    generate: async request => { calls.push('draw'); drawings.push(request); return { path: '/images/social-selfie.png', seed: 789 }; },
+  }) });
+  assert.deepEqual(calls, [], 'creating the service and reading posts do not generate images');
+  assert.deepEqual(store.read(), before);
+  assert.equal(h.metadataSaves, saves);
+  const result = await service.generatePost('photo-post');
+  assert.deepEqual(calls, ['recipe', 'draw']);
+  assert.equal(recipes[0].description, '我在窗边的自拍');
+  assert.deepEqual(recipes[0].sender, { name: '林舟', nickname: '舟' });
+  assert.deepEqual(drawings[0].characters, [{ name: '林舟', tag: 'black hair, white shirt', nl: '黑发白衬衫' }]);
+  assert.equal(drawings[0].save, true);
+  const expected = structuredClone(before);
+  Object.assign(expected.social.posts[0].image, { path: '/images/social-selfie.png', seed: 789 });
+  assert.deepEqual(store.read(), expected, 'only the canonical post image changes; feed IDs and other records remain intact');
+  assert.deepEqual(result, expected.social.posts[0].image);
+  assert.deepEqual(h.persistedMetadata.pocketPhone, expected);
+  assert.equal(h.metadataSaves, saves + 1);
+  assert.deepEqual(await service.generatePost('photo-post'), result);
+  assert.deepEqual(calls, ['recipe', 'draw'], 'an existing image needs neither prompt preparation nor another drawing');
+  assert.equal(h.metadataSaves, saves + 1);
+});
+
+test('NPC social photos reject people before drawing and accept an explicit scenery-only recipe', async () => {
+  const { h, store } = setup();
+  await store.updateSocial(social => ({ ...social,
+    npcs: [{ id: 'npc:neighbor', name: '邻居', description: '住在附近的路人' }],
+    posts: [{ id: 'npc-photo', authorId: 'npc:neighbor', text: '窗边一角', image: { description: '窗边的盆栽' } }], feedIds: ['npc-photo'],
+  }));
+  const before = structuredClone(store.read()), saves = h.metadataSaves;
+  let people = ['林舟'];
+  const drawings = [];
+  const service = createPhoneImageService({ store, modelClient: { complete: async () => JSON.stringify({ prompt: 'plant, window', characters: people }) }, apiProvider: () => ({
+    apiVersion: 1,
+    getBackendStatus: () => ({ configured: true, supportsCharacters: true }),
+    getCharacters: () => ({ characters: [{ name: '林舟', tag: 'black hair' }] }),
+    generate: async request => { drawings.push(request); return { path: '/images/plant.png', seed: 321 }; },
+  }) });
+  await assert.rejects(service.generatePost('npc-photo'), /包含人物.*未生成/);
+  assert.deepEqual(drawings, []);
+  assert.deepEqual(store.read(), before);
+  assert.equal(h.metadataSaves, saves);
+  people = [];
+  await service.generatePost('npc-photo');
+  assert.equal(drawings.length, 1);
+  assert.deepEqual(drawings[0].characters, []);
+  assert.equal(store.read().social.posts[0].image.path, '/images/plant.png');
+  assert.deepEqual(store.read().contacts, [], 'a photo does not turn its NPC author into a contact');
+  assert.equal(h.metadataSaves, saves + 1);
+});
+
 for (const [label, fields] of [['missing', {}], ['string', { characters: '林舟' }], ['null', { characters: null }]]) {
   test(`photo generation rejects a ${label} character list before drawing or saving`, async () => {
     const { h, store, batch } = setup();
@@ -81,6 +147,8 @@ test('sending a sticker and receiving rich replies use the same stored batch and
   assert.ok(saved.every(message => message.batch.key === batch.key));
   const context = await contextReader.readForContact('lin');
   assert.ok(context.history[0].text.includes('开心'));
+  assert.equal(context.history[0].type, 'sticker');
+  assert.equal(context.history[0].stickerId, 'sepia.happy');
   assert.ok(context.history[1].text.includes('广场东侧'));
   await store.deleteMessage('lin', saved[1].id);
   assert.equal((await contextReader.readForContact('lin')).history.length, 1);

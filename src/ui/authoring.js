@@ -1,7 +1,7 @@
 import { action, pageHeading } from './shared.js';
 
 export function renderAuthoring(state, { ui, busy }) {
-  return `${pageHeading('随卡包')}
+  return `${pageHeading('酒馆助手脚本')}
     <div class="authoring-summary">${state.contacts.length} 位联系人 · ${(state.groups || []).length} 个群聊</div>
     <label class="field-label" for="export-source">核心来源</label>
     <select id="export-source" aria-label="核心来源">

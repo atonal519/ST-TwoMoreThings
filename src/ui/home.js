@@ -1,10 +1,12 @@
 import { asset, avatar, escape } from './shared.js';
 import { unreadConversations } from '../notifications.js';
 import { displayName } from '../profiles.js';
+import { wallpaperPreset } from '../backgrounds.js';
 
 export function homeImage(state) {
   const night = state.theme === 'night', custom = state.wallpapers?.[night ? 'night' : 'day'];
-  return { custom: Boolean(custom), src: custom || asset(night ? 'night-fold-foreground.png' : 'echo-foreground.png'), alt: custom ? '自定义主页背景' : night ? '银白与深蓝折叠线带，内折处一抹朱红' : '矿蓝与青铜色的回声线环' };
+  const preset = wallpaperPreset(custom);
+  return { custom: Boolean(custom), src: preset?.[night ? 'night' : 'day'] || custom || asset(night ? 'night-fold-foreground.png' : 'echo-foreground.png'), alt: preset?.name || (custom ? '自定义主页背景' : night ? '银白与深蓝折叠线带，内折处一抹朱红' : '矿蓝与青铜色的回声线环') };
 }
 
 export function renderHome(state) {

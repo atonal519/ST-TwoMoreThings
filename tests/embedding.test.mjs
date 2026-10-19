@@ -8,6 +8,48 @@ import { createHarness } from './harness.mjs';
 import { createContextReader } from '../src/context.js';
 import { createApiSettings } from '../src/api.js';
 
+test('background presets and local images survive a portable card round trip without social records', async () => {
+  const h = createHarness(), store = createPhoneStore({ target: h.host.captureChat() });
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
+  const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true });
+  await store.setChatBackground('lin', 'color:sage');
+  await store.setChatBackground('zhou', '/user/images/shared.webp');
+  await store.setChatBackground(group.id, '/user/images/shared.webp');
+  await store.setWallpaper('day', 'builtin:glass-lake');
+  await store.setWallpaper('night', '/user/images/shared.webp');
+  await store.updateSocial(social => ({ ...social,
+    posts: [{ id: 'private-post', authorId: 'lin', text: '这条动态不能随卡导出', image: { description: '私有配图', path: '/images/private.png' } }],
+    npcs: [{ id: 'npc:private', name: '私有路人', description: '不随卡复制' }],
+    feedIds: ['private-post'], expandedAuthors: ['lin'],
+  }));
+  const before = structuredClone(store.read()), saves = h.metadataSaves, reads = [];
+  const authoring = createAuthoringService({ store, host: h.host, baseUrl: 'http://localhost/', fetchImage: async url => {
+    reads.push(url);
+    return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/webp' } });
+  } });
+  const { script } = await authoring.exportScript();
+  const preset = script.data.twoMoreThings;
+  assert.deepEqual(reads, ['/user/images/shared.webp'], 'shared uploads are embedded once; builtins and color IDs are not fetched');
+  assert.equal(preset.contacts[0].background, 'color:sage');
+  assert.equal(preset.contacts[1].background, 'data:image/webp;base64,AQID');
+  assert.equal(preset.groups[0].background, 'data:image/webp;base64,AQID');
+  assert.deepEqual(preset.wallpapers, { day: 'builtin:glass-lake', night: 'data:image/webp;base64,AQID' });
+  assert.equal('social' in preset, false);
+  const serialized = JSON.stringify(script);
+  for (const privateValue of ['private-post', '这条动态不能随卡导出', '/images/private.png', 'npc:private', '私有路人']) assert.equal(serialized.includes(privateValue), false);
+  const imported = stateFromPreset(preset);
+  const reader = createHarness(), readerStore = createPhoneStore({ target: reader.host.captureChat(), initialState: imported });
+  assert.deepEqual(readerStore.read().contacts.map(person => person.background), ['color:sage', 'data:image/webp;base64,AQID']);
+  assert.equal(readerStore.read().groups[0].background, 'data:image/webp;base64,AQID');
+  assert.deepEqual(readerStore.read().groups[0].memberIds, readerStore.read().contacts.map(person => person.id));
+  assert.deepEqual(readerStore.read().wallpapers, preset.wallpapers);
+  assert.equal(readerStore.read().social, undefined);
+  assert.deepEqual(readerStore.read().conversations, {});
+  assert.equal(reader.metadataSaves, 0, 'loading author defaults does not write a reader archive');
+  assert.deepEqual(store.read(), before);
+  assert.equal(h.metadataSaves, saves, 'export does not change the author archive');
+});
+
 test('export produces a portable helper script with authored profiles and groups, excluding records and credentials', async () => {
   const h = createHarness(), store = createPhoneStore({ target: h.host.captureChat() });
   await store.saveContact('', { name: '林舟', nickname: '舟', expression: '短句，只用文字表达。', avatar: 'http://localhost/user/avatars/a.png', language: '英语，附中文翻译' });

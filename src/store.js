@@ -1,14 +1,16 @@
 import { cleanProfile } from './profiles.js';
 import { messageText } from './content.js';
+import { cleanBackground } from './backgrounds.js';
+import { contentImagePaths, imagePath } from './image-files.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
 
-export function createPhoneStore({ target, assertEnabled = () => {}, isReading = () => false, initialState }) {
+export function createPhoneStore({ target, assertEnabled = () => {}, isReading = () => false, initialState, removeImages = async () => {} }) {
   const empty = initialState || emptyState();
   const read = () => target.metadata.pocketPhone || empty;
   // Serialize normal phone saves so sending while a reply arrives keeps both changes.
   let saving = Promise.resolve();
-  function update(change) {
+  function update(change, cleanImages = false) {
     const operation = saving.then(async () => {
       const previous = target.metadata.pocketPhone;
       const current = read(), next = change(current);
@@ -20,6 +22,15 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         else target.metadata.pocketPhone = previous;
         throw error;
       }
+      // 先保存真实删除，再删已无引用的文件；文件失败不能伪装成存档回滚成功。
+      if (cleanImages) {
+        const retained = contentImagePaths(next);
+        const removed = [...contentImagePaths(current)].filter(path => !retained.has(path));
+        if (removed.length) {
+          try { await removeImages(removed); }
+          catch { throw new Error('内容已保存，但旧图片及附带文件清理失败，请检查酒馆连接。'); }
+        }
+      }
       return read();
     });
     saving = operation.catch(() => {});
@@ -27,6 +38,14 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   }
   const store = {
     read,
+    updateSocial(change, { cleanImages = false } = {}) {
+      return update(state => {
+        assertEnabled();
+        const social = state.social || { posts: [], npcs: [], feedIds: [] };
+        const next = change(social, state);
+        return next === social ? state : { ...state, social: next };
+      }, cleanImages);
+    },
     appendMessage(id, message) { return store.appendMessages(id, [message]); },
     appendMessages(id, messages) {
       return update(state => {
@@ -53,6 +72,22 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         return { ...state, conversations: { ...state.conversations, [id]: messages.map(message => message.id === messageId ? { ...message, image: { ...message.image, ...image } } : message) } };
       });
     },
+    clearImagePaths(paths) {
+      const missing = new Set(paths.map(imagePath).filter(Boolean));
+      return update(state => {
+        let changed = false;
+        const clear = item => {
+          if (!missing.has(imagePath(item.image?.path))) return item;
+          changed = true;
+          const { path, seed, ...image } = item.image;
+          return { ...item, image };
+        };
+        const conversations = Object.fromEntries(Object.entries(state.conversations).map(([id, messages]) => [id, messages.map(clear)]));
+        const social = state.social && { ...state.social, posts: state.social.posts.map(clear) };
+        const forum = state.forum && { ...state.forum, posts: state.forum.posts.map(clear) };
+        return changed ? { ...state, conversations, ...(social ? { social } : {}), ...(forum ? { forum } : {}) } : state;
+      }, true);
+    },
     respondTransfer(id, messageId, status, actorId, batch) {
       return update(state => {
         assertEnabled();
@@ -70,13 +105,13 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       });
     },
     deleteMessage(id, messageId) {
-      return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.id !== messageId) } }));
+      return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.id !== messageId) } }), true);
     },
     clearConversation(id, anchor) {
-      return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.batch?.key !== anchor.key) } }));
+      return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.batch?.key !== anchor.key) } }), true);
     },
     async saveContact(id, draft) {
-      const profile = cleanProfile(draft, true);
+      const profile = { ...cleanProfile(draft, true), ...('background' in draft ? { background: cleanBackground(draft.background, true) } : {}) };
       const contactId = id || `manual:${globalThis.crypto.randomUUID()}`;
       await update(state => {
         const current = state.contacts.find(item => item.id === contactId);
@@ -101,15 +136,20 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
           if (conversations[group.id]?.some(message => message.speakerId === id)) conversations[group.id] = conversations[group.id].filter(message => message.speakerId !== id);
           return group.memberIds.includes(id) ? { ...group, memberIds: group.memberIds.filter(key => key !== id) } : group;
         });
-        return { ...state, contacts: state.contacts.filter(person => person.id !== id), groups, conversations };
-      });
+        const social = state.social && { ...state.social,
+          posts: state.social.posts.filter(post => post.authorId !== id).map(post => ({ ...post, comments: (post.comments || []).filter(comment => comment.authorId !== id) })),
+          feedIds: state.social.feedIds.filter(key => !state.social.posts.some(post => post.id === key && post.authorId === id)),
+          ...(state.social.expandedAuthors ? { expandedAuthors: state.social.expandedAuthors.filter(key => key !== id) } : {}),
+        };
+        return { ...state, contacts: state.contacts.filter(person => person.id !== id), groups, conversations, ...(social ? { social } : {}) };
+      }, true);
     },
     deleteGroup(id) {
       return update(state => {
         const conversations = { ...state.conversations };
         delete conversations[id];
         return { ...state, groups: (state.groups || []).filter(group => group.id !== id), conversations };
-      });
+      }, true);
     },
     async mergeDirectory({ contacts, groups }) {
       const added = { contacts: [], groups: [] };
@@ -134,6 +174,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       const name = String(draft.name || '').trim();
       if (!name) throw new Error('请填写群名。');
       const { avatar } = cleanProfile({ ...draft, name });
+      const appearance = 'background' in draft ? { background: cleanBackground(draft.background, true) } : {};
       const memberIds = [...new Set(draft.memberIds || [])];
       const userIsMember = draft.userIsMember !== false;
       if (!memberIds.length || memberIds.length + Number(userIsMember) < 2) throw new Error('请至少选择两位群成员，可以包含自己。');
@@ -142,14 +183,22 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         if (memberIds.some(key => !state.contacts.some(person => person.id === key))) throw new Error('有群成员不在联系人中，请重新选择。');
         const groups = state.groups || [], current = groups.find(group => group.id === id);
         if (id && !current) throw new Error('这个群聊已不存在，请返回短信重新选择。');
-        const group = { ...current, id: groupId, name, avatar, memberIds, userIsMember };
+        const group = { ...current, id: groupId, name, avatar, ...appearance, memberIds, userIsMember };
         return { ...state, groups: current ? groups.map(item => item.id === id ? group : item) : [...groups, group] };
       });
       return read().groups.find(group => group.id === groupId);
     },
     setTheme(theme) { return update(state => ({ ...state, theme: theme === 'night' ? 'night' : 'day' })); },
-    setWallpaper(theme, path) { return update(state => ({ ...state, wallpapers: { ...state.wallpapers, [theme === 'night' ? 'night' : 'day']: path } })); },
-    replaceForum(posts) { return update(state => { assertEnabled(); return { ...state, forum: { posts } }; }); },
+    setWallpaper(theme, path) { const value = cleanBackground(path); return update(state => ({ ...state, wallpapers: { ...state.wallpapers, [theme === 'night' ? 'night' : 'day']: value } })); },
+    setChatBackground(id, value) {
+      const background = cleanBackground(value, true);
+      return update(state => {
+        const key = state.contacts.some(person => person.id === id) ? 'contacts' : 'groups';
+        if (!state[key]?.some(person => person.id === id)) throw new Error('这个聊天已删除，无法更改背景。');
+        return { ...state, [key]: state[key].map(person => person.id === id ? { ...person, background } : person) };
+      });
+    },
+    replaceForum(posts) { return update(state => { assertEnabled(); return { ...state, forum: { posts } }; }, true); },
     upsertContacts(items) {
       return update(state => {
         const contacts = new Map(state.contacts.map(item => [item.id, item]));

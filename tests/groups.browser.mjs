@@ -42,6 +42,8 @@ try {
   await page.waitForFunction(() => Object.values(previewHarness.metadata.pocketPhone.conversations).find(items => items.some(x => x.speakerId === 'lin'))?.length === 2);
   await page.getByRole('button', { name: '聊天选项', exact: true }).click();
   await page.getByRole('button', { name: '编辑群聊', exact: true }).click();
+  assert.equal(await page.locator('.group-members-fold').getAttribute('open'), null, '编辑时成员默认折叠');
+  await page.locator('.group-members-fold summary').click();
   assert.equal(await page.locator('.profile-avatar img').getAttribute('src'), uploadedAvatar);
   await page.getByRole('button', { name: '移除头像', exact: true }).click();
   assert.equal(await page.locator('.profile-avatar img').count(), 0);

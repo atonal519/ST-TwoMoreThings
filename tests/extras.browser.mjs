@@ -27,14 +27,16 @@ try {
   assert.equal(await page.evaluate(()=>quickReplyApi.getSetByName('两三事').qrList.length),1);
   await page.getByRole('button',{name:'关闭手机',exact:true}).click();
   await page.evaluate(()=>previewHarness.runQuickReply());
-  await page.locator('.view-desktop').waitFor({state:'visible'});
+  await page.locator('.view-home').waitFor({state:'visible'});
   await openApp(page, '设置');
   await page.getByLabel('选择主页背景').setInputFiles({name:'wallpaper.png',mimeType:'image/png',buffer:readFileSync(new URL('../assets/echo-foreground.png',import.meta.url))});
   await page.waitForFunction(()=>previewHarness.metadata.pocketPhone.wallpapers?.day);
   assert.equal(await page.evaluate(()=>JSON.stringify(previewHarness.metadata.pocketPhone).includes('base64')),false);
   const dimensions=await page.evaluate(async()=>{const img=new Image();img.src='data:image/webp;base64,'+previewHarness.lastUpload.image;await img.decode();return [img.width,img.height];});
   assert.ok(Math.max(...dimensions)<=1600);
-  await page.getByRole('button',{name:'锁屏',exact:true}).click();
+  await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+  await page.evaluate(() => previewHarness.runQuickReply());
+  await page.locator('.view-home').waitFor();
   assert.equal(await page.locator('.home-wallpaper').count(),1);
   assert.equal(await page.locator('.home-art').count(),0,'自定义背景不会再叠内置前景');
   assert.equal(await page.locator('.home-clock').getAttribute('aria-label'),'当前时间 23:58');

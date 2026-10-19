@@ -156,9 +156,14 @@ export function parsePayload(text, kind, { allowEmpty = false } = {}) {
     if (!title || !author || !content) return [];
     const comments = array(item.comments ?? item.replies).flatMap(comment => {
       const author = string(comment?.author ?? comment?.username), text = string(comment?.text ?? comment?.content);
-      return author && text ? [{ author, text }] : [];
+      const translation = string(comment?.translation ?? comment?.translatedText);
+      return author && text ? [{ author, text, ...(translation ? { translation } : {}) }] : [];
     });
-    return [{ title, author, content, comments, category: string(item.category) }];
+    const titleTranslation = string(item.titleTranslation ?? item.title_translation);
+    const contentTranslation = string(item.contentTranslation ?? item.content_translation ?? item.translation);
+    return [{ title, author, content, comments, category: string(item.category),
+      ...(titleTranslation ? { titleTranslation } : {}), ...(contentTranslation ? { contentTranslation } : {}),
+    }];
   });
   if (!valid.length && !allowEmpty) throw new Error(kind === 'contacts' ? '回答中没有可用的联系人，请检查角色卡和世界书后重新整理。' : kind === 'forum' ? '回答中没有可用的完整帖子，请重新刷新。' : '回答中没有可用的对方短信，请点继续重试。');
   return valid;
@@ -166,7 +171,8 @@ export function parsePayload(text, kind, { allowEmpty = false } = {}) {
 
 export function parseJsonObject(text) {
   const source = String(text).trim(), first = source.indexOf('{'), last = source.lastIndexOf('}');
-  for (const candidate of [source, source.slice(first, last + 1)]) {
+  const fenced = [...source.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(match => match[1]);
+  for (const candidate of [source, ...fenced, source.slice(first, last + 1)]) {
     try {
       let value = JSON.parse(candidate);
       for (const key of ['data', 'result', 'answer']) if (value?.[key] && typeof value[key] === 'object') value = value[key];

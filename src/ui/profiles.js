@@ -1,4 +1,5 @@
 import { action, avatarEditor, escape } from './shared.js';
+import { renderBackgroundPicker } from './backgrounds.js';
 
 export function renderProfile(state, { ui, busy }) {
   const person = ui.profileDraft;
@@ -24,8 +25,9 @@ export function renderProfile(state, { ui, busy }) {
       <label class="field-label" for="profile-avatar">头像地址</label>
       <input id="profile-avatar" name="avatar" type="url" value="${escape(person.avatar?.startsWith('data:') ? '' : person.avatar)}" placeholder="https://…，也可从上方选择图片">
       ${contactFields}
+      ${contact ? `<span class="field-label">聊天背景</span>${renderBackgroundPicker({ value: person.background, theme: state.theme, busy: busy.has('chat-background'), chat: true })}` : ''}
       <div class="form-actions">
-        <button class="save-button" type="submit" ${busy.has('profile') || busy.has('avatar') || busy.has('style') ? 'disabled' : ''}>${busy.has('profile') ? '保存中…' : '保存'}</button>
+        <button class="save-button" type="submit" ${busy.has('profile') || busy.has('avatar') || busy.has('style') || busy.has('chat-background') ? 'disabled' : ''}>${busy.has('profile') ? '保存中…' : '保存'}</button>
         ${contact && ui.editId ? action('remove-contact', '删除', '', 'danger-button') : ''}
       </div>
     </form>`;

@@ -29,7 +29,7 @@ try {
     await page.locator('.phone-shell').waitFor();
     const css = readFileSync('/tmp/mobile-plugin-reference-research/preview-fonts.css', 'utf8').replaceAll('Nowar Rounded TW Wc', 'PocketPreviewCJK');
     await page.evaluate(css => { const face = document.createElement('style'); face.textContent = css; document.head.append(face); const style = document.createElement('style'); style.textContent = ':host{font-family:PocketPreviewCJK,sans-serif}'; document.querySelector('.pocket-phone').shadowRoot.append(style); }, css);
-    await page.evaluate(async () => { await document.fonts.load('15px PocketPreviewCJK', '两三事随卡包核心来源本机测试导出返回联系人群聊'); await document.fonts.ready; });
+    await page.evaluate(async () => { await document.fonts.load('15px PocketPreviewCJK', '两三事酒馆助手脚本核心来源本机测试导出返回联系人群聊'); await document.fonts.ready; });
     await page.locator('.phone-shell').waitFor();
     await page.evaluate(() => {
       const state = previewHarness.metadata.pocketPhone;
@@ -38,12 +38,13 @@ try {
     });
     await openApp(page, '设置');
     await page.getByRole('button', { name: '内容设置', exact: true }).click();
-    await page.getByRole('button', { name: '导出随卡包', exact: true }).click();
-    await page.getByRole('heading', { name: '随卡包', exact: true }).waitFor();
+    await page.getByRole('button', { name: '导出酒馆助手脚本', exact: true }).click();
+    await page.getByRole('heading', { name: '酒馆助手脚本', exact: true }).waitFor();
     await page.getByLabel('核心来源', { exact: true }).selectOption(kind === 'native' ? 'local' : 'remote');
     const downloaded = page.waitForEvent('download');
     await page.getByRole('button', { name: '导出', exact: true }).click();
     const download = await downloaded;
+    await page.getByText('酒馆助手脚本已导出。', { exact: true }).waitFor();
     const path = `${output}/${kind}-script.json`; await download.saveAs(path);
     const script = JSON.parse(readFileSync(path, 'utf8'));
     assert.equal(script.data.twoMoreThings.contacts.length, 3);

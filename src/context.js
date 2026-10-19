@@ -49,7 +49,29 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       }
       return { ...current, ...(calendarReference ? { calendar: calendarReference } : {}), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, history: history.map(contextMessage), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText)].join('\n') }) };
     },
-    async readForForum() { const current = base(); return { ...current, worldbook: await target.readWorldInfo({ scanText: current.story.map(item => item.text).join('\n') }) }; },
+    async readForForum() {
+      const current = base();
+      // 正文只提供时代、地域与环境背景，公众知情由论坛任务判断，不传用户档案或人物记忆。
+      return { clock: current.clock, setting: current.character, storyBackground: current.story,
+        worldbook: await target.readWorldInfo({ scanText: current.story.map(item => item.text).join('\n') }) };
+    },
+    async readForSocial(authors) {
+      const current = base(), bridge = qqjBridgeProvider?.();
+      const contacts = authors.filter(person => person.kind !== 'npc');
+      const ids = actorIds(contacts, bridge), entityIds = [...new Set(ids.values())];
+      const scanText = [...current.story.map(item => item.text), ...authors.map(person => person.name || '')].join('\n');
+      let actors = [];
+      if (entityIds.length && bridge?.readContext) {
+        const context = await bridge.readContext({ query: scanText.slice(-8000), entityIds, maxCharacters: 6000 });
+        if (context?.status === 'ready') actors = context.actors || [];
+      }
+      return { ...current, authors: authors.map(person => ({ id: person.id, kind: person.kind,
+        name: person.name, nickname: person.nickname || '', description: person.description || '',
+        personality: person.personality || '', expression: person.expression || '', language: person.language || '',
+        related: actors.filter(actor => ids.has(person.id) && actor.entityId === ids.get(person.id))
+          .map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n'),
+      })), worldbook: await target.readWorldInfo({ scanText }) };
+    },
     async readDirectorySources() {
       const snapshot = qqjBridgeProvider?.()?.getPeopleSnapshot?.();
       const state = store.read();

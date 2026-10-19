@@ -20,12 +20,13 @@ try {
   check('real minutes do not advance story time', await page.locator('.home-clock text').textContent(), '2358');
   await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
-  check('chat fills the phone width', await page.evaluate(() => {
+  check('chat fills the screen inside the phone bezel', await page.evaluate(() => {
     const root = document.querySelector('.pocket-phone').shadowRoot;
-    const shell = root.querySelector('.phone-shell').getBoundingClientRect();
+    const shell = root.querySelector('.phone-shell'), bounds = shell.getBoundingClientRect();
+    const border = parseFloat(getComputedStyle(shell).borderLeftWidth);
     return ['.message-feed', '.composer'].every(selector => {
       const box = root.querySelector(selector).getBoundingClientRect();
-      return Math.abs(box.x - shell.x) < 1 && Math.abs(box.width - shell.width) < 1;
+      return Math.abs(box.x - bounds.x - border) < 1 && Math.abs(box.width - shell.clientWidth) < 1;
     });
   }), true);
   check('chat has no nested rounded container', await page.locator('.message-feed').evaluate(x => getComputedStyle(x).borderRadius), '0px');
@@ -44,11 +45,13 @@ try {
   }), true);
   check('reply uses the same story time', await page.getByRole('log').locator('.message-row').last().locator('time').textContent(), '23:58');
   await openApp(page, '论坛');
-  check('forum fills the phone width without an outer border', await page.evaluate(() => {
+  check('forum fills the screen without an extra inner frame', await page.evaluate(() => {
     const root = document.querySelector('.pocket-phone').shadowRoot, shell = root.querySelector('.phone-shell'), main = root.querySelector('.phone-main');
-    return Math.abs(shell.getBoundingClientRect().width - main.getBoundingClientRect().width) < 1 && getComputedStyle(shell).borderTopWidth === '0px';
+    return Math.abs(shell.clientWidth - main.getBoundingClientRect().width) < 1 && getComputedStyle(main).borderTopWidth === '0px';
   }), true);
-  await page.getByRole('button', { name: '锁屏', exact: true }).click();
+  await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+  await page.evaluate(() => previewHarness.app.open());
+  await page.locator('.view-home').waitFor();
   await page.evaluate(() => {
     window.originalClock = document.querySelector('.pocket-phone').shadowRoot.querySelector('.home-clock');
     previewHarness.mainMessages.push({ is_user: false, mes: '<!-- SDC-end | date=大陆历1686年10月5日 | weekday=周三 | time=00:04 -->' });

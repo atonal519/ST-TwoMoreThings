@@ -31,11 +31,12 @@ export function normalizeContent(item) {
 
 export function contextMessage(message) {
   return { ...(message.speakerId ? { speakerId: message.speakerId } : { role: message.role }), text: messageText(message),
+    ...(message.type === 'sticker' ? { type: 'sticker', stickerId: message.stickerId } : {}),
     ...(message.translation ? { translation: message.translation } : {}),
     ...(message.type === 'transfer' ? { transferId: message.id, recipientId: message.transfer.recipientId, status: message.transfer.status } : {}),
   };
 }
 
-export const RICH_MESSAGES_PROMPT = `可按场景自然使用以下消息，勿为展示功能强行发送：
-表情：{"type":"sticker","stickerId":"从stickers目录原样选择id"}；定位：{"type":"location","location":{"name":"地点名","address":"剧情内地址或空"}}；转账：{"type":"transfer","transfer":{"amount":"金额数字","currency":"CNY等币种","note":"简短备注","recipientId":"私聊填@user，群聊填收款成员id"}}；图片：{"type":"image","image":{"description":"真实发来照片的可绘制画面描述，写清画面人物、动作、物品和环境"}}。图片卡仅表示照片内容，点开才生图，不生成图片地址或绘图标签。
+export const RICH_MESSAGES_PROMPT = `messages可混合普通文字和下列消息；群聊每条仍需speakerId。图片表情包是独立图片贴纸，与文字中的emoji、颜文字不同。人物习惯爱发表情包且stickers目录有合适内容时，应自然选用图片贴纸，也可单独回一张；emoji和颜文字可并用，不能一直替代图片表情包。没有合适场景时不发，不要求每轮发。
+图片贴纸：{"type":"sticker","stickerId":"从stickers目录原样选择id"}，按meaning选图，不编造编号；定位：{"type":"location","location":{"name":"地点名","address":"剧情内地址或空"}}；转账：{"type":"transfer","transfer":{"amount":"金额数字","currency":"CNY等币种","note":"简短备注","recipientId":"私聊填@user，群聊填收款成员id"}}；图片：{"type":"image","image":{"description":"真实发来照片的可绘制画面描述，写清画面人物、动作、物品和环境"}}。照片按场景需要发送，不要求每轮发；只给描述，用户点开才生图，不生成图片地址或绘图标签。
 收到用户待收款的转账，可在transferActions中返回{"transferId":"原消息id","status":"accepted或returned"}；仅处理收款人是自己的转账，不捏造票据，不把收款说成新转账。群聊的每条transferActions另带speakerId。普通消息仍用text和可选translation。`;

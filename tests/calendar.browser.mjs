@@ -62,7 +62,9 @@ try {
       await page.locator('.phone-shell').screenshot({ path: `${output}/${host}-${theme}.png` });
     }
     const baseline = await page.evaluate(() => ({ saves: previewHarness.metadataSaves, requests: previewHarness.requests.length }));
-    await page.getByRole('button', { name: '锁屏', exact: true }).click();
+    await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+    await page.evaluate(() => previewHarness.app.open());
+    await page.locator('.view-home').waitFor();
     const art = await page.locator('.home-artboard').elementHandle();
     await page.evaluate(() => dispatchEvent(new CustomEvent('st-sevendayscal:calendar-changed')));
     assert.equal(await art.evaluate(el => el.isConnected), true);

@@ -16,11 +16,16 @@ import { createPhoneImageService } from './phone-images.js';
 import { readLockWeather } from './weather.js';
 import { createAuthoringService, stateFromPreset } from './authoring.js';
 import { createCalendarReader } from './calendar.js';
+import { createSocialService } from './social.js';
+import { createImageFiles } from './image-files.js';
+import { createImageProviders } from './image-providers.js';
 export { createPhoneControl, createPhoneImageService };
 
 export function initialize({ host = createHostAdapter(), documentRef = document, qqjBridgeProvider, preset } = {}) {
   const initialState = preset ? stateFromPreset(preset) : undefined;
-  const makeStore = (target, options = {}) => createPhoneStore({ target, initialState, ...options });
+  const files = createImageFiles({ host });
+  const imageProviders = createImageProviders({ host });
+  const makeStore = (target, options = {}) => createPhoneStore({ target, initialState, removeImages: files.remove, ...options });
   let phone, targetId, activeRequests = 0;
   const entries = createPhoneEntries({ host, documentRef, open, defaults: preset?.entries, initialTheme: initialState?.theme, toggle: () => phone?.isOpen ? phone.close() : open() });
   const onBusyChange = value => { activeRequests += value ? 1 : -1; entries.fab.setBusy(activeRequests > 0); };
@@ -55,8 +60,9 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
       groups: createGroupService({ target, store, contextReader, modelClient }),
       directory: createDirectoryService({ store, contextReader, modelClient }),
       forum: createForumService({ store, contextReader, modelClient }), apiSettings, calendar,
+      social: createSocialService({ store, contextReader, modelClient }),
       wallpaper: createWallpaperService({ host, store }), entries, authoring: createAuthoringService({ host, store, readEntries: entries.read }), mode: host.mode,
-      control, images: createPhoneImageService({ store, modelClient, assertEnabled: control.assertEnabled, readBatch: () => readTimeline(target.messages), onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
+      control, imageProviders, images: createPhoneImageService({ store, modelClient, files, providers: imageProviders, assertEnabled: control.assertEnabled, onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
       onContextChange: () => host.setPrompt(''),
       onClose: () => entries.focus(),
     });

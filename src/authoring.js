@@ -1,8 +1,10 @@
+import { cleanBackground } from './backgrounds.js';
+
 export const REMOTE_CORE_URL = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js';
 export const LOCAL_CORE_URL = new URL('../embed.js', import.meta.url).href;
 
 const string = value => typeof value === 'string' ? value : '';
-const profile = person => Object.fromEntries(['name', 'nickname', 'avatar', 'expression', 'language', 'personality', 'tone'].filter(key => typeof person?.[key] === 'string').map(key => [key, person[key]]));
+const profile = person => Object.fromEntries(['name', 'nickname', 'avatar', 'expression', 'language', 'personality', 'tone', 'background'].filter(key => typeof person?.[key] === 'string').map(key => [key, person[key]]));
 
 // 作者配置保存在卡片或角色脚本数据中；运行时的手机档案只属于当前聊天。
 export function readCardPreset(character) {
@@ -17,13 +19,13 @@ export function readCardPreset(character) {
 
 export function stateFromPreset(preset) {
   if (preset?.schemaVersion !== 1) throw new Error('卡内手机配置版本不支持，请让作者更新随卡包。');
-  const contacts = (preset.contacts || []).map(person => ({ ...profile(person), id: string(person.id), source: { kind: 'card' }, edited: true, manualFields: ['name', 'nickname', 'avatar', 'expression', 'language'] }));
+  const contacts = (preset.contacts || []).map(person => ({ ...profile(person), background: cleanBackground(person.background, true), id: string(person.id), source: { kind: 'card' }, edited: true, manualFields: ['name', 'nickname', 'avatar', 'expression', 'language'] }));
   const ids = new Set(contacts.map(person => person.id));
   if (ids.size !== contacts.length || contacts.some(person => !person.id || !person.name?.trim())) throw new Error('卡内手机的联系人缺少姓名或编号重复，请让作者重新导出。');
-  const groups = (preset.groups || []).map(group => ({ id: string(group.id), name: string(group.name), avatar: string(group.avatar), memberIds: [...new Set(group.memberIds || [])], userIsMember: group.userIsMember !== false }));
+  const groups = (preset.groups || []).map(group => ({ id: string(group.id), name: string(group.name), avatar: string(group.avatar), background: cleanBackground(group.background, true), memberIds: [...new Set(group.memberIds || [])], userIsMember: group.userIsMember !== false }));
   if (new Set(groups.map(group => group.id)).size !== groups.length || groups.some(group => !group.id || !group.name.trim() || ids.has(group.id) || group.memberIds.some(id => !ids.has(id)))) throw new Error('卡内手机的群聊资料或成员无法对应，请让作者重新导出。');
   return { schemaVersion: 1, contacts, groups, conversations: {}, forum: { posts: [] }, injectEnabled: preset.injectEnabled === true, theme: preset.theme === 'night' ? 'night' : 'day',
-    wallpapers: { day: string(preset.wallpapers?.day), night: string(preset.wallpapers?.night) },
+    wallpapers: { day: cleanBackground(preset.wallpapers?.day), night: cleanBackground(preset.wallpapers?.night) },
     ...(preset.userProfile ? { userProfile: profile(preset.userProfile) } : {}),
   };
 }
@@ -44,7 +46,7 @@ export function createAuthoringService({ store, host, readEntries = () => host.r
     async exportScript({ coreUrl = REMOTE_CORE_URL } = {}) {
       const state = store.read(), images = new Map();
       const portable = async source => {
-        if (!source || source.startsWith('data:image/')) return source || '';
+        if (!source || source.startsWith('data:image/') || source.startsWith('builtin:') || source.startsWith('color:')) return source || '';
         const url = new URL(source, baseUrl);
         if (url.protocol !== 'blob:' && url.origin !== new URL(baseUrl).origin) return source;
         if (!images.has(source)) images.set(source, (async () => {
@@ -60,8 +62,8 @@ export function createAuthoringService({ store, host, readEntries = () => host.r
         return images.get(source);
       };
       const ids = new Map(state.contacts.map((person, index) => [person.id, `card:contact-${index + 1}`]));
-      const contacts = await Promise.all(state.contacts.map(async person => ({ ...profile(person), id: ids.get(person.id), avatar: await portable(person.avatar) })));
-      const groups = await Promise.all((state.groups || []).map(async (group, index) => ({ id: `card:group-${index + 1}`, name: group.name, avatar: await portable(group.avatar), memberIds: group.memberIds.map(id => ids.get(id)), userIsMember: group.userIsMember })));
+      const contacts = await Promise.all(state.contacts.map(async person => ({ ...profile(person), id: ids.get(person.id), avatar: await portable(person.avatar), background: await portable(person.background) })));
+      const groups = await Promise.all((state.groups || []).map(async (group, index) => ({ id: `card:group-${index + 1}`, name: group.name, avatar: await portable(group.avatar), background: await portable(group.background), memberIds: group.memberIds.map(id => ids.get(id)), userIsMember: group.userIsMember })));
       const userProfile = state.userProfile ? { ...profile(state.userProfile), avatar: await portable(state.userProfile.avatar) } : undefined;
       const preferences = readEntries();
       const preset = { schemaVersion: 1, theme: state.theme === 'night' ? 'night' : 'day', injectEnabled: state.injectEnabled === true, contacts, groups, entries: { fabShow: preferences.fabShow !== false, qrShow: preferences.qrShow === true },

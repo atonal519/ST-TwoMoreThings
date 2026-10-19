@@ -1,4 +1,4 @@
-import { action, empty, escape, icon, pageHeading } from './shared.js';
+import { action, empty, escape, icon, pageHeading, renderBilingual } from './shared.js';
 
 export function renderForum(state, { busy }) {
   const posts = state.forum?.posts || [];
@@ -7,8 +7,8 @@ export function renderForum(state, { busy }) {
       <span class="post-category category-${index % 3}">${escape(post.category || '闲聊')}</span>
       <span class="post-author">${escape(post.author)}</span>
     </span>
-    <strong class="post-title">${escape(post.title)}</strong>
-    <span class="post-excerpt">${escape(post.content)}</span>
+    <strong class="post-title">${renderBilingual(post.title, post.titleTranslation)}</strong>
+    <span class="post-excerpt">${renderBilingual(post.content, post.contentTranslation)}</span>
     <span class="post-footer">
       <span>${icon('messages')}${post.comments?.length || 0} 条回帖</span>
       <span>展开看看 ${icon('next')}</span>
@@ -27,7 +27,7 @@ export function renderPost(state, { ui }) {
     <span class="comment-avatar tone-${index % 3}" aria-hidden="true">${escape(Array.from(comment.author || '路人')[0])}</span>
     <div>
       <h3>${escape(comment.author)}</h3>
-      <p>${escape(comment.text)}</p>
+      <p>${renderBilingual(comment.text, comment.translation)}</p>
     </div>
   </article>`).join('');
   return `<header class="post-heading">
@@ -36,12 +36,12 @@ export function renderPost(state, { ui }) {
     </header>
     <article class="post-detail">
       <span class="post-category">${escape(post.category || '闲聊')}</span>
-      <h1>${escape(post.title)}</h1>
+      <h1>${renderBilingual(post.title, post.titleTranslation)}</h1>
       <div class="post-byline">
         <span class="author-mark">${escape(Array.from(post.author || '友')[0])}</span>
         <span>${escape(post.author)}</span>
       </div>
-      <p class="post-body">${escape(post.content)}</p>
+      <p class="post-body">${renderBilingual(post.content, post.contentTranslation)}</p>
     </article>
     <section class="comments">
       <h2>回帖 <span>${post.comments?.length || 0}</span></h2>

@@ -37,6 +37,7 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       return target;
     },
     readSettings: () => context().extensionSettings,
+    getEventSource: () => context().eventSource,
     saveSettings: () => context().saveSettingsDebounced(),
     readQuickReplies: () => globalThis.quickReplyApi,
     registerOpenCommand(open) {

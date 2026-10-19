@@ -76,7 +76,9 @@ try {
     assert.equal(await page.locator('.phone-shell').evaluate(x => x.scrollWidth <= x.clientWidth + 1), true);
     await page.evaluate(() => { previewHarness.replyWait = new Promise(resolve => previewHarness.releaseReply = resolve); previewHarness.reply = { messages: [{ text: '晚点见。' }, { type: 'sticker', stickerId: 'sepia.hello' }] }; });
     await page.getByRole('button', { name: '继续', exact: true }).click();
-    await page.getByRole('button', { name: '锁屏', exact: true }).click();
+    await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+    await page.evaluate(() => previewHarness.app.open());
+    await page.locator('.view-home').waitFor();
     await page.evaluate(() => { previewHarness.replyWait = null; previewHarness.releaseReply(); });
     await page.locator('.lock-notification').waitFor();
     assert.equal(await page.locator('.lock-notification').count(), 1);
@@ -84,10 +86,14 @@ try {
     await page.locator('.phone-shell').screenshot({ path: `${output}/${kind}-${width}-lock.png` });
     await page.evaluate(() => previewHarness.metadata.pocketPhone.theme = 'night');
     await openApp(page, '设置');
-    await page.getByRole('button', { name: '锁屏', exact: true }).click();
+    await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+    await page.evaluate(() => previewHarness.app.open());
+    await page.locator('.view-home').waitFor();
     await page.locator('.phone-shell').screenshot({ path: `${output}/${kind}-${width}-night-lock.png` });
     await page.locator('.lock-notification').click();
-    await page.getByRole('button', { name: '锁屏', exact: true }).click();
+    await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+    await page.evaluate(() => previewHarness.app.open());
+    await page.locator('.view-home').waitFor();
     await page.waitForFunction(() => !document.querySelector('.pocket-phone').shadowRoot.querySelector('.lock-notification'));
     await openApp(page, '设置');
     await page.getByRole('switch', { name: '启用两三事', exact: true }).uncheck();

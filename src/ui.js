@@ -1,7 +1,7 @@
 import { avatar, refKey } from './ui/shared.js';
 import { renderHome } from './ui/home.js';
 import { createPhoneClock } from './ui/status.js';
-import { renderShell } from './ui/shell.js';
+import { renderFeedback, renderShell } from './ui/shell.js';
 import { renderDesktop } from './ui/desktop.js';
 import { renderInbox, renderChat } from './ui/messages.js';
 import { renderForum, renderPost } from './ui/forum.js';
@@ -17,6 +17,10 @@ import { LOCAL_CORE_URL, REMOTE_CORE_URL } from './authoring.js';
 import { renderCalendar } from './ui/calendar.js';
 import { createCalendarReader } from './calendar.js';
 import { mountChatParticles } from './ui/particles.js';
+import { createPhoneWindow } from './ui/window.js';
+import { createChatScroll } from './ui/chat-scroll.js';
+import { renderSocial, renderSocialProfile } from './ui/social.js';
+import { imagePath } from './image-files.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
@@ -24,6 +28,7 @@ const apps = [
   { id: 'forum', label: '论坛', view: 'forum' },
   { id: 'calendar', label: '日历', view: 'calendar' },
   { id: 'settings', label: '设置', view: 'settings' },
+  { id: 'social', label: 'ainstgram', view: 'social' },
 ];
 const pages = {
   home: renderHome,
@@ -40,9 +45,11 @@ const pages = {
   'user-profile': renderProfile,
   authoring: renderAuthoring,
   calendar: renderCalendar,
+  social: renderSocial,
+  'social-profile': renderSocialProfile,
 };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, apiSettings, wallpaper, entries, images, authoring, mode, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, social, apiSettings, imageProviders, wallpaper, entries, images, authoring, mode, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
@@ -62,15 +69,19 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
   surface.setAttribute('aria-label', '两三事');
   root.append(stylesheet, surface);
   mount.append(element);
+  const windowControls = createPhoneWindow(surface);
+  const chatScroll = createChatScroll(root);
   // 这里只持有未保存的页面状态；联系人和消息始终从 store 读取。
   const ui = {
-    view: 'home', unlocked: false, feedback: null, defaultUser,
+    view: 'home', feedback: null, defaultUser,
     contactId: '', groupId: '', postId: '',
     drafts: new Map(), visibleMessages: 60, batch: null,
     historyOpen: false, visibleHistory: 60,
     inboxMenu: false, chatMenu: false, selectedMessage: '', confirmClear: false,
     editor: '', editId: '', profileDraft: {},
     groupEditId: '', groupDraft: {}, deletion: null,
+    groupMembersOpen: false,
+    socialAuthorId: '', socialPastOpen: false, socialLimit: 30, socialScroll: 0,
     drawers: { connection: true, appearance: false, content: false },
     manual: false, apiDraft: {}, models: [], modelSearch: '', modelsOpen: false,
     attachment: '', attachmentDraft: {}, stickerPack: 'blob', photo: null,
@@ -81,14 +92,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
   const clock = createPhoneClock({ root, element, readTime });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
-  let stopParticles = null;
+  let particles = null;
 
   // 导航、草稿、事件与服务调用由控制器统一持有，页面只负责展示。
   function render({ bottom = false } = {}) {
-    stopParticles?.();
-    stopParticles = null;
     const scrollTop = inChat() ? root.querySelector('.message-feed')?.scrollTop : undefined;
     const settingsScroll = root.querySelector('.view-settings')?.scrollTop;
+    const socialScroll = ['social', 'social-profile'].includes(ui.view) ? root.querySelector(`.view-${ui.view}`)?.scrollTop : undefined;
     const state = store.read();
     const enabled = control.isEnabled();
     element.dataset.enabled = String(enabled);
@@ -104,19 +114,27 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       ? calendar.month(ui.calendarOffset)
       : ui.view === 'desktop' ? calendar.month(0) : null;
     surface.innerHTML = renderShell({
-      content: page(state, { ui, busy, apiSettings, entries, control, apps, calendar: calendarMonth }),
+      content: page(state, { ui, busy, apiSettings, imageProviders, entries, control, apps, calendar: calendarMonth }),
       view: ui.view, enabled, weather,
       feedback: ui.feedback, photo: ui.photo,
     });
     clock.refresh();
     resizeDraft();
+    chatScroll.attach();
     if (settingsScroll !== undefined && ui.view === 'settings') root.querySelector('.view-settings').scrollTop = settingsScroll;
+    if (socialScroll !== undefined && ['social', 'social-profile'].includes(ui.view)) root.querySelector('.phone-main').scrollTop = socialScroll;
     if (bottom) {
       const feed = root.querySelector('.message-feed');
       if (feed) feed.scrollTop = feed.scrollHeight;
     } else if (scrollTop !== undefined) root.querySelector('.message-feed').scrollTop = scrollTop;
     const chatStage = root.querySelector('.chat-stage');
-    if (chatStage && !element.hidden) stopParticles = mountChatParticles(chatStage);
+    if (chatStage && !element.hidden) {
+      if (particles) particles.attach(chatStage);
+      else particles = mountChatParticles(chatStage);
+    } else {
+      particles?.dispose();
+      particles = null;
+    }
   }
   async function perform(key, task, after) {
     if (busy.has(key)) return;
@@ -133,15 +151,50 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       busy.delete(key); render({ bottom: inChat() && (key === 'profile' || key === 'group-profile' || key.startsWith('send:') || key.startsWith('continue:')) });
     }
   }
+  async function recoverImages(paths) {
+    if (!paths.length || !images?.recoverMissing || !control.isEnabled()) return [];
+    try {
+      const missing = await images.recoverMissing(paths);
+      if (missing.length) {
+        if (ui.photo && missing.includes(imagePath(ui.photo.path))) ui.photo = null;
+        render();
+      }
+      return missing;
+    } catch (error) {
+      ui.feedback = { error: true, text: error.message || '图片状态未能保存，请检查酒馆连接。' };
+      // 失败只更新提示，避免重挂同一张破图再次触发error。
+      const feedback = surface.querySelector('.feedback');
+      if (feedback) feedback.outerHTML = renderFeedback(ui.feedback);
+      else surface.insertAdjacentHTML('beforeend', renderFeedback(ui.feedback));
+      return null;
+    }
+  }
+  function recoverVisibleImages() {
+    // 只在打开页面时核对本页图片，捕捉图库删除后仍被浏览器缓存的旧图。
+    void recoverImages([...root.querySelectorAll('img[data-phone-image]')].map(image => image.dataset.phoneImage));
+  }
+  function imageError(event) {
+    if (event.target.matches?.('img[data-phone-image]')) void recoverImages([event.target.dataset.phoneImage]);
+  }
+  async function viewPhoto(readImage) {
+    const image = readImage();
+    if (!image?.path) return;
+    if (await recoverImages([image.path]) === null) return;
+    const current = readImage();
+    if (current?.path) { ui.photo = current; render(); }
+  }
   function close() {
     dismissMenus();
+    windowControls.stop();
+    chatScroll.stop();
     element.hidden = true;
     clock.stop();
-    stopParticles?.();
-    stopParticles = null;
+    particles?.dispose();
+    particles = null;
     onClose?.();
   }
   function showPage(view, { bottom = false } = {}) {
+    if (ui.view === 'social' && view !== 'social') ui.socialScroll = root.querySelector('.view-social')?.scrollTop || 0;
     dismissMenus();
     ui.view = view;
     ui.feedback = null;
@@ -149,6 +202,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     ui.attachment = '';
     ui.photo = null;
     render({ bottom });
+    recoverVisibleImages();
+    if (view === 'social') root.querySelector('.view-social').scrollTop = ui.socialScroll;
   }
   // 返回先收起当前聊天的清空确认，再按页面父级走，不另存应用历史栈。
   function goBack() {
@@ -158,6 +213,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       case 'chat':
       case 'group-chat': parent = 'inbox'; break;
       case 'post': parent = 'forum'; break;
+      case 'social-profile': parent = 'social'; break;
       case 'contact-profile':
         parent = ui.editId ? 'chat' : 'inbox';
         ui.profileDraft = {};
@@ -180,7 +236,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
   }
   function editGroup(id = '') {
     const group = store.read().groups?.find(item => item.id === id);
-    ui.groupEditId = id; ui.groupDraft = { name: group?.name || '', avatar: group?.avatar || '', memberIds: [...(group?.memberIds || [])], userIsMember: group?.userIsMember ?? true };
+    ui.groupEditId = id; ui.groupDraft = { name: group?.name || '', avatar: group?.avatar || '', background: group?.background || '', memberIds: [...(group?.memberIds || [])], userIsMember: group?.userIsMember ?? true };
+    ui.groupMembersOpen = !id;
     ui.view = 'group-profile'; ui.chatMenu = false; ui.inboxMenu = false; ui.feedback = null; render();
   }
   function closeModels() {
@@ -205,7 +262,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     ui.editor = kind; ui.editId = id;
     const state = store.read();
     const person = kind === 'user' ? state.userProfile || { name: defaultUser } : state.contacts.find(item => item.id === id) || {};
-    ui.profileDraft = Object.fromEntries(['name', 'nickname', 'avatar', ...(kind === 'contact' ? ['expression', 'language'] : [])].map(key => [key, person[key] || '']));
+    ui.profileDraft = Object.fromEntries(['name', 'nickname', 'avatar', ...(kind === 'contact' ? ['expression', 'language', 'background'] : [])].map(key => [key, person[key] || '']));
     ui.view = `${kind}-profile`; ui.chatMenu = false; ui.inboxMenu = false; ui.feedback = null; render();
   }
   function keydown(event) {
@@ -235,6 +292,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     if (event.target.matches('.photo-viewer')) { ui.photo = null; render(); return; }
     const button = event.target.closest('button');
     if (!button || button.disabled) return;
+    if (button.dataset.wallpaper !== undefined) { const theme = store.read().theme; void perform('wallpaper', () => store.setWallpaper(theme, button.dataset.wallpaper)); return; }
+    if (button.dataset.chatBackground !== undefined) {
+      const draft = ui.view === 'group-profile' ? ui.groupDraft : ui.profileDraft;
+      draft.background = button.dataset.chatBackground; render(); return;
+    }
     if (button.dataset.calendarDay) { ui.calendarDay = Number(button.dataset.calendarDay); render(); return; }
     if (button.dataset.stickerPack) { ui.stickerPack = button.dataset.stickerPack; render(); return; }
     if (button.dataset.sticker) {
@@ -252,22 +314,46 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       return;
     }
     if (button.dataset.contact || button.dataset.group) {
-      ui.unlocked = true;
       if (button.dataset.group) { ui.groupId = button.dataset.group; ui.view = 'group-chat'; }
       else { ui.contactId = button.dataset.contact; ui.view = 'chat'; }
       ui.chatMenu = false; ui.inboxMenu = false; ui.confirmClear = false; ui.selectedMessage = ''; ui.visibleMessages = 60; ui.historyOpen = false; ui.visibleHistory = 60; ui.feedback = null;
       ui.attachment = ''; ui.attachmentDraft = {};
       render({ bottom: true });
+      recoverVisibleImages();
       void store.markRead(conversationId()).catch(() => { ui.feedback = { error: true, text: '消息的已读状态保存失败，请检查酒馆连接。' }; render(); }); return;
     }
     if (button.dataset.message) { ui.chatMenu = false; ui.selectedMessage = ui.selectedMessage === button.dataset.message ? '' : button.dataset.message; render(); return; }
     if (button.dataset.post) { ui.postId = button.dataset.post; ui.view = 'post'; ui.feedback = null; render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
-      case 'unlock': ui.unlocked = true; showPage('desktop'); break;
-      case 'lock': ui.unlocked = false; showPage('home'); break;
+      case 'unlock': showPage('desktop'); break;
       case 'system-home': showPage('desktop'); break;
       case 'system-back': goBack(); break;
+      case 'social-refresh': void perform('social', () => social.refresh()); break;
+      case 'social-author': {
+        const authorId = button.dataset.socialAuthor;
+        if (ui.view !== 'social-profile' || ui.socialAuthorId !== authorId) {
+          ui.socialAuthorId = authorId; showPage('social-profile');
+        }
+        break;
+      }
+      case 'social-author-refresh': {
+        const authorId = ui.socialAuthorId;
+        void perform(`social-author:${authorId}`, () => social.generateAuthor(authorId)); break;
+      }
+      case 'social-back': goBack(); break;
+      case 'social-past': ui.socialPastOpen = !ui.socialPastOpen; render(); break;
+      case 'social-earlier': ui.socialLimit += 30; render(); break;
+      case 'social-image': {
+        const post = store.read().social?.posts.find(item => item.id === button.dataset.socialImage);
+        if (post?.image?.path) void viewPhoto(() => store.read().social?.posts.find(item => item.id === button.dataset.socialImage)?.image);
+        else void perform(`social-image:${button.dataset.socialImage}`, () => images.generatePost(button.dataset.socialImage));
+        break;
+      }
+      case 'restore-chat-background': {
+        const draft = ui.view === 'group-profile' ? ui.groupDraft : ui.profileDraft;
+        draft.background = ''; render(); break;
+      }
       case 'open-calendar':
         ui.view = 'calendar'; ui.calendarOffset = 0; ui.calendarDay = null;
         ui.feedback = null; render(); break;
@@ -282,7 +368,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
           const url = URL.createObjectURL(new Blob([JSON.stringify(result.script, null, 2)], { type: 'application/json' }));
           const link = doc.createElement('a'); link.href = url; link.download = result.filename; doc.body.append(link); link.click(); link.remove();
           setTimeout(() => URL.revokeObjectURL(url), 0);
-          ui.feedback = { text: '随卡包已导出。' };
+          ui.feedback = { text: '酒馆助手脚本已导出。' };
         });
         break;
       case 'attachments': ui.attachment = ui.attachment ? '' : 'menu'; ui.selectedMessage = ''; ui.chatMenu = false; render(); break;
@@ -293,7 +379,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       case 'close-photo': ui.photo = null; render(); break;
       case 'photo': {
         const message = store.read().conversations[id]?.find(item => item.id === button.dataset.photo);
-        if (message?.image.path) { ui.photo = message.image; render(); }
+        if (message?.image.path) void viewPhoto(() => store.read().conversations[id]?.find(item => item.id === button.dataset.photo)?.image);
         else void perform(`image:${button.dataset.photo}`, () => images.generate(id, button.dataset.photo));
         break;
       }
@@ -396,6 +482,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     }
   }
   function change(event) {
+    if (event.target.id === 'image-provider') void perform('image-provider', () => imageProviders.select(event.target.value));
     if (event.target.id === 'export-source') { ui.exportLocal = event.target.value === 'local'; render(); }
     if (event.target.id === 'phone-enabled') {
       const enabled = event.target.checked;
@@ -406,6 +493,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       const { value, checked } = event.target;
       if (value === '@user') ui.groupDraft.userIsMember = checked;
       else ui.groupDraft.memberIds = checked ? [...ui.groupDraft.memberIds, value] : ui.groupDraft.memberIds.filter(id => id !== value);
+      root.querySelector('.group-members-fold summary span').textContent = `${ui.groupDraft.memberIds.length + Number(ui.groupDraft.userIsMember)} 人`;
     }
     if (event.target.id === 'inject-enabled') {
       const enabled = event.target.checked;
@@ -420,7 +508,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       const file = event.target.files[0], theme = store.read().theme;
       void perform('wallpaper', async () => wallpaper.upload(theme, await readImage(file, doc, 1600)));
     }
-    if (event.target.matches('.profile-form input[type="file"], .group-form input[type="file"]') && event.target.files[0]) {
+    if (event.target.id === 'chat-background-file' && event.target.files[0]) {
+      const file = event.target.files[0], draft = ui.view === 'group-profile' ? ui.groupDraft : ui.profileDraft;
+      void perform('chat-background', async () => wallpaper.uploadImage(await readImage(file, doc, 1600)), path => { draft.background = path; });
+    }
+    if (event.target.matches('.avatar-picker input[type="file"]') && event.target.files[0]) {
       const file = event.target.files[0], draft = event.target.closest('.group-form') ? ui.groupDraft : ui.profileDraft;
       void perform('avatar', () => readImage(file, doc), value => { draft.avatar = value; });
     }
@@ -459,12 +551,15 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
   const refreshCalendar = () => {
     if (!element.hidden && ['calendar', 'desktop'].includes(ui.view)) render();
   };
+  const rememberMembersFold = event => { if (event.target.matches?.('.group-members-fold')) ui.groupMembersOpen = event.target.open; };
   doc.defaultView.addEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
   root.addEventListener('keydown', keydown);
   root.addEventListener('click', click);
   root.addEventListener('input', input);
   root.addEventListener('change', change);
   root.addEventListener('submit', submit);
+  root.addEventListener('toggle', rememberMembersFold, true);
+  root.addEventListener('error', imageError, true);
   doc.addEventListener('pointerdown', dismissMenus, true);
   render();
   return {
@@ -472,14 +567,16 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     isReading(id) { return element.isConnected && !element.hidden && inChat() && conversationId() === id; },
     close,
     open() {
-      // 当前聊天第一次打开先锁屏；同一实例解锁后，关闭再开回桌面。
+      // 关闭后重开统一进入锁屏；已显示时调用 open 只刷新当前页。
       if (element.hidden) {
-        ui.view = ui.unlocked ? 'desktop' : 'home';
+        ui.view = 'home';
         ui.photo = null;
         ui.attachment = '';
       }
       element.hidden = false;
       render();
+      recoverVisibleImages();
+      windowControls.refresh();
     },
     refreshTime() {
       clock.refresh();
@@ -493,7 +590,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
     },
     dispose() {
       clock.stop();
-      stopParticles?.();
+      particles?.dispose();
+      chatScroll.dispose();
+      windowControls.dispose();
       doc.defaultView.removeEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
       doc.removeEventListener('pointerdown', dismissMenus, true);
       root.removeEventListener('keydown', keydown);
@@ -501,6 +600,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, a
       root.removeEventListener('input', input);
       root.removeEventListener('change', change);
       root.removeEventListener('submit', submit);
+      root.removeEventListener('toggle', rememberMembersFold, true);
+      root.removeEventListener('error', imageError, true);
       element.remove(); fontStyle.remove();
     },
   };

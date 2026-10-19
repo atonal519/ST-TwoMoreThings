@@ -34,7 +34,7 @@ try {
     assert.equal(await page.locator('.home-clock text').textContent(), '2358');
     await page.getByRole('button', { name: '进入桌面', exact: true }).click();
     await page.locator('.view-desktop').waitFor();
-    assert.equal(await page.locator('.desktop-app').count(), 4);
+    assert.equal(await page.locator('.desktop-app').count(), 5);
     assert.equal(await page.locator('.desktop-calendar').count(), 0, 'no Gouhua means no fabricated calendar widget');
     assert.equal(await page.locator('.status-time').textContent(), '23:58');
 
@@ -94,7 +94,9 @@ try {
       previewHarness.storyUpdated();
     });
     assert.equal(await page.locator('.status-time').textContent(), '00:04');
-    await page.getByRole('button', { name: '锁屏', exact: true }).click();
+    await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+    await page.evaluate(() => previewHarness.app.open());
+    await page.locator('.view-home').waitFor();
     assert.equal(await page.locator('.home-clock text').textContent(), '0004');
     assert.equal(await page.getByRole('button', { name: '进入桌面', exact: true }).isVisible(), true);
     assert.equal(await page.getByRole('button', { name: '设置', exact: true }).count(), 0);
@@ -126,5 +128,5 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log('Desktop/status bar: native/Luker, fingerprint entry, four apps, read-only calendar widget, story clock, compact day/night layouts; no model calls or archive writes.');
+  console.log('Desktop/status bar: native/Luker, fingerprint entry, five apps, read-only calendar widget, story clock, compact day/night layouts; no model calls or archive writes.');
 } finally { await browser.close(); }

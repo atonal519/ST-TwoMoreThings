@@ -22,7 +22,9 @@ try {
   if (await page.getByRole('button', { name: '外观设置', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '外观设置', exact: true }).click();
   await page.getByLabel('外观主题').selectOption('night');
   await page.waitForFunction(() => document.querySelector('.pocket-phone').dataset.theme === 'night');
-  await page.getByRole('button', { name: '锁屏', exact: true }).click();
+  await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+  await page.evaluate(() => previewHarness.app.open());
+  await page.locator('.view-home').waitFor();
   assert.notEqual(await page.locator('.home-art').getAttribute('src'), dayArt, '夜间使用独立折带前景');
   assert.ok(await page.locator('.home-clock').evaluate(x => x.getBoundingClientRect().height) > dayClockHeight * 1.5, '夜间采用独立的长数字构图');
   assert.equal(await page.locator('.phone-shell').evaluate(x => getComputedStyle(x).backgroundColor), 'rgb(13, 32, 44)');
@@ -75,7 +77,7 @@ try {
   assert.equal(await page.evaluate(() => previewHarness.requests.length), 1);
   await page.getByRole('button', { name: '关闭手机', exact: true }).click();
   await page.getByRole('button', { name: '打开两三事', exact: true }).click();
-  await page.locator('.view-desktop').waitFor();
+  await page.locator('.view-home').waitFor();
   await openApp(page, '短信');
   await page.getByRole('button', { name: /晚风/ }).click();
   assert.equal(await page.getByRole('heading', { name: '晚风', exact: true }).count(), 1);

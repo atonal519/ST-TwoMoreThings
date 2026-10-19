@@ -53,6 +53,7 @@ try {
     const back = () => page.locator('.system-nav').getByRole('button', { name: '返回', exact: true });
     await page.getByRole('button', { name: '进入桌面', exact: true }).click();
     await page.locator('.view-desktop').waitFor();
+    assert.equal(await page.getByRole('button', { name: '锁屏', exact: true }).count(), 0, 'there is no separate lock button');
     assert.equal(await page.locator('.system-nav button').count(), 3);
     assert.equal(await page.locator('.system-nav').evaluate(nav => {
       const home = nav.querySelector('[data-action="system-home"]').getBoundingClientRect();
@@ -99,7 +100,7 @@ try {
     await back().click();
     await page.locator('.view-settings').waitFor();
     await page.getByRole('button', { name: '内容设置', exact: true }).click();
-    await page.getByRole('button', { name: '导出随卡包', exact: true }).click();
+    await page.getByRole('button', { name: '导出酒馆助手脚本', exact: true }).click();
     await back().click();
     await page.locator('.view-settings').waitFor();
     await home().click();
@@ -108,8 +109,6 @@ try {
     await page.locator('.phone-shell').screenshot({ path: `${output}/${host}-${width}-chat.png` });
     await page.getByRole('button', { name: '关闭手机', exact: true }).click();
     await page.evaluate(() => previewHarness.app.open());
-    await page.locator('.view-desktop').waitFor();
-    await page.getByRole('button', { name: '锁屏', exact: true }).click();
     await page.locator('.view-home').waitFor();
     assert.equal(await centeredFingerprint(), true);
     await page.getByRole('button', { name: '关闭手机', exact: true }).click();
@@ -122,6 +121,8 @@ try {
     assert.equal(await centeredFingerprint(), true);
     await page.locator('.phone-shell').screenshot({ path: `${output}/${host}-${width}-lock-night.png` });
     await page.getByRole('button', { name: '进入桌面', exact: true }).click();
+    await page.evaluate(() => previewHarness.app.open());
+    assert.equal(await page.locator('.view-desktop').count(), 1, 'refreshing an already open phone does not lock it');
     await page.getByRole('button', { name: '关闭手机', exact: true }).click();
     await page.evaluate(() => {
       previewHarness.context.chatId = 'preview-second-chat';
@@ -133,5 +134,5 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log('Phone navigation: lower-center fingerprint, lockscreen without shortcuts, back/home plus adjacent close, parent-page back, draft retention, reopen desktop and explicit lock; native/Luker 320/390, no model calls or saves.');
+  console.log('Phone navigation: lower-center fingerprint, no lock button, parent-page back/home, draft retention and close/reopen lockscreen; native/Luker 320/390, no model calls or saves.');
 } finally { await browser.close(); }

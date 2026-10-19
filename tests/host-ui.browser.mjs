@@ -44,10 +44,56 @@ try {
       }), expected);
     }
     await page.setViewportSize({ width: 1200, height: 1000 });
+    const shell = page.locator('.phone-shell');
+    const rectangle = () => shell.evaluate(node => {
+      const b = node.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), width: Math.round(b.width), height: Math.round(b.height) };
+    });
+    const dragStatusTo = async (x, y) => {
+      const status = await page.locator('.phone-status').boundingBox();
+      await page.mouse.move(status.x + 80, status.y + status.height / 2);
+      await page.mouse.down(); await page.mouse.move(x, y, { steps: 6 }); await page.mouse.up();
+    };
+    const status = await page.locator('.phone-status').boundingBox();
+    await dragStatusTo(status.x + 80 - 180, status.y + status.height / 2 + 70);
+    check(`${kind}: desktop top bar drags the whole phone`, await rectangle(), { x: 640, y: 150, width: 360, height: 600 });
+    check(`${kind}: black bezel belongs to the original window bounds`, await shell.evaluate(node => {
+      const style = getComputedStyle(node); return { border: style.borderTopWidth, color: style.borderTopColor };
+    }), { border: '4px', color: 'rgb(20, 22, 23)' });
+    await openApp(page, '短信');
+    await page.locator('[data-contact="lin"]').click();
+    check(`${kind}: navigation preserves the dragged position`, await rectangle(), { x: 640, y: 150, width: 360, height: 600 });
+    const input = page.getByRole('textbox', { name: '短信内容' });
+    await input.fill('拖动时保留的草稿');
+    const textBox = await input.boundingBox();
+    await page.mouse.move(textBox.x + 10, textBox.y + 15); await page.mouse.down();
+    await page.mouse.move(textBox.x + 40, textBox.y + 25); await page.mouse.up();
+    check(`${kind}: text selection does not move the phone`, await rectangle(), { x: 640, y: 150, width: 360, height: 600 });
+    check(`${kind}: dragging does not replace the draft`, await input.inputValue(), '拖动时保留的草稿');
+    check(`${kind}: top bar has no separate lock button`, await page.getByRole('button', { name: '锁屏', exact: true }).count(), 0);
+    await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+    await launcher.click();
+    await page.locator('.view-home').waitFor();
+    check(`${kind}: reopening preserves this instance position`, await rectangle(), { x: 640, y: 150, width: 360, height: 600 });
+    await dragStatusTo(0, 0);
+    check(`${kind}: dragging keeps the phone inside the upper viewport edges`, await rectangle(), { x: 10, y: 10, width: 360, height: 600 });
+    await dragStatusTo(1199, 999);
+    check(`${kind}: dragging keeps the phone inside the lower viewport edges`, await rectangle(), { x: 830, y: 390, width: 360, height: 600 });
+    await page.setViewportSize({ width: 641, height: 800 });
+    await page.waitForTimeout(50);
+    await dragStatusTo(100, 100);
+    check(`${kind}: 641px still supports dragging`, (await rectangle()).x < 261, true);
+    await page.setViewportSize({ width: 640, height: 800 });
+    await page.waitForTimeout(50);
+    await dragStatusTo(200, 150);
+    check(`${kind}: 640px returns to the fixed mobile layout and ignores dragging`, await rectangle(), { x: 10, y: 20, width: 620, height: 760 });
+    check(`${kind}: mobile layout owns its coordinates`, await shell.evaluate(node => [node.style.left, node.style.top, node.style.right]), ['', '', '']);
+    await page.setViewportSize({ width: 1200, height: 1000 });
     await openApp(page, '设置');
     await page.getByRole('button', { name: '编辑我的资料', exact: true }).click();
     check(`${kind}: unsaved user profile defaults to the host user name`, await page.getByLabel('姓名', { exact: true }).inputValue(), '小满');
-    await page.getByRole('button', { name: '锁屏', exact: true }).click();
+    await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+    await launcher.click();
+    await page.locator('.view-home').waitFor();
     check(`${kind}: main surface is isolated in a shadow root`, await page.evaluate(() => {
       const host = document.querySelector('.pocket-phone');
       return host.shadowRoot?.mode === 'open' && document.querySelector('.phone-shell') === null;
@@ -64,7 +110,7 @@ try {
     check(`${kind}: uncovered host remains clickable`, await page.evaluate(() => document.elementFromPoint(5, 5)?.id), 'host-outside');
     check(`${kind}: host text effects do not enter phone`, await page.locator('.home-date').evaluate(x => {
       const s = getComputedStyle(x); return { shadow: s.textShadow, spacing: s.letterSpacing, size: s.fontSize };
-    }), { shadow: 'none', spacing: '1.65px', size: '11px' });
+    }), { shadow: 'none', spacing: '1.8975px', size: '12.65px' });
     check(`${kind}: host palette does not replace phone background`, await page.locator('.phone-shell').evaluate(x => getComputedStyle(x).backgroundColor), 'rgb(243, 241, 232)');
     await openApp(page, '短信');
     await page.getByRole('button', { name: /林舟/ }).click();
@@ -82,5 +128,5 @@ try {
     await page.close();
   }
   assert.deepEqual(failures, []);
-  console.log('Manifest auto-entry, native/Luker shapes, QQJ geometry, Shadow DOM, style and keyboard isolation passed. Simulated hosts; no real data or model calls.');
+  console.log('Manifest entry, native/Luker geometry, black bezel, desktop dragging, mobile reset, Shadow DOM and input isolation passed. Simulated hosts; no real data or model calls.');
 } finally { await browser.close(); }

@@ -1,6 +1,6 @@
 export function createWallpaperService({ host, store }) {
-  return {
-    async upload(theme, dataUrl) {
+  const service = {
+    async uploadImage(dataUrl) {
       const image = /^data:image\/webp;base64,(.+)$/.exec(dataUrl)?.[1];
       if (!image) throw new Error('背景图片无法读取，请重新选择图片。');
       let response;
@@ -13,9 +13,16 @@ export function createWallpaperService({ host, store }) {
       const path = typeof data.path === 'string' ? data.path.trim() : '';
       if (!path) throw new Error('背景图片上传后没有返回图片地址。');
       const source = path.startsWith('/') ? path : `/${path}`;
-      await store.setWallpaper(theme, source);
       return source;
     },
+    async upload(theme, dataUrl, conversationId) {
+      const source = await service.uploadImage(dataUrl);
+      if (conversationId) await store.setChatBackground(conversationId, source);
+      else await store.setWallpaper(theme, source);
+      return source;
+    },
+    uploadChat: (id, dataUrl) => service.upload(null, dataUrl, id),
     restore: theme => store.setWallpaper(theme, ''),
   };
+  return service;
 }

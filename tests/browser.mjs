@@ -99,7 +99,9 @@ try {
   await page.screenshot({ path: `${output}/local-settings.png` });
   assert.equal(await page.evaluate(() => window.previewHarness.mainMessages.length), 1);
   assert.equal(await page.evaluate(() => window.previewHarness.metadata.foreign.keep), true);
-  await page.getByRole('button', { name: '锁屏', exact: true }).click();
+  await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+  await page.evaluate(() => previewHarness.app.open());
+  await page.locator('.view-home').waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: `${output}/local-home-mobile.png` });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
@@ -110,7 +112,7 @@ try {
   assert.ok(await feed.evaluate(x => x.clientHeight > 150));
   await page.getByRole('button', { name: '关闭手机', exact: true }).click();
   await page.getByRole('button', { name: '打开两三事', exact: true }).click();
-  await page.locator('.view-desktop').waitFor();
+  await page.locator('.view-home').waitFor();
   await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
   await page.getByRole('log', { name: '短信记录' }).waitFor();

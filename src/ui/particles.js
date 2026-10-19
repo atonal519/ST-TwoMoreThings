@@ -1,4 +1,4 @@
-// 溯之的缓漂光点；只持有当前聊天视口的绘制资源，由 UI 重建/关闭时回收。
+// 正常重绘只重绑原画布，保留光点位置与相位；离开聊天、关闭或销毁时回收。
 export function mountChatParticles(stage) {
   const doc = stage.ownerDocument, win = doc.defaultView;
   const canvas = doc.createElement('canvas');
@@ -44,29 +44,41 @@ export function mountChatParticles(stage) {
     previousTime = null;
   }
   function sync() {
-    stop();
     canvas.hidden = reducedMotion.matches || doc.hidden || !width || !height;
-    if (!canvas.hidden) frame = win.requestAnimationFrame(paint);
+    if (canvas.hidden) stop();
+    else if (!frame) frame = win.requestAnimationFrame(paint);
   }
   const observer = new win.ResizeObserver(([entry]) => {
     width = entry.contentRect.width;
     height = entry.contentRect.height;
     const ratio = Math.min(win.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
+    const pixelWidth = Math.round(width * ratio), pixelHeight = Math.round(height * ratio);
+    // 同尺寸重复赋值也会清空位图；重绑时只更新实际发生变化的尺寸。
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.fillStyle = win.getComputedStyle(canvas).color;
     context.shadowColor = context.fillStyle;
     sync();
   });
-  observer.observe(stage);
+  function attach(nextStage) {
+    observer.disconnect();
+    nextStage.append(canvas);
+    observer.observe(nextStage);
+  }
+  attach(stage);
   reducedMotion.addEventListener('change', sync);
   doc.addEventListener('visibilitychange', sync);
-  return () => {
-    stop();
-    observer.disconnect();
-    reducedMotion.removeEventListener('change', sync);
-    doc.removeEventListener('visibilitychange', sync);
-    canvas.remove();
+  return {
+    attach,
+    dispose() {
+      stop();
+      observer.disconnect();
+      reducedMotion.removeEventListener('change', sync);
+      doc.removeEventListener('visibilitychange', sync);
+      canvas.remove();
+    },
   };
 }

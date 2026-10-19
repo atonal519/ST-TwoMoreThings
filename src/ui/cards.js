@@ -1,8 +1,9 @@
-import { action, escape, icon } from './shared.js';
+import { action, escape, icon, renderBilingual } from './shared.js';
 import { findSticker, stickerPacks, stickers } from '../stickers.js';
 import { displayName } from '../profiles.js';
+import { imageSource } from '../image-files.js';
 
-export function renderCardBody(message, generating = false, readOnly = false) {
+export function renderCardBody(message, generating = false) {
   if (message.type === 'sticker') {
     const sticker = findSticker(message.stickerId);
     return sticker ? `<img src="${escape(sticker.src)}" alt="${escape(sticker.label)}" draggable="false" loading="lazy">` : escape(message.text);
@@ -17,13 +18,13 @@ export function renderCardBody(message, generating = false, readOnly = false) {
     <small>${{ pending: '待收款', accepted: '已收下', returned: '已退回' }[message.transfer.status] || '待收款'}</small>`;
   if (message.type === 'image') {
     const photo = message.image.path
-      ? `<img class="message-photo" src="${escape(message.image.path)}" alt="${escape(message.image.description)}" loading="lazy">`
+      ? `<img class="message-photo" data-phone-image="${escape(message.image.path)}" src="${escape(imageSource(message.image.path))}" alt="${escape(message.image.description)}" loading="lazy">`
       : `<span class="photo-placeholder">${icon('image')}</span>`;
     return `${photo}
       <span class="photo-description">${escape(message.image.description)}</span>
-      <small>${message.image.path ? '查看图片' : generating ? '生成中…' : readOnly ? '过去的图片未生成' : '点击生成'}</small>`;
+      <small>${message.image.path ? '查看图片' : generating ? '生成中…' : '点击生成'}</small>`;
   }
-  return `<span class="message-original">${escape(message.text)}</span>${message.translation ? `<span class="message-translation" lang="zh-CN">${escape(message.translation)}</span>` : ''}`;
+  return renderBilingual(message.text, message.translation);
 }
 
 export function renderCardActions(message, { readOnly, busy }) {
@@ -100,7 +101,7 @@ export function renderAttachments(state, ui, busy, contact, isGroup) {
 export function renderPhotoViewer(photo) {
   return photo ? `<div class="photo-viewer" role="dialog" aria-label="查看图片" aria-modal="true">
     ${action('close-photo', '关闭图片', 'close', 'icon-button')}
-    <img src="${escape(photo.path)}" alt="${escape(photo.description)}">
+    <img data-phone-image="${escape(photo.path)}" src="${escape(imageSource(photo.path))}" alt="${escape(photo.description)}">
     <p>${escape(photo.description)}</p>
   </div>` : '';
 }

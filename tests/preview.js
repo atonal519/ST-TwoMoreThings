@@ -69,13 +69,13 @@ const ctx = {
   saveMetadata: async () => { if (h.saveWait) await h.saveWait; h.metadataSaves++; }, saveSettingsDebounced: () => { h.settingsSaves++; }, getRequestHeaders: () => ({ 'Content-Type': 'application/json' }),
   setExtensionPrompt: (id, text) => { h.prompt = text; },
   eventTypes: { GENERATION_AFTER_COMMANDS: 'before-main', GENERATION_ENDED: 'main-ended', MESSAGE_UPDATED: 'main-edited', MESSAGE_SWIPED: 'main-swiped' },
-  eventSource: { on(name, fn) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(fn); }, removeListener: (name, fn) => listeners.get(name)?.delete(fn) },
+  eventSource: { on(name, fn) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(fn); }, removeListener: (name, fn) => listeners.get(name)?.delete(fn), emit: (name, ...args) => emit(name, ...args) },
 };
 if (new URLSearchParams(location.search).get('host') === 'luker') {
   ctx.saveChatMetadata = async () => { await ctx.saveMetadata(); return true; };
 }
 h.context = ctx;
-const emit = async name => { for (const callback of listeners.get(name) || []) await callback(); };
+const emit = async (name, ...args) => { for (const callback of listeners.get(name) || []) await callback(...args); };
 h.beforeGeneration = () => emit('before-main');
 h.storyUpdated = () => emit('main-ended');
 if (new URLSearchParams(location.search).get('clock') === 'story') {
@@ -85,15 +85,33 @@ for (const history of Object.values(h.metadata.pocketPhone.conversations)) for (
 const host = createHostAdapter({ contextProvider: () => ctx,
   worldInfoBindings: { getNames: () => ['示例世界书'], load: async () => ({ entries: { 0: { content: '林舟和周予有一个朋友群，用户也在其中。', disable: false } } }) },
   fetchImpl: async (path, init) => {
-    if (init.method === 'GET') return fetch(path);
+    if (init.method === 'GET' || init.method === 'HEAD') return fetch(path, init);
+    if (path === '/api/images/delete' || path === '/api/files/delete') {
+      (h.fileDeletes ||= []).push({ endpoint: path, ...JSON.parse(init.body) });
+      return new Response(null, { status: 200 });
+    }
     const body = JSON.parse(init.body); h.requests.push({ path, body });
     if (path.endsWith('/status')) return Response.json(h.models || { data: [{ id: '示例模型-A' }, { id: '示例模型-B' }] }, { status: h.modelsStatus || 200 });
     if (path === '/api/images/upload') { h.lastUpload = body; return Response.json({ path: '/user/images/pocket-phone/preview.webp' }); }
     if (h.replyWait) await h.replyWait;
     const system = body.messages[0].content;
+    const input = JSON.parse(body.messages[1]?.content || '{}');
     const result = system.includes('手机聊天压') ? { summary: '用户与林舟约好晚点在书店见面。' }
+      : system.includes('手机ainstgram') ? {
+        npcs: input.authors.filter(person => person.kind === 'npc' && !person.name).map((person, index) => ({ id: person.id, name: `街角店主${index + 1}`, description: '经营街边小店，喜欢记录普通日常。' })),
+        posts: input.authors.flatMap((person, index) => Array.from({ length: input.task === 'author' ? 2 : 1 }, (_, entry) => ({ authorId: person.id,
+          publishedAt: input.task === 'author' ? ['大陆历1686年8月5日 10:20', '大陆历1686年10月3日 19:05'][entry] : `大陆历1686年10月4日 23:${53 - index * 5}`,
+          text: h.socialBilingual ? `A quiet coffee break by the window, ${entry + 1}.` : input.task === 'author' ? `散步经过旧书店，记下第${entry + 1}件小事。` : '今天的阳光很好，路过时顺便买了一杯咖啡。',
+          ...(h.socialBilingual ? { translation: '今天的阳光很好，路过时顺便买了一杯咖啡。' } : {}),
+          ...(index === 0 && input.task === 'feed' ? { image: { description: '窗边的一杯咖啡，旁边放着一本翻开的旧书，无人物。' } } : {}),
+          likes: 12 + index, reposts: index, commentsCount: 2, comments: h.socialBilingual
+            ? [{ name: '晚风', text: 'Love these little moments.', translation: '好喜欢这样的日常。' }, { name: '路过', text: 'Looks lovely!', translation: '看起来不错！' }]
+            : [{ name: '晚风', text: '好喜欢这样的日常。' }, { name: '路过', text: '看起来不错！' }],
+        }))),
+      }
+      : system.includes('手机照片描述') ? { prompt: 'coffee cup, book, window, sunlight, still life', characters: [], size: 'landscape' }
       : system.includes('已有通讯录') ? { contacts: [], groups: [] }
-      : system.includes('论坛内容') ? { posts: createPosts(true) }
+      : system.includes('外部公众视角的论坛') ? { posts: createPosts(true) }
       : system.includes('整理已有') ? { contacts: [{ name: '林舟', personality: '温和、细心', expression: '短句，语气平和。' }] }
       : { messages: [{ text: '好，那我在书店门口等你。' }] };
     return Response.json({ choices: [{ message: { content: JSON.stringify(system.includes('手机聊天压') ? h.summary || result : h.reply || result) } }] });

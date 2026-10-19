@@ -2,11 +2,12 @@ import { renderModelPicker } from './models.js';
 import { homeImage } from './home.js';
 import { action, avatar, escape, icon, pageHeading, refKey } from './shared.js';
 import { displayName } from '../profiles.js';
+import { renderBackgroundPicker } from './backgrounds.js';
 
-export function renderSettings(state, { ui, busy, apiSettings, entries, control }) {
+export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, control }) {
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
   const current = sources.find(source => refKey(source.ref) === refKey(selected));
-  const manual = ui.manual || !sources.length, background = homeImage(state), preferences = entries.read();
+  const manual = ui.manual || !sources.length, preferences = entries.read();
   const drawer = (key, title, content) => `<section class="settings-drawer">
     <button type="button" class="settings-drawer-toggle" data-drawer="${key}" aria-expanded="${ui.drawers[key]}">
       <span>${title}</span>${icon('next')}
@@ -45,13 +46,10 @@ export function renderSettings(state, { ui, busy, apiSettings, entries, control 
     </select>
     ${entrySwitch('fabShow', '悬浮球')}
     ${entrySwitch('qrShow', 'QR')}
-    <span class="field-label">主页背景</span>
+    <span class="field-label">锁屏背景</span>
     <div class="wallpaper-editor">
-      <img src="${escape(background.src)}" alt="主页背景预览">
-      <div>
-        <label class="wallpaper-picker ${busy.has('wallpaper') ? 'is-busy' : ''}">${busy.has('wallpaper') ? '保存中…' : '选择图片'}<input id="wallpaper-file" type="file" accept="image/*" aria-label="选择主页背景" ${busy.has('wallpaper') ? 'disabled' : ''}></label>
-        ${background.custom ? action('restore-wallpaper', '恢复默认', '', 'quiet-button', busy.has('wallpaper')) : ''}
-      </div>
+      ${renderBackgroundPicker({ value: state.wallpapers?.[state.theme === 'night' ? 'night' : 'day'], theme: state.theme,
+        busy: busy.has('wallpaper'), preview: homeImage({ ...state, wallpapers: {} }).src })}
     </div>`;
   const content = `<label class="compact-switch-row">
     <span>短信带入正文</span>
@@ -60,7 +58,17 @@ export function renderSettings(state, { ui, busy, apiSettings, entries, control 
       <span></span>
     </span>
   </label>
-  ${action('authoring', '导出随卡包', '', 'quiet-button', !control.isEnabled())}`;
+  <label class="compact-switch-row" for="image-provider">
+    <span>生图设置</span>
+    <select id="image-provider" class="image-provider-select" aria-label="生图设置" ${busy.has('image-provider') ? 'disabled' : ''}>
+      <option value="baibai" ${imageProviders?.getSelected() !== 'chatu8' ? 'selected' : ''}>柏宝绘</option>
+      <option value="chatu8" ${imageProviders?.getSelected() === 'chatu8' ? 'selected' : ''}>智绘姬</option>
+    </select>
+  </label>
+  <div class="compact-switch-row settings-export-row">
+    <span>导出酒馆助手脚本</span>
+    <button type="button" class="switch-button" data-action="authoring" aria-label="导出酒馆助手脚本" ${control.isEnabled() ? '' : 'disabled'}>导出</button>
+  </div>`;
   return `${pageHeading('设置')}
     <label class="compact-switch-row master-switch">
       <span>启用两三事</span>

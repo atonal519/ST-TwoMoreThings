@@ -11,6 +11,12 @@ function renderNavigation(view, enabled) {
 }
 
 // 窗口结构和导航只在这里生成；页面模块不接管关闭、状态栏或底栏。
+export function renderFeedback(feedback) {
+  return feedback ? `<div class="feedback ${feedback.error ? 'is-error' : ''}" role="${feedback.error ? 'alert' : 'status'}">
+    <span>${escape(feedback.text)}</span>${action('dismiss', '关闭提示', 'close', 'icon-button')}
+  </div>` : '';
+}
+
 export function renderShell({ content, view, enabled, weather, feedback, photo }) {
   const locked = view === 'home';
   const footer = `<footer class="phone-footer ${locked ? 'home-footer' : ''}">
@@ -24,10 +30,8 @@ export function renderShell({ content, view, enabled, weather, feedback, photo }
     ${action('close', '关闭手机', 'phone-close', 'icon-button close-button lock-close')}` : renderNavigation(view, enabled)}
   </footer>`;
 
-  return `${renderStatusBar({ locked, enabled })}
+  return `${renderStatusBar()}
     <main class="phone-main view-${view}">${content}</main>
-    ${feedback ? `<div class="feedback ${feedback.error ? 'is-error' : ''}" role="${feedback.error ? 'alert' : 'status'}">
-      <span>${escape(feedback.text)}</span>${action('dismiss', '关闭提示', 'close', 'icon-button')}
-    </div>` : ''}
+    ${renderFeedback(feedback)}
     ${footer}${renderPhotoViewer(photo)}`;
 }

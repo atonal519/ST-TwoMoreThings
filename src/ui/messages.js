@@ -3,6 +3,7 @@ import { displayName } from '../profiles.js';
 import { partitionHistory } from '../timeline.js';
 import { messageText } from '../content.js';
 import { renderAttachments, renderCardActions, renderCardBody } from './cards.js';
+import { chatBackgroundStyle } from '../backgrounds.js';
 
 export function renderInbox(state, { ui, busy }) {
   const groups = state.groups || [];
@@ -61,7 +62,7 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
   const grouped = `${hasPrev ? ' grouped-top' : ''}${hasNext ? ' grouped-bottom' : ''}${previous && !hasPrev ? ' group-start' : ''}`;
   const chosen = selected === message.id;
   const bubbleAttributes = message.type === 'image'
-    ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" ${busy.has(`image:${message.id}`) || readOnly && !message.image.path ? 'disabled' : ''}`
+    ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" ${busy.has(`image:${message.id}`) ? 'disabled' : ''}`
     : `data-message="${escape(message.id)}" aria-label="短信：${escape(messageText(message))}" aria-expanded="${chosen}"`;
   const timestamp = message.timeLabel
     ? `<div class="message-foot"><time title="${escape([message.storyDate, message.storyWeekday, message.timeLabel].filter(Boolean).join(' '))}" datetime="${escape(message.createdAt || '')}">${escape(message.timeLabel)}</time></div>`
@@ -72,7 +73,7 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
       <div class="message-copy">
         ${isGroup && !mine && !hasPrev ? `<span class="message-sender">${escape(displayName(contact))}</span>` : ''}
         <div class="bubble-line">
-          <button type="button" class="bubble ${message.type ? `${message.type}-message` : ''}" ${bubbleAttributes}>${renderCardBody(message, busy.has(`image:${message.id}`), readOnly)}</button>
+          <button type="button" class="bubble ${message.type ? `${message.type}-message` : ''}" ${bubbleAttributes}>${renderCardBody(message, busy.has(`image:${message.id}`))}</button>
           ${chosen ? action('delete-message', '删除这条短信', 'trash', 'message-delete icon-button danger', deleting) : ''}
         </div>
         ${renderCardActions(message, { readOnly, busy })}
@@ -118,7 +119,7 @@ export function renderChat(state, { ui, busy }) {
     ${action(isGroup ? 'remove-group' : 'remove-contact', isGroup ? '删除群聊' : '删除联系人', '', 'menu-item danger')}
   </div>` : '';
   const clearConfirmation = ui.confirmClear ? `<section class="clear-confirm" role="alert">
-    <p>清空当前主楼时间点之后的消息及草稿，移出后续上下文和正文参考；过去的记录保留。</p>
+    <p>清空当前主楼时间点之后的消息及草稿，同时删除相关生成图片；过去的记录保留。</p>
     <div>
       ${action('cancel-clear', '取消', '', 'quiet-button')}
       ${action('confirm-clear', '确认清空', '', 'quiet-button danger', busy.has(`clear:${contact.id}`))}
@@ -126,14 +127,14 @@ export function renderChat(state, { ui, busy }) {
   </section>` : '';
   const composer = observer ? `<div class="composer observer-composer">
     <span>旁观群聊</span>
-    ${action('continue', '继续', 'play', 'continue-button', generating)}
+    ${action('continue', '继续', 'refresh', 'continue-button', generating)}
   </div>` : `<form class="composer">
     <div class="composer-input">
       ${action('attachments', '添加消息', 'plus', 'icon-button attachment-button')}
       <label class="sr-only" for="sms-draft">短信内容</label>
       <textarea id="sms-draft" name="message" rows="1" aria-label="短信内容">${escape(ui.drafts.get(contact.id) || '')}</textarea>
+      ${action('continue', '继续', 'refresh', 'continue-button', generating || saving)}
       ${action('send', '发送', 'send', 'send-button', saving)}
-      ${action('continue', '继续', 'play', 'continue-button', generating || saving)}
     </div>
   </form>
   ${renderAttachments(state, ui, busy, contact, isGroup)}`;
@@ -150,7 +151,7 @@ export function renderChat(state, { ui, busy }) {
       </div>
     </header>
     ${clearConfirmation}
-    <div class="chat-stage">
+    <div class="chat-stage ${contact.background && !contact.background.startsWith('color:') ? 'has-wallpaper' : ''}" style="${escape(chatBackgroundStyle(contact.background, state.theme))}">
       <div class="message-feed" role="log" aria-label="短信记录" aria-live="polite">
         ${pastCount ? `<button type="button" class="history-fold" data-action="history" aria-expanded="${ui.historyOpen}"><span>${ui.historyOpen ? '收起过去' : '查看过去'}</span></button>` : ''}
         ${ui.historyOpen && pastCount > ui.visibleHistory ? action('earlier-history', '查看更早的历史', '', 'earlier-button') : ''}
