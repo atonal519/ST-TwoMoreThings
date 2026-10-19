@@ -154,7 +154,7 @@ test('sending a sticker and receiving rich replies use the same stored batch and
   assert.equal((await contextReader.readForContact('lin')).history.length, 1);
 });
 
-test('accepting or returning a received transfer updates its record and is included in the main-story summary', async () => {
+test('accepting or returning a received transfer updates its record and directly reaches the main-story reference', async () => {
   const { target, store, batch } = setup();
   await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
   const service = createMessageService({ target, store, contextReader: createContextReader({ target, store }), modelClient: { complete: async () => '{"messages":[{"type":"transfer","transfer":{"amount":"20","recipientId":"@user","note":"咖啡"}}]}' } });
@@ -165,10 +165,10 @@ test('accepting or returning a received transfer updates its record and is inclu
   assert.equal(store.read().conversations.lin.length, 1);
   assert.equal(store.read().conversations.lin[0].transfer.status, 'accepted');
   await store.setInjectionEnabled(true);
-  let summaryInput;
-  const backflow = createBackflowService({ target, store, modelClient: { complete: async request => { summaryInput = JSON.parse(request.messages[0].content); return '{"summary":"林舟给用户转账20元，用户已收下。"}'; } } });
-  await backflow.prepare();
-  assert.ok(summaryInput.conversations[0].messages[0].text.includes('已收下'));
+  const backflow = createBackflowService({ target, store, modelClient: { complete() { assert.fail('a short transfer reference does not require a summary'); } } });
+  const reference = await backflow.prepare();
+  assert.ok(reference.includes('林舟 → 我：'));
+  assert.ok(reference.includes('已收下'));
   await assert.rejects(store.respondTransfer('lin', message.id, 'returned', '@user', batch), /处理/);
 });
 
@@ -188,18 +188,16 @@ test('unread notifications merge each conversation and disappear after reading w
   assert.equal(unreadConversations(store.read()).length, 0);
 });
 
-test('group transfer summaries retain the named recipient and settlement result', async () => {
+test('group transfer references retain the named recipient and settlement result without summarizing', async () => {
   const { target, store, batch } = setup();
   await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
   const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true });
   await store.appendMessage(group.id, { id: 't', role: 'user', speakerId: '@user', type: 'transfer', transfer: { amount: '20.00', currency: 'CNY', recipientId: 'zhou', status: 'accepted' }, batch });
   await store.setInjectionEnabled(true);
-  let summaryInput;
-  const backflow = createBackflowService({ target, store, modelClient: { complete: async request => { summaryInput = JSON.parse(request.messages[0].content); return '{"summary":"用户给周予转账20元，周予已收下。"}'; } } });
-  await backflow.prepare();
-  const message = summaryInput.conversations[0].messages[0];
-  assert.equal(message.recipient, '周予');
-  assert.ok(message.text.includes('已收下'));
+  const backflow = createBackflowService({ target, store, modelClient: { complete() { assert.fail('a short group reference does not require a summary'); } } });
+  const reference = await backflow.prepare();
+  assert.ok(reference.includes('我 → 周予：'));
+  assert.ok(reference.includes('已收下'));
 });
 
 test('old archives do not become new notifications and visible replies are read in the same save', async () => {
@@ -219,6 +217,7 @@ test('a transfer result changed during summarization is not injected as an obsol
   const { target, store, batch } = setup();
   await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
   await store.appendMessage('lin', { id: 't', role: 'assistant', type: 'transfer', transfer: { amount: '20.00', currency: 'CNY', recipientId: '@user', status: 'pending' }, batch });
+  await store.appendMessage('lin', { id: 'itinerary', role: 'user', text: '行程安排'.repeat(800), batch });
   await store.setInjectionEnabled(true);
   const backflow = createBackflowService({ target, store, modelClient: { complete: async () => { await store.respondTransfer('lin', 't', 'accepted', '@user', batch); return '{"summary":"林舟给用户转账20元，尚未收款。"}'; } } });
   await assert.rejects(backflow.prepare(), /改变|变更|变化/);

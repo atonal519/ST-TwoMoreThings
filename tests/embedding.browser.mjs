@@ -27,7 +27,7 @@ try {
     await page.route('**/api/backends/chat-completions/generate', async route => {
       const request = route.request().postDataJSON();
       await page.evaluate(body => { previewHarness.requests.push({ body }); }, request);
-      return route.fulfill({ json: { choices: [{ message: { content: '{"messages":[{"text":"收到，晚点见。"}]}' } }] } });
+      return route.fulfill({ json: { choices: [{ message: { content: request.messages[0].content.includes('手机聊天压') ? '{"summary":"用户和林舟确认了行程安排。"}' : '{"messages":[{"text":"收到，晚点见。"}]}' } }] } });
     });
     await page.route('**/__font/*.woff2', route => { const name = basename(new URL(route.request().url()).pathname), local = '/tmp/mobile-plugin-reference-research/preview-fonts/' + name; return route.fulfill({ path: existsSync(local) ? local : '/tmp/myriad-home-design-20261016/' + name, contentType: 'font/woff2' }); });
     await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${kind}`);
@@ -99,6 +99,23 @@ try {
     await embedded.getByText('收到，晚点见。', { exact: true }).waitFor();
     assert.equal(await page.evaluate(() => previewHarness.mainMessages.length), 1);
     assert.equal(await page.evaluate(() => previewHarness.metadata.pocketPhone.contacts[0].expression), script.data.twoMoreThings.contacts[0].expression);
+    await openApp(embedded, '设置');
+    await embedded.getByRole('button', { name: '内容设置', exact: true }).click();
+    await embedded.getByRole('switch', { name: '短信带入正文', exact: true }).check();
+    const shortRequests = await page.evaluate(() => previewHarness.requests.length);
+    await page.evaluate(() => previewHarness.beforeGeneration());
+    assert.equal(await page.evaluate(() => previewHarness.requests.length), shortRequests, '随卡短聊天在正文入口不请求摘要');
+    assert.ok(await page.evaluate(() => previewHarness.prompt.includes('随卡手机测试') && previewHarness.prompt.includes('收到，晚点见。')));
+    await openApp(embedded, '短信');
+    await embedded.getByRole('button', { name: /林舟/ }).click();
+    await embedded.getByRole('textbox', { name: '短信内容' }).fill('行程安排'.repeat(800));
+    await embedded.getByRole('button', { name: '发送', exact: true }).click();
+    await page.waitForFunction(() => Object.values(previewHarness.metadata.pocketPhone.conversations).some(messages => messages.at(-1)?.text.length === 3200));
+    await page.evaluate(() => previewHarness.beforeGeneration());
+    assert.equal(await page.evaluate(() => previewHarness.requests.length), shortRequests + 1, '随卡长聊天只增加一次摘要调用');
+    assert.ok(await page.evaluate(() => previewHarness.prompt.includes('用户和林舟确认了行程安排。')));
+    const summary = await page.evaluate(() => JSON.parse(previewHarness.requests.at(-1).body.messages[1].content));
+    assert.deepEqual(summary.conversations[0].messages.map(message => message.text), ['随卡手机测试', '收到，晚点见。', '行程安排'.repeat(800)]);
     await openApp(embedded, '设置');
     await embedded.getByRole('button', { name: '外观设置', exact: true }).click();
     await embedded.getByRole('switch', { name: 'QR', exact: true }).check();

@@ -33,12 +33,19 @@ try {
   assert.equal(await page.evaluate(() => previewHarness.requests.length), 0, '开关不调用摘要');
   assert.equal(await page.evaluate(() => previewHarness.prompt), '');
   await page.evaluate(() => previewHarness.beforeGeneration());
-  assert.equal(await page.evaluate(() => previewHarness.requests.length), 1);
-  assert.ok(await page.evaluate(() => previewHarness.prompt.includes('用户与林舟约好晚点在书店见面。')));
-  const summaryInput = await page.evaluate(() => JSON.parse(previewHarness.requests[0].body.messages[1].content));
-  assert.deepEqual(summaryInput.conversations[0].messages.map(item => item.text), ['吃饭吗？']);
+  assert.equal(await page.evaluate(() => previewHarness.requests.length), 0, '短聊天在真实正文生成入口直接带入，不请求摘要');
+  assert.ok(await page.evaluate(() => previewHarness.prompt.includes('我：吃饭吗？')));
+  assert.ok(!await page.evaluate(() => previewHarness.prompt.includes('上一楼聊过的约定')));
   await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
+  await page.getByRole('textbox', { name: '短信内容' }).fill('行程安排'.repeat(800));
+  await page.getByRole('button', { name: '发送', exact: true }).click();
+  await page.waitForFunction(() => previewHarness.metadata.pocketPhone.conversations.lin.at(-1)?.text.length === 3200);
+  await page.evaluate(() => previewHarness.beforeGeneration());
+  assert.equal(await page.evaluate(() => previewHarness.requests.length), 1, '超限后才请求摘要');
+  assert.ok(await page.evaluate(() => previewHarness.prompt.includes('用户与林舟约好晚点在书店见面。')));
+  const summaryInput = await page.evaluate(() => JSON.parse(previewHarness.requests[0].body.messages[1].content));
+  assert.deepEqual(summaryInput.conversations[0].messages.map(item => item.text), ['吃饭吗？', '行程安排'.repeat(800)]);
   await page.getByRole('button', { name: '聊天选项', exact: true }).click();
   await page.getByRole('button', { name: '清空聊天', exact: true }).click();
   await page.getByRole('button', { name: '确认清空', exact: true }).click();
@@ -53,5 +60,5 @@ try {
   assert.deepEqual(errors, []);
   await page.close();
  }
- console.log('Native/Luker timeline folding, read-only history deletion, current-only clear and awaited main-generation summary passed. Simulated hosts/model only.');
+ console.log('Native/Luker timeline folding, history deletion, current-only clear, immediate short backflow and awaited oversized summary passed. Simulated hosts/model only.');
 } finally { await browser.close(); }

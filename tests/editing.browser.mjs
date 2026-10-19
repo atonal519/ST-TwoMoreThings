@@ -59,7 +59,7 @@ try {
   await page.getByRole('button', { name: '继续', exact: true }).click();
   await page.getByRole('log').getByText('我在路上。', { exact: true }).waitFor();
   assert.equal(await page.getByRole('log').locator('.message-translation').count(), 1);
-  assert.equal(await page.evaluate(() => previewHarness.prompt), '', '发送和回复后不直接注入原文，等主楼生成前摘要');
+  assert.equal(await page.evaluate(() => previewHarness.prompt), '', '发送和回复后不注入，等主楼生成前按长度选择原文或摘要');
   await page.getByRole('log').getByText('删除这句测试', { exact: true }).click();
   await page.getByRole('button', { name: '删除这条短信', exact: true }).click();
   await page.waitForFunction(() => !previewHarness.prompt.includes('删除这句测试'));

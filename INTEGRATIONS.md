@@ -55,3 +55,5 @@
 卡内入口embed.js导出mountEmbedded({preset})，只显式启动，不触发独立版自动注册；共享逻辑在src/runtime.js。加载脚本在宿主realm运行核心，脚本真实pagehide时释放自己的实例、命令、悬浮球及QR，不设置切聊任务或恢复系统。
 
 独立版仍使用pocketPhone偏好、tmt-open命令和pocket-phone-context摘要槽；卡内版使用twoMoreThingsEmbedded偏好、tmt-card-open命令和pocket-phone-context-card摘要槽。两者手机档案统一保存在当前聊天pocketPhone，作者预设仅作为无档案时的初始值，不复制第二份存档。
+
+正文生成前只整理当前楼用户参与的私聊和群聊，不带入旁观群或过去批次。最终注入文字合计不超过3000个Unicode字符时直接带入原文，含人物归属、译文、卡片描述和转账结果，不另调模型；超限才将本批全部短信压成总共100字以内摘要，不按条数截断。长度判断在本地完成，不读图片文件；超限后的模型压缩仍需等待。准备正文参考不会改写或保存手机记录。
