@@ -5,7 +5,7 @@ import { displayName } from '../profiles.js';
 import { renderBackgroundPicker } from './backgrounds.js';
 import { VERSION } from '../version.js';
 
-export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, control }) {
+export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control }) {
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
   const current = sources.find(source => refKey(source.ref) === refKey(selected));
   const manual = ui.manual || !sources.length, preferences = entries.read();
@@ -40,7 +40,7 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
       ${sources.map(source => `<option value="${escape(refKey(source.ref))}" ${!manual && refKey(source.ref) === refKey(selected) ? 'selected' : ''}>${escape(source.label)}</option>`).join('')}
     </select>
     ${connectionDetails}`;
-  const appearance = `<label class="field-label" for="phone-theme">主题</label>
+  const appearanceContent = `<label class="field-label" for="phone-theme">主题</label>
     <select id="phone-theme" aria-label="外观主题">
       <option value="day" ${state.theme !== 'night' ? 'selected' : ''}>日间 · 回声</option>
       <option value="night" ${state.theme === 'night' ? 'selected' : ''}>夜间 · 深蓝</option>
@@ -55,6 +55,13 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
     </label>
     ${entrySwitch('fabShow', '悬浮球')}
     ${entrySwitch('qrShow', 'QR')}
+    <label class="compact-switch-row">
+      <span>粒子效果</span>
+      <span class="switch">
+        <input id="particles-enabled" type="checkbox" role="switch" aria-label="粒子效果" ${appearance.particlesEnabled() ? 'checked' : ''} ${busy.has('particles') ? 'disabled' : ''}>
+        <span></span>
+      </span>
+    </label>
     <span class="field-label">锁屏背景</span>
     <div class="wallpaper-editor">
       ${renderBackgroundPicker({ value: state.wallpapers?.[state.theme === 'night' ? 'night' : 'day'], theme: state.theme,
@@ -98,7 +105,7 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
       </button>
     </section>
     ${drawer('connection', '连接设置', connection)}
-    ${drawer('appearance', '外观设置', appearance)}
+    ${drawer('appearance', '外观设置', appearanceContent)}
     ${drawer('content', '内容设置', content)}
     <small class="app-version">两三事 ${VERSION}</small>`;
 }

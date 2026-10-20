@@ -481,6 +481,15 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
 .phone-dialog-current { margin-top: 10px; color: var(--pp-active); }
 .phone-dialog-error { margin-top: 8px; color: var(--pp-error); }
 .phone-dialog .form-actions { justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+/* 头像原图只在裁剪弹窗内存在，圆形预览与最终头像的裁切范围一致。 */
+.avatar-crop-dialog { display: grid; gap: 10px; }
+.avatar-crop-dialog h2, .avatar-crop-dialog .form-actions { margin: 0; }
+.avatar-crop-frame { position: relative; width: min(220px, 100%); aspect-ratio: 1; margin-inline: auto; overflow: hidden; border-radius: 50%; background: var(--pp-pale); touch-action: none; cursor: grab; }
+.avatar-crop-frame:active { cursor: grabbing; }
+.avatar-crop-frame img { position: absolute; max-width: none; max-height: none; user-select: none; pointer-events: none; }
+.avatar-crop-hint { text-align: center; color: var(--pp-muted); font-size: 11px; }
+.avatar-crop-zoom { display: flex; align-items: center; gap: 12px; }
+.avatar-crop-zoom input { flex: 1; min-width: 0; accent-color: var(--pp-active); }
 /* 空状态、反馈与可访问标签。 */
 .empty-state { text-align: center; padding: 52px 20px; color: var(--pp-muted); }
 .empty-symbol { margin-bottom: 15px; }

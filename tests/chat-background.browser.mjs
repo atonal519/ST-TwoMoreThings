@@ -113,7 +113,7 @@ try {
   assert.equal(await page.evaluate(() => previewHarness.metadata.pocketPhone.groups.find(g => g.name === '新群').background), '/user/images/pocket-phone/preview.webp');
   await openApp(page, '设置');
   await page.getByRole('button', { name: '外观设置', exact: true }).click();
-  assert.equal(await page.locator('[data-wallpaper]').count(), 2);
+  assert.deepEqual(await page.locator('[data-wallpaper]').evaluateAll(items => items.map(item => item.dataset.wallpaper)), ['', 'builtin:glass-lake', 'builtin:paper-petals']);
   await page.locator('[data-wallpaper="builtin:glass-lake"]').click();
   await page.waitForFunction(() => previewHarness.metadata.pocketPhone.wallpapers.day === 'builtin:glass-lake');
   await page.getByRole('button', { name: '关闭手机', exact: true }).click();

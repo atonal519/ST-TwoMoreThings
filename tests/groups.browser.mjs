@@ -19,6 +19,7 @@ try {
   await page.getByRole('button', { name: '创建群聊', exact: true }).click();
   await page.getByLabel('群名', { exact: true }).fill('旧书店的朋友');
   await page.getByLabel('选择头像图片').setInputFiles({ name: 'group.png', mimeType: 'image/png', buffer: readFileSync(new URL('../assets/echo-foreground.png', import.meta.url)) });
+  await page.getByRole('dialog', { name: '调整头像', exact: true }).getByRole('button', { name: '确定', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('.pocket-phone').shadowRoot.querySelector('.profile-avatar img')?.src.startsWith('data:image/'));
   await page.locator('input[value="@user"]').uncheck();
   await page.locator('input[value="lin"]').check();

@@ -19,12 +19,14 @@ import { createCalendarReader } from './calendar.js';
 import { createSocialService } from './social.js';
 import { createImageFiles } from './image-files.js';
 import { createImageProviders } from './image-providers.js';
+import { createAppearanceSettings } from './appearance.js';
 export { createPhoneControl, createPhoneImageService };
 
 export function initialize({ host = createHostAdapter(), documentRef = document, qqjBridgeProvider, preset } = {}) {
   const initialState = preset ? stateFromPreset(preset) : undefined;
   const files = createImageFiles({ host });
   const imageProviders = createImageProviders({ host });
+  const appearance = createAppearanceSettings({ host, documentRef });
   const makeStore = (target, options = {}) => createPhoneStore({ target, initialState, removeImages: files.remove, ...options });
   let phone, targetId, activeRequests = 0;
   const entries = createPhoneEntries({ host, documentRef, open, defaults: preset?.entries, initialTheme: initialState?.theme, toggle: () => phone?.isOpen ? phone.close() : open() });
@@ -60,7 +62,7 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
       directory: createDirectoryService({ store, contextReader, modelClient }),
       forum: createForumService({ store, contextReader, modelClient }), apiSettings, calendar,
       social: createSocialService({ store, contextReader, modelClient }),
-      wallpaper: createWallpaperService({ host, store }), entries, authoring: createAuthoringService({ host, store, readEntries: entries.read }), mode: host.mode,
+      wallpaper: createWallpaperService({ host, store }), entries, appearance, authoring: createAuthoringService({ host, store, readEntries: entries.read }), mode: host.mode,
       control, imageProviders, images: createPhoneImageService({ store, modelClient, files, providers: imageProviders, assertEnabled: control.assertEnabled, onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
       onContextChange: () => host.setPrompt(''),
       onClose: () => entries.focus(),

@@ -43,6 +43,7 @@ try {
   await page.getByLabel('线上聊天方式', { exact: true }).fill('短句，不用句号，偶尔只回符号');
   await page.getByLabel('语言习惯', { exact: true }).fill('英语，附中文翻译');
   await page.getByLabel('选择头像图片').setInputFiles({ name: 'avatar.png', mimeType: 'image/png', buffer: readFileSync(new URL('../assets/echo-foreground.png', import.meta.url)) });
+  await page.getByRole('dialog', { name: '调整头像', exact: true }).getByRole('button', { name: '确定', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('.pocket-phone').shadowRoot.querySelector('.profile-avatar img')?.src.startsWith('data:image/'));
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('heading', { name: '晚风', exact: true }).waitFor();

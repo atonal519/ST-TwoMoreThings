@@ -17,6 +17,7 @@ import { LOCAL_CORE_URL, REMOTE_CORE_URL } from './authoring.js';
 import { renderCalendar } from './ui/calendar.js';
 import { createCalendarReader } from './calendar.js';
 import { mountChatParticles } from './ui/particles.js';
+import { mountAvatarCropper } from './ui/avatar-cropper.js';
 import { createPhoneWindow } from './ui/window.js';
 import { createChatScroll } from './ui/chat-scroll.js';
 import { renderSocial, renderSocialProfile } from './ui/social.js';
@@ -49,7 +50,7 @@ const pages = {
   'social-profile': renderSocialProfile,
 };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, social, apiSettings, imageProviders, wallpaper, entries, images, authoring, mode, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, social, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
@@ -93,10 +94,22 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const clock = createPhoneClock({ root, element, readTime });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
-  let particles = null;
+  let particles = null, avatarCropper = null;
+
+  function syncParticles() {
+    const chatStage = root.querySelector('.chat-stage');
+    if (chatStage && !element.hidden && appearance.particlesEnabled()) {
+      if (particles) particles.attach(chatStage);
+      else particles = mountChatParticles(chatStage);
+    } else {
+      particles?.dispose();
+      particles = null;
+    }
+  }
 
   // 导航、草稿、事件与服务调用由控制器统一持有，页面只负责展示。
   function render({ bottom = false } = {}) {
+    if (!element.isConnected) return;
     const scrollTop = inChat() ? root.querySelector('.message-feed')?.scrollTop : undefined;
     const settingsScroll = root.querySelector('.view-settings')?.scrollTop;
     const socialScroll = ['social', 'social-profile'].includes(ui.view) ? root.querySelector(`.view-${ui.view}`)?.scrollTop : undefined;
@@ -117,7 +130,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       ? calendar.month(ui.calendarOffset)
       : ui.view === 'desktop' ? calendar.month(0) : null;
     surface.innerHTML = renderShell({
-      content: page(state, { ui, busy, apiSettings, imageProviders, entries, control, apps, calendar: calendarMonth, weather }),
+      content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, apps, calendar: calendarMonth, weather }),
       view: ui.view, enabled, weather,
       feedback: ui.feedback, photo: ui.photo,
       conflict: ui.conflict, mode, conflictBusy: busy.has('conflict'),
@@ -136,14 +149,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       const feed = root.querySelector('.message-feed');
       if (feed) feed.scrollTop = feed.scrollHeight;
     } else if (scrollTop !== undefined) root.querySelector('.message-feed').scrollTop = scrollTop;
-    const chatStage = root.querySelector('.chat-stage');
-    if (chatStage && !element.hidden) {
-      if (particles) particles.attach(chatStage);
-      else particles = mountChatParticles(chatStage);
-    } else {
-      particles?.dispose();
-      particles = null;
-    }
+    syncParticles();
+    avatarCropper?.attach();
   }
   async function perform(key, task, after) {
     if (busy.has(key)) return;
@@ -193,6 +200,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (current?.path) { ui.photo = current; render(); }
   }
   function close() {
+    avatarCropper?.close();
     dismissMenus();
     windowControls.stop();
     chatScroll.stop();
@@ -529,6 +537,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       const key = event.target.dataset.entryPreference, value = event.target.checked;
       void perform('entry', () => entries.set(key, value), result => { if (result?.notice) ui.feedback = { text: result.notice }; });
     }
+    if (event.target.id === 'particles-enabled') {
+      const enabled = event.target.checked;
+      void perform('particles', () => appearance.setParticlesEnabled(enabled));
+    }
     if (event.target.id === 'phone-theme') void perform('theme', () => store.setTheme(event.target.value));
     if (event.target.id === 'phone-lock-style') void perform('lock-style', () => store.setLockStyle(event.target.value));
     if (event.target.id === 'wallpaper-file' && event.target.files[0]) {
@@ -541,7 +553,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
     if (event.target.matches('.avatar-picker input[type="file"]') && event.target.files[0]) {
       const file = event.target.files[0], draft = event.target.closest('.group-form') ? ui.groupDraft : ui.profileDraft;
-      void perform('avatar', () => readImage(file, doc), value => { draft.avatar = value; });
+      void perform('avatar', async () => {
+        avatarCropper = mountAvatarCropper(surface, file);
+        try { return await avatarCropper.result; }
+        finally { avatarCropper = null; }
+      }, value => { if (value) draft.avatar = value; }).then(() => root.querySelector('.avatar-picker input')?.focus({ preventScroll: true }));
     }
     if (event.target.id === 'api-source') {
       ui.manual = event.target.value === 'manual';
@@ -579,6 +595,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (!element.hidden && ['calendar', 'desktop'].includes(ui.view)) render();
   };
   const rememberMembersFold = event => { if (event.target.matches?.('.group-members-fold')) ui.groupMembersOpen = event.target.open; };
+  const unsubscribeAppearance = appearance.subscribe(() => {
+    const toggle = root.querySelector('#particles-enabled');
+    if (toggle) toggle.checked = appearance.particlesEnabled();
+    syncParticles();
+  });
   doc.defaultView.addEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
   root.addEventListener('keydown', keydown);
   root.addEventListener('click', click);
@@ -617,6 +638,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
     },
     dispose() {
+      avatarCropper?.close();
+      unsubscribeAppearance();
       clock.stop();
       particles?.dispose();
       chatScroll.dispose();
