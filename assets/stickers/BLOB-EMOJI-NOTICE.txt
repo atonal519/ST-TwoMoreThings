@@ -1,0 +1,12 @@
+Blobmoji inline emoji artwork
+
+Original artwork: Google Inc.; Blobmoji additions and modifications: C1710 and contributors.
+https://github.com/C1710/blobmoji
+Additional SVG assets sourced from commit 7dd14d2b0141693485fd26bc35817bd290352a79.
+The 24 previously included Blob images are retained and shared by large stickers and inline emoji.
+Images are distributed unmodified apart from local filenames under Apache License 2.0; see BLOB-LICENSE.txt.
+
+Chinese emoji names are based on Unicode CLDR release 42, with local display-name aliases.
+Copyright 1991-2022 Unicode, Inc.
+https://github.com/unicode-org/cldr/tree/release-42/common/annotations/zh.xml
+See UNICODE-LICENSE.txt (Unicode-DFS-2016).

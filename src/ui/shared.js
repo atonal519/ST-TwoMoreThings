@@ -1,4 +1,5 @@
 import { avatarSource, displayName } from '../profiles.js';
+import { splitEmojiText } from '../emojis.js';
 
 const icons = {
   social: '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><path d="M17.5 6.5h.01"/>',
@@ -39,8 +40,14 @@ export const icon = name => ['messages', 'forum'].includes(name)
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 export const refKey = ref => ref ? `${ref.kind}:${ref.presetId || ''}` : '';
 
+export function renderEmojiText(text) {
+  return splitEmojiText(text).map(part => part.emoji
+    ? `<img class="inline-emoji" src="${escape(part.emoji.src)}" alt="${escape(part.text)}" title="${escape(part.emoji.label)}" draggable="false" loading="lazy">`
+    : escape(part.text)).join('');
+}
+
 export function renderBilingual(text, translation) {
-  return `<span class="message-original">${escape(text)}</span>${translation ? `<span class="message-translation" lang="zh-CN">${escape(translation)}</span>` : ''}`;
+  return `<span class="message-original">${renderEmojiText(text)}</span>${translation ? `<span class="message-translation" lang="zh-CN">${renderEmojiText(translation)}</span>` : ''}`;
 }
 
 export function avatar(contact, small = false) {

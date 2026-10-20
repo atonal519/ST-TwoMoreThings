@@ -1,4 +1,4 @@
-import { asset, avatar, escape } from './shared.js';
+import { asset, avatar, escape, renderEmojiText } from './shared.js';
 import { unreadConversations } from '../notifications.js';
 import { displayName } from '../profiles.js';
 import { wallpaperPreset } from '../backgrounds.js';
@@ -36,7 +36,7 @@ export function renderHome(state, { weather } = {}) {
     ${unreadConversations(state).map(item => `<button type="button" class="lock-notification"
       data-${item.isGroup ? 'group' : 'contact'}="${escape(item.id)}">
       ${avatar(item, true)}
-      <span class="notification-copy"><strong>${escape(displayName(item))}</strong><span>${escape(item.preview)}</span></span>
+      <span class="notification-copy"><strong>${escape(displayName(item))}</strong><span>${renderEmojiText(item.preview)}</span></span>
       <small>${item.count}</small>
     </button>`).join('')}
   </div>`;

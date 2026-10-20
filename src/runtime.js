@@ -39,7 +39,7 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
     if (!control.isEnabled()) return;
     const store = makeStore(target);
     const modelClient = createModelClient({ host, sourceProvider: createApiSettings({ host }), onBusyChange });
-    try { host.setPrompt(await createBackflowService({ target, store, modelClient, isEnabled: control.isEnabled }).prepare()); }
+    try { host.setPrompt(await createBackflowService({ target, store, modelClient, isEnabled: control.isEnabled }).prepare(type)); }
     catch (error) { host.reportError(`手机摘要未生成，本次正文未带入手机消息。${error.message || '请检查手机生成连接后重试。'}`); }
   });
   const unsubscribeTime = host.onStoryChanged(() => phone?.refreshTime());
@@ -56,7 +56,7 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
     const modelClient = { async complete(request) { control.assertEnabled(); const answer = await client.complete(request); control.assertEnabled(); return answer; } };
     const calendar = createCalendarReader();
     const contextReader = createContextReader({ target, store, qqjBridgeProvider, calendar });
-    currentPhone = mountPhone({ mount: documentRef.documentElement, store, defaultUser: target.user, readTime: () => readPhoneTime(target.messages), readTimeline: () => readTimeline(target.messages),
+    currentPhone = mountPhone({ mount: documentRef.documentElement, store, qqjBridgeProvider, defaultUser: target.user, readTime: () => readPhoneTime(target.messages), readTimeline: () => readTimeline(target.messages),
       messages: createMessageService({ target, store, contextReader, modelClient }),
       groups: createGroupService({ target, store, contextReader, modelClient }),
       directory: createDirectoryService({ store, contextReader, modelClient }),

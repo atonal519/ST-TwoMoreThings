@@ -266,7 +266,7 @@ test('a genuinely deleted friend is not restored as an author or named comment w
   assert.deepEqual(posts[0].comments, [{ name: '路过的人', text: '保留的评论' }]);
 });
 
-test('social context recalls selected friends once, keeps actor ownership, and excludes private SMS and unrelated memory', async () => {
+test('social context scopes selected friends private SMS for proactive replies and excludes unrelated memory', async () => {
   const calls = [];
   const bridge = { readContext: async request => {
     calls.push(request);
@@ -284,5 +284,162 @@ test('social context recalls selected friends once, keeps actor ownership, and e
   assert.equal(input.authors.find(author => author.id === 'friend-0').related, 'entity-0的状态\nentity-0的记忆');
   assert.equal(input.authors.find(author => author.kind === 'npc').related, '');
   assert.equal(JSON.stringify(input).includes('不相关人物的秘密'), false);
-  assert.equal(JSON.stringify(input).includes('不应进入动态的私信'), false);
+  assert.equal(input.authors.find(author => author.id === 'friend-0').privateHistory[0].text, '不应进入动态的私信');
+  assert.equal(input.authors.filter(author => author.id !== 'friend-0').some(author => JSON.stringify(author).includes('不应进入动态的私信')), false);
+});
+
+test('comment uses one model call, saves the user comment and identified replies, preserves virtual count, and can atomically add unread SMS', async () => {
+  const { h, store, service } = await setup(2);
+  await service.refresh();
+  const post = store.read().social.posts[0];
+  await store.updateSocial(social => ({ ...social, posts: social.posts.map(item => item.id === post.id
+    ? { ...item, comments: [...item.comments, { authorId: 'friend-0', name: '昵称0', text: '我之前来过。' }] } : item) }));
+  h.completion = { choices: [{ message: { content: JSON.stringify({
+    comments: [
+      { authorId: post.authorId, text: '看到啦。' },
+      { authorId: 'friend-0', text: 'I want to go too.', translation: '我也想去。' },
+      { authorId: 'invented', text: '不应保存。' },
+    ],
+    proactiveMessages: [{ contactId: post.authorId, messages: [{ text: '你刚才的留言我看到了。' }] }],
+  }) } }] };
+  const before = h.metadataSaves;
+  const result = await service.comment(post.id, '我也喜欢这里。');
+  assert.equal(h.modelRequests.length, 2);
+  assert.equal(h.metadataSaves, before + 1);
+  const saved = store.read().social.posts.find(item => item.id === post.id);
+  assert.equal(saved.commentsCount, 6, 'virtual count 3 plus user comment and two accepted replies');
+  assert.deepEqual(saved.comments.slice(-3), [
+    { role: 'user', name: '我', text: '我也喜欢这里。' },
+    { name: '昵称1', text: '看到啦。', authorId: 'friend-1' },
+    { name: '昵称0', text: 'I want to go too.', translation: '我也想去。', authorId: 'friend-0' },
+  ]);
+  assert.equal(store.read().conversations[post.authorId].length, 1);
+  assert.equal(store.read().conversations[post.authorId][0].read, false);
+  assert.equal(result.id, post.id);
+});
+
+test('comment keeps the original post and draft when model parsing or atomic save fails', async () => {
+  const { h, store, service } = await setup(1);
+  await service.refresh();
+  const post = structuredClone(store.read().social.posts[0]);
+  h.completion = { choices: [{ message: { content: '这不是JSON' } }] };
+  await assert.rejects(service.comment(post.id, '保留草稿'), /JSON/);
+  assert.deepEqual(store.read().social.posts[0], post);
+  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [{ authorId: post.authorId, text: '回应' }] }) } }] };
+  h.saveFailure = new Error('save failed');
+  await assert.rejects(service.comment(post.id, '保存失败草稿'));
+  assert.deepEqual(store.read().social.posts[0], post);
+});
+
+test('historical author generation ignores optional proactive messages', async () => {
+  const { h, store, service } = await setup(1);
+  await service.refresh();
+  const authorId = store.read().social.posts[0].authorId;
+  h.completion = { choices: [{ message: { content: JSON.stringify({ posts: [{ authorId, text: '旧日常。' }], proactiveMessages: [{ contactId: authorId, messages: [{ text: '不应发出。' }] }] }) } }] };
+  await service.generateAuthor(authorId);
+  assert.equal(store.read().conversations[authorId], undefined);
+});
+
+test('feed accepts proactive text only once and rejects a contact not present in returned posts', async () => {
+  const { h, store, service } = await setup(2);
+  h.completion = { choices: [{ message: { content: JSON.stringify({ posts: [{ authorId: 'friend-0', text: '新动态。' }], proactiveMessages: [
+    { contactId: 'friend-1', messages: [{ text: '不应因为未出现在动态中而发送。' }] },
+    { contactId: 'friend-0', messages: [{ text: '这条短信应保存。' }] },
+  ] }) } }] };
+  await service.refresh();
+  assert.equal(h.modelRequests.length, 1);
+  assert.equal(store.read().conversations['friend-0'].length, 1);
+  assert.equal(store.read().conversations['friend-1'], undefined);
+  h.saveFailure = new Error('save failed');
+  await assert.rejects(service.refresh());
+  assert.equal(store.read().social.posts[0].text, '新动态。');
+  assert.equal(store.read().conversations['friend-0'].length, 1, 'failed replacement keeps the existing post and SMS together');
+});
+
+test('comment supplies saved publication and photo context and can answer an anonymous commenter by exact name', async () => {
+  const { h, store, service } = await setup(1);
+  await service.refresh();
+  const post = store.read().social.posts[0];
+  await store.updateSocial(social => ({ ...social, posts: social.posts.map(item => item.id === post.id ? { ...item, publishedAt: '2026-10-01 09:00', image: { description: '窗边的蓝色花瓶。' }, comments: [{ name: '路过的阿青', text: '好看。' }], commentsCount: 1 } : item) }));
+  h.completion = (_path, init) => {
+    const input = JSON.parse(JSON.parse(init.body).messages[1].content);
+    assert.equal(input.post.publishedAt, '2026-10-01 09:00');
+    assert.equal(input.post.image.description, '窗边的蓝色花瓶。');
+    return { choices: [{ message: { content: JSON.stringify({ comments: [{ name: '路过的阿青', text: '确实很有气氛。' }] }) } }] };
+  };
+  await service.comment(post.id, '我也觉得。');
+  assert.equal(store.read().social.posts.find(item => item.id === post.id).comments.at(-1).name, '路过的阿青');
+});
+
+test('comment with an explicit empty comments array still saves the user comment', async () => {
+  const { h, store, service } = await setup(1);
+  await service.refresh();
+  const post = store.read().social.posts[0];
+  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [] }) } }] };
+  await service.comment(post.id, '今天也来看看。');
+  assert.equal(store.read().social.posts.find(item => item.id === post.id).comments.at(-1).text, '今天也来看看。');
+});
+
+test('an identified existing commenter can send a private SMS without adding a public reply', async () => {
+  const { h, store, service } = await setup(2);
+  await service.refresh();
+  const post = store.read().social.posts.find(item => item.authorId === 'friend-1');
+  await store.updateSocial(social => ({ ...social, posts: social.posts.map(item => item.id === post.id
+    ? { ...item, comments: [{ authorId: 'friend-0', name: '昵称0', text: '那家书店不错。' }] } : item) }));
+  await store.appendMessage('friend-0', { id: 'existing', role: 'user', text: '保留原短信。' });
+  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [],
+    proactiveMessages: [{ contactId: 'friend-0', messages: [{ text: '我私下把地址发给你。' }] }],
+  }) } }] };
+  const before = h.metadataSaves, calls = h.modelRequests.length;
+  await service.comment(post.id, '在哪儿？');
+  assert.equal(h.metadataSaves, before + 1);
+  assert.equal(h.modelRequests.length, calls + 1);
+  assert.deepEqual(store.read().conversations['friend-0'].map(item => item.text), ['保留原短信。', '我私下把地址发给你。']);
+  assert.equal(store.read().conversations['friend-0'].at(-1).read, false);
+  assert.equal(store.read().social.posts.find(item => item.id === post.id).comments.at(-1).text, '在哪儿？');
+});
+
+test('a later comment cannot save a reply under the user name while keeping a valid named reply', async () => {
+  const { h, store, service } = await setup(1);
+  await service.refresh();
+  const post = store.read().social.posts[0];
+  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [{ name: '我', text: '冒充用户。' }, { name: '新路人', text: '路过回应。' }] }) } }] };
+  await service.comment(post.id, '第一条留言。');
+  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [{ name: '我', text: '再次冒充。' }, { authorId: post.authorId, text: '角色回应。' }] }) } }] };
+  await service.comment(post.id, '第二条留言。');
+  const comments = store.read().social.posts.find(item => item.id === post.id).comments;
+  assert.equal(comments.filter(item => item.role === 'user').length, 2);
+  assert.equal(comments.some(item => item.text === '再次冒充。'), false);
+  assert.equal(comments.at(-1).authorId, post.authorId);
+});
+
+test('toggleLike saves only virtual user state and derives the displayed count', async () => {
+  const { h, store, service } = await setup(1);
+  await service.refresh();
+  const post = store.read().social.posts[0];
+  const baseLikes = post.likes;
+  const before = h.metadataSaves;
+  const liked = await service.toggleLike(post.id);
+  assert.equal(liked.userLiked, true);
+  assert.equal(liked.likes, baseLikes + 1);
+  assert.equal(store.read().social.posts[0].likes, baseLikes);
+  assert.equal(store.read().social.posts[0].userLiked, true);
+  assert.equal(h.modelRequests.length, 1, 'toggling a like does not call the model');
+  assert.equal(h.metadataSaves, before + 1);
+
+  const unliked = await service.toggleLike(post.id);
+  assert.equal(unliked.userLiked, false);
+  assert.equal(unliked.likes, baseLikes);
+  assert.equal(store.read().social.posts[0].likes, baseLikes);
+  assert.equal(store.read().social.posts[0].userLiked, false);
+  assert.equal(h.modelRequests.length, 1, 'cancelling a like does not call the model');
+  assert.equal(h.metadataSaves, before + 2);
+});
+
+test('toggleLike reports a missing post without saving or calling the model', async () => {
+  const { h, service } = await setup(1);
+  const before = h.metadataSaves;
+  await assert.rejects(service.toggleLike('missing-post'), /动态已不存在/);
+  assert.equal(h.metadataSaves, before);
+  assert.equal(h.modelRequests.length, 0);
 });

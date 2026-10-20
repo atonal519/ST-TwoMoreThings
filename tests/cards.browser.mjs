@@ -28,6 +28,7 @@ try {
     assert.equal(await page.getByRole('button', { name: '添加消息', exact: true }).count(), 1, 'composer must expose the attachment picker');
     await page.getByRole('button', { name: '添加消息', exact: true }).click();
     await page.getByRole('button', { name: '表情', exact: true }).click();
+    await page.getByRole('tab', { name: 'Blob Emoji', exact: true }).click();
     await page.getByRole('button', { name: '发送表情：开心', exact: true }).click();
     await page.waitForFunction(() => previewHarness.metadata.pocketPhone.conversations.lin.at(-1)?.stickerId === 'blob.1f600');
     await page.getByRole('button', { name: '添加消息', exact: true }).click();

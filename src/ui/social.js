@@ -4,7 +4,7 @@ import { getSocialAuthor, readSocialPosts, readSocialFeed } from '../social.js';
 import { publicationLabel } from '../social-time.js';
 import { imageSource } from '../image-files.js';
 
-function renderPost(post, state, busy) {
+function renderPost(post, state, busy, ui) {
   const author = getSocialAuthor(state, post.authorId);
   if (!author) return '';
   const generating = busy.has(`social-image:${post.id}`);
@@ -15,7 +15,12 @@ function renderPost(post, state, busy) {
         : `<span class="social-photo-placeholder">${icon('image')}<span>${escape(post.image.description)}</span><small>${generating ? '生成中…' : '点击生成图片'}</small></span>`}
     </button>` : '';
   const comments = (post.comments || []).map(comment => `<p class="social-comment"><strong>${escape(comment.name)}</strong>${renderBilingual(comment.text, comment.translation)}</p>`).join('');
+  const commentOpen = ui.socialCommentOpen.has(post.id);
+  const draft = ui.socialDrafts.get(post.id) || '';
+  const commentBusy = busy.has(`social-comment:${post.id}`);
   const date = publicationLabel(post);
+  const userLiked = Boolean(post.userLiked);
+  const likes = (Number(post.likes) || 0) + Number(userLiked);
   return `<article class="social-post" data-social-post="${escape(post.id)}">
     <button type="button" class="social-author" data-action="social-author" data-social-author="${escape(author.id)}" aria-label="查看${escape(displayName(author))}的主页">
       ${avatar(author, true)}
@@ -27,9 +32,13 @@ function renderPost(post, state, busy) {
     ${photo}
     ${post.text ? `<p class="social-caption">${renderBilingual(post.text, post.translation)}</p>` : ''}
     <div class="social-stats" aria-label="动态统计">
-      <span>${icon('heart')}${post.likes || 0} 赞</span><span>${icon('repost')}${post.reposts || 0} 转发</span><span>${icon('comment')}${post.commentsCount || 0} 评论</span>
+      <button type="button" class="social-like" data-action="social-like" data-social-post="${escape(post.id)}" aria-pressed="${userLiked}" aria-label="${userLiked ? '取消点赞' : '点赞'}" ${busy.has(`social-like:${post.id}`) ? 'disabled' : ''}>${icon('heart')}${likes} 赞</button><span>${icon('repost')}${post.reposts || 0} 转发</span><button type="button" class="social-comment-toggle" data-action="social-comment-toggle" data-social-post="${escape(post.id)}" aria-expanded="${commentOpen}">${icon('comment')}${post.commentsCount || 0} 评论</button>
     </div>
     ${comments ? `<div class="social-comments">${comments}</div>` : ''}
+    ${commentOpen ? `<form class="social-comment-form" data-social-comment-form="${escape(post.id)}">
+      <textarea name="comment" rows="1" placeholder="写下你的留言" aria-label="给这条动态留言">${escape(draft)}</textarea>
+      <button type="submit" class="social-comment-send" ${commentBusy ? 'disabled' : ''}>${commentBusy ? '发送中…' : '发送'}</button>
+    </form>` : ''}
     ${date ? `<time class="social-time">${escape(date)}</time>` : ''}
   </article>`;
 }
@@ -43,11 +52,11 @@ export function renderSocial(state, { ui, busy }) {
       <h1 class="social-wordmark">ainstgram</h1>
       ${action('social-refresh', busy.has('social') ? '刷新动态中' : '刷新动态', 'refresh', 'icon-button', busy.has('social'))}
     </header>
-    <div class="social-feed">${feed.map(post => renderPost(post, state, busy)).join('')}</div>
+    <div class="social-feed">${feed.map(post => renderPost(post, state, busy, ui)).join('')}</div>
     ${!feed.length ? empty(busy.has('social') ? '正在整理动态' : '暂无动态', '', 'image') : ''}
     ${past.length ? `<section class="social-history">
       <button type="button" class="history-fold" data-action="social-past" aria-expanded="${Boolean(ui.socialPastOpen)}"><span>${ui.socialPastOpen ? '收起过去的动态' : '查看过去的动态'}</span></button>
-      ${ui.socialPastOpen ? `${past.slice(0, limit).map(post => renderPost(post, state, busy)).join('')}
+      ${ui.socialPastOpen ? `${past.slice(0, limit).map(post => renderPost(post, state, busy, ui)).join('')}
         ${past.length > limit ? action('social-earlier', '查看更早的动态', '', 'earlier-button') : ''}` : ''}
     </section>` : ''}`;
 }
@@ -72,7 +81,7 @@ export function renderSocialProfile(state, { ui, busy }) {
       </div>
     </section>
     ${generating ? '<p class="social-loading" role="status">正在补充个人动态…</p>' : ''}
-    <div class="social-profile-posts">${posts.slice(0, limit).map(post => renderPost(post, state, busy)).join('')}</div>
+    <div class="social-profile-posts">${posts.slice(0, limit).map(post => renderPost(post, state, busy, ui)).join('')}</div>
     ${posts.length > limit ? action('social-earlier', '查看更早的动态', '', 'earlier-button') : ''}
     ${!posts.length && !generating ? empty('暂无动态', '', 'image') : ''}`;
 }

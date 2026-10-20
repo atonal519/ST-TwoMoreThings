@@ -13,8 +13,8 @@ function clockTime(raw) {
   return `${pad(hour)}:${pad(minute)}`;
 }
 
-export function latestAiFloor(messages) {
-  for (let i = messages.length - 1; i >= 0; i--) {
+export function latestAiFloor(messages, beforeIndex = messages.length) {
+  for (let i = beforeIndex - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.is_user || message.is_system || ['user', 'system'].includes(message.role) || typeof message.mes !== 'string' || !message.mes) continue;
     return { index: i, message };

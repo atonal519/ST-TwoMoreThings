@@ -93,6 +93,14 @@ try {
     await openApp(embedded, '短信');
     await embedded.getByRole('button', { name: /林舟/ }).click();
     assert.equal(await embedded.locator('.bubble').count(), 0);
+    await embedded.getByRole('button', { name: '添加消息', exact: true }).click();
+    await embedded.getByRole('button', { name: '表情', exact: true }).click();
+    const inlineEmoji = embedded.getByRole('button', { name: '插入表情：合十', exact: true });
+    await inlineEmoji.locator('img').evaluate(image => image.decode());
+    assert.ok((await inlineEmoji.locator('img').getAttribute('src')).endsWith('/assets/stickers/blob-1f64f.svg'));
+    await inlineEmoji.click();
+    assert.equal(await embedded.getByRole('textbox', { name: '短信内容' }).inputValue(), '🙏');
+    await embedded.getByRole('button', { name: '收起附件', exact: true }).click();
     await embedded.getByRole('textbox', { name: '短信内容' }).fill('随卡手机测试');
     await embedded.getByRole('button', { name: '发送', exact: true }).click();
     await embedded.getByRole('button', { name: '继续', exact: true }).click();

@@ -38,12 +38,22 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   }
   const store = {
     read,
-    updateSocial(change, { cleanImages = false } = {}) {
+    updateSocial(change, { cleanImages = false, incomingMessages = [] } = {}) {
       return update(state => {
         assertEnabled();
         const social = state.social || { posts: [], npcs: [], feedIds: [] };
         const next = change(social, state);
-        return next === social ? state : { ...state, social: next };
+        const conversations = { ...state.conversations };
+        let messagesChanged = false;
+        const validContacts = new Set((state.contacts || []).map(person => person.id));
+        for (const entry of Array.isArray(incomingMessages) ? incomingMessages : []) {
+          if (!validContacts.has(entry?.contactId) || !Array.isArray(entry.messages) || !entry.messages.length) continue;
+          const existing = conversations[entry.contactId] || [];
+          conversations[entry.contactId] = [...existing, ...entry.messages.map(message => message.role === 'assistant' ? { ...message, read: Boolean(isReading(entry.contactId)) } : message)];
+          messagesChanged = true;
+        }
+        if (next === social && !messagesChanged) return state;
+        return { ...state, social: next, ...(messagesChanged ? { conversations } : {}) };
       }, cleanImages);
     },
     appendMessage(id, message) { return store.appendMessages(id, [message]); },

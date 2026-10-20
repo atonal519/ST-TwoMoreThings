@@ -14,6 +14,38 @@ async function setup() {
   return { h, target, store, batch: readTimeline(target.messages) };
 }
 
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: regenerating the main reply uses the SMS batch before the replaced reply`, async () => {
+  const h = createHarness({ hostKind, messages: [
+    { is_user: false, mes: '<!-- SDC-end | date=2027-03-19 | time=15:30 -->' },
+    { is_user: true, mes: '继续剧情。' },
+    { is_user: false, mes: '<!-- SDC-end | date=2027-03-19 | time=17:40 -->' },
+  ] });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
+  await store.setInjectionEnabled(true);
+  await store.appendMessages('lin', [
+    { id: 'before-reply', role: 'user', text: '刚才说好六点在书店见。', batch: { key: '[0,"2027-03-19","15:30"]' } },
+    { id: 'after-reply', role: 'user', text: '新一楼之后的短信。', batch: { key: '[2,"2027-03-19","17:40"]' } },
+  ]);
+  const before = structuredClone(store.read()), saves = h.metadataSaves;
+  const service = createBackflowService({ target, store, modelClient: { complete() { assert.fail('short SMS must not request a model'); } } });
+  const retry = await service.prepare('regenerate');
+  assert.ok(retry.includes('刚才说好六点在书店见。'));
+  assert.ok(!retry.includes('新一楼之后的短信。'));
+  for (const type of ['normal', 'continue']) {
+    const next = await service.prepare(type);
+    assert.ok(next.includes('新一楼之后的短信。'));
+    assert.ok(!next.includes('刚才说好六点在书店见。'));
+  }
+  assert.deepEqual(store.read(), before);
+  assert.equal(h.metadataSaves, saves);
+  // 两种宿主的切换候选入口可能先清空待写楼，也可能先移除待写楼。
+  target.messages.at(-1).mes = '';
+  assert.ok((await service.prepare('swipe')).includes('刚才说好六点在书店见。'));
+  target.messages.pop();
+  assert.ok((await service.prepare('regenerate')).includes('刚才说好六点在书店见。'));
+});
+
 test('short backflow preserves bilingual messages, participant names and card facts without a model or file data', async () => {
   const { h, target, store, batch } = await setup();
   await store.saveUserProfile({ name: '小满' });

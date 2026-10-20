@@ -29,6 +29,8 @@ try {
     });
     await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${host}&clock=story`);
     await page.locator('.view-home').waitFor();
+    const originalArtwork = await page.locator('.home-art').elementHandle();
+    await page.locator('.home-art').evaluate(image => image.decode());
     assert.equal(await page.getByRole('button', { name: '短信', exact: true }).count(), 0, 'lockscreen has no persistent SMS shortcut');
     assert.equal(await page.getByRole('button', { name: '论坛', exact: true }).count(), 0);
     assert.equal(await page.locator('.system-nav').count(), 0);
@@ -111,6 +113,14 @@ try {
     await page.evaluate(() => previewHarness.app.open());
     await page.locator('.view-home').waitFor();
     assert.equal(await centeredFingerprint(), true);
+    const lockImageIdentity = await page.locator('.view-home img.home-wallpaper, .view-home img.home-art').elementHandle();
+    assert.equal(await page.locator('.home-art').evaluate((node, previous) => node === previous, originalArtwork), true, 'artwork survives navigating all inner pages, closing from chat and reopening');
+    await page.getByRole('button', { name: '关闭手机', exact: true }).click();
+    await page.evaluate(() => previewHarness.app.open());
+    await page.locator('.view-home').waitFor();
+    assert.equal(await page.locator('.view-home img.home-wallpaper, .view-home img.home-art').evaluate((node, previous) => node === previous, lockImageIdentity), true, 'same-src lock artwork keeps its image node across close and reopen');
+    await page.evaluate(() => previewHarness.app.open());
+    assert.equal(await page.locator('.view-home img.home-wallpaper, .view-home img.home-art').evaluate((node, previous) => node === previous, lockImageIdentity), true, 'same-src lock artwork keeps its image node on an already-open refresh');
     await page.getByRole('button', { name: '关闭手机', exact: true }).click();
     await page.evaluate(() => previewHarness.app.open());
     await page.locator('.view-home').waitFor();
@@ -118,6 +128,8 @@ try {
       previewHarness.metadata.pocketPhone.theme = 'night';
       previewHarness.app.open();
     });
+    assert.equal(await page.locator('.home-art').evaluate((node, previous) => node === previous, lockImageIdentity), false, 'actual source change replaces the artwork');
+    await page.locator('.home-art').evaluate(image => image.decode());
     assert.equal(await centeredFingerprint(), true);
     await page.locator('.phone-shell').screenshot({ path: `${output}/${host}-${width}-lock-night.png` });
     await page.getByRole('button', { name: '进入桌面', exact: true }).click();

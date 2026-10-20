@@ -20,6 +20,7 @@ test('same story time on two AI floors still separates history; clear only remov
   assert.notEqual(anchor.key, oldKey);
   await service.send('lin', '当前批短信');
   assert.deepEqual((await reader.readForContact('lin')).history.map(x => x.text), ['当前批短信']);
+  assert.deepEqual((await reader.readForContact('lin')).previousMessages.map(x => x.text), ['上一批短信'], 'past grouping does not erase conversation continuity');
   assert.deepEqual(partitionHistory(store.read().conversations.lin, anchor).past[0].messages.map(x => x.text), ['上一批短信']);
   await store.clearConversation('lin', anchor);
   assert.deepEqual(store.read().conversations.lin.map(x => x.text), ['上一批短信']);

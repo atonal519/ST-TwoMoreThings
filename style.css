@@ -7,6 +7,7 @@
   --pp-surface: #fbfaf6; --pp-surface-soft: #e9e9e2; --pp-divider-soft: #d7dad1;
   --pp-message-user: #314a50; --pp-message-user-text: #f7f7ef;
   --pp-active: #397584; --pp-feedback: #e0e9e2; --pp-error-surface: #f4e6dd;
+  --pp-like-active: #d64545;
   --pp-elevation-soft: 0 1px 3px rgb(0 0 0 / 6%), 0 1px 2px rgb(0 0 0 / 4%);
   --pp-panel-height: min(calc(100dvh - 20px), max(300px, min(600px, 85dvh)));
   position: fixed; inset: 0; width: 100dvw; height: 100dvh; z-index: 2000001; display: block;
@@ -23,6 +24,7 @@
   --pp-surface: #162d3a; --pp-surface-soft: #102631; --pp-divider-soft: #344c5a;
   --pp-message-user: #2d4f65; --pp-message-user-text: #f2efdc;
   --pp-active: #d06b50; --pp-feedback: #263b45; --pp-error-surface: #422f2c;
+  --pp-like-active: #ff766c;
   --pp-elevation-soft: none;
   color-scheme: dark;
 }
@@ -250,6 +252,7 @@ h3 { font-size: 14px; font-weight: 600; }
 .typing i { display: inline-block; width: 3px; height: 3px; margin: 0 3px; background: var(--pp-muted); border-radius: 50%; }
 .earlier-button { display: block; margin: 0 auto 16px; min-height: 36px; font-size: 11px; color: var(--pp-muted); }
 /* 消息卡与附件面板，复用会话本身的气泡和滚动区。 */
+.inline-emoji { display: inline-block; width: 1.25em; height: 1.25em; margin-inline: .06em; vertical-align: -.25em; object-fit: contain; }
 .bubble.sticker-message, .is-mine .bubble.sticker-message { border: 0; padding: 0; background: transparent; box-shadow: none; }
 .sticker-message img { display: block; width: 104px; height: 104px; object-fit: contain; }
 .message-row .bubble.sticker-message::after { display: none; }
@@ -280,13 +283,18 @@ h3 { font-size: 14px; font-weight: 600; }
 .attachment-shortcuts { display: grid; grid-template-columns: repeat(auto-fill, 48px); gap: 6px 10px; }
 .attachment-shortcuts > button { min-height: 50px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 10px; line-height: 15px; }
 .attachment-shortcuts svg { width: 32px; height: 32px; padding: 7px; background: var(--pp-surface-soft); border-radius: 7px; }
+.sticker-picker { display: flex; flex-direction: column; overflow: hidden; }
+.sticker-picker .attachment-heading, .sticker-tabs, .sticker-credit { flex: 0 0 auto; }
 .sticker-tabs { display: flex; gap: 13px; font-size: 11px; }
 .sticker-tabs button { min-height: 27px; border-bottom: 1px solid transparent; }
 .sticker-tabs button[aria-selected="true"] { color: var(--pp-active); border-color: currentColor; }
-.sticker-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; padding: 5px 0; }
+.sticker-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; padding: 5px 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .sticker-grid button { display: grid; place-items: center; min-height: 39px; border-radius: 5px; }
 .sticker-grid button:hover { background: var(--pp-pale); }
 .sticker-grid img { width: 38px; height: 38px; object-fit: contain; }
+.emoji-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.emoji-grid button { min-height: 32px; }
+.emoji-grid img { width: 24px; height: 24px; }
 .sticker-credit { font-size: 9px; line-height: 1.5; color: var(--pp-muted); }
 .attachment-form { display: flex; flex-direction: column; gap: 5px; }
 .attachment-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 10px; color: var(--pp-muted); }
@@ -373,13 +381,19 @@ h3 { font-size: 14px; font-weight: 600; }
 .social-caption { margin: 8px 14px 0; font-size: 13px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .social-post:not(:has(.social-photo)) .social-caption { margin-top: 0; }
 .social-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 9px 14px 5px; font-size: 11px; }
-.social-stats > span { display: inline-flex; align-items: center; gap: 4px; }
+.social-stats > span, .social-stats > button { display: inline-flex; align-items: center; gap: 4px; }
 .social-stats svg { width: 16px; height: 16px; }
+.social-like { color: inherit; font: inherit; }
+.social-like[aria-pressed="true"] svg { color: var(--pp-like-active); fill: currentColor; }
+.social-comment-toggle { color: inherit; font: inherit; }
 .social-comments { margin: 0 14px; }
 .social-comment { font-size: 11.5px; line-height: 1.7; overflow-wrap: anywhere; }
 .social-comment strong { font-weight: 600; margin-right: 6px; }
 .social-comment .message-original { display: inline; }
 .social-comment .message-translation { font-size: 10.5px; }
+.social-comment-form { display: flex; align-items: flex-end; gap: 7px; margin: 8px 14px 0; }
+.social-comment-form textarea { min-width: 0; flex: 1 1 auto; min-height: 29px; max-height: 80px; padding: 6px 8px; border: 1px solid var(--pp-divider-soft); border-radius: 8px; background: var(--pp-surface); color: var(--pp-ink); font: inherit; line-height: 1.45; resize: vertical; }
+.social-comment-send { flex: 0 0 auto; min-height: 29px; padding: 5px 9px; border-radius: 7px; background: var(--pp-active); color: var(--pp-paper); font-size: 11px; }
 .social-time { display: block; margin: 6px 14px 0; font-size: 10.5px; color: var(--pp-muted); }
 .social-profile { display: flex; align-items: center; gap: 14px; padding: 17px 15px; border-bottom: 1px solid var(--pp-divider-soft); }
 .social-profile .avatar { width: 58px; height: 58px; flex-basis: 58px; font-size: 23px; }

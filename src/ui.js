@@ -22,6 +22,8 @@ import { createPhoneWindow } from './ui/window.js';
 import { createChatScroll } from './ui/chat-scroll.js';
 import { renderSocial, renderSocialProfile } from './ui/social.js';
 import { imagePath } from './image-files.js';
+import { findBlobEmoji } from './emojis.js';
+import { readContactAvatars } from './contact-avatars.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
@@ -50,7 +52,7 @@ const pages = {
   'social-profile': renderSocialProfile,
 };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, social, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, social, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
@@ -84,9 +86,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     groupEditId: '', groupDraft: {}, deletion: null,
     groupMembersOpen: false,
     socialAuthorId: '', socialPastOpen: false, socialLimit: 30, socialScroll: 0,
+    socialCommentOpen: new Set(), socialDrafts: new Map(),
     drawers: { connection: true, appearance: false, content: false },
     manual: false, apiDraft: {}, models: [], modelSearch: '', modelsOpen: false,
-    attachment: '', attachmentDraft: {}, stickerPack: 'blob', photo: null,
+    attachment: '', attachmentDraft: {}, stickerPack: 'emoji', photo: null,
     calendarOffset: 0, calendarDay: null,
   };
   const busy = new Set();
@@ -94,7 +97,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const clock = createPhoneClock({ root, element, readTime });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
-  let particles = null, avatarCropper = null;
+  let particles = null, avatarCropper = null, lockImageNode = null, lockImageSrc = '';
 
   function syncParticles() {
     const chatStage = root.querySelector('.chat-stage');
@@ -110,13 +113,30 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   // 导航、草稿、事件与服务调用由控制器统一持有，页面只负责展示。
   function render({ bottom = false } = {}) {
     if (!element.isConnected) return;
+    const currentLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
+    if (currentLockImage) {
+      lockImageNode = currentLockImage;
+      lockImageSrc = currentLockImage.getAttribute('src') || '';
+    }
+    const previousDraft = root.querySelector('#sms-draft');
+    const selection = previousDraft && { text: previousDraft.value, start: previousDraft.selectionStart, end: previousDraft.selectionEnd };
+    const activeSocialComment = root.activeElement?.matches?.('.social-comment-form textarea') ? root.activeElement : null;
+    const socialSelection = activeSocialComment && {
+      postId: activeSocialComment.closest('.social-comment-form')?.dataset.socialCommentForm,
+      text: activeSocialComment.value,
+      start: activeSocialComment.selectionStart,
+      end: activeSocialComment.selectionEnd,
+    };
     const scrollTop = inChat() ? root.querySelector('.message-feed')?.scrollTop : undefined;
     const settingsScroll = root.querySelector('.view-settings')?.scrollTop;
     const socialScroll = ['social', 'social-profile'].includes(ui.view) ? root.querySelector(`.view-${ui.view}`)?.scrollTop : undefined;
-    const state = store.read();
+    let state = store.read();
     const enabled = control.isEnabled();
     element.dataset.enabled = String(enabled);
     if (!enabled) { ui.view = 'settings'; ui.photo = null; ui.attachment = ''; }
+    if (['inbox', 'chat', 'group-chat', 'group-profile', 'social', 'social-profile'].includes(ui.view)) {
+      state = { ...state, contacts: readContactAvatars(state.contacts, qqjBridgeProvider?.()) };
+    }
     const batch = readTimeline();
     if (ui.batch?.key !== batch.key) { ui.historyOpen = false; ui.visibleHistory = 60; }
     ui.batch = batch;
@@ -136,12 +156,30 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       conflict: ui.conflict, mode, conflictBusy: busy.has('conflict'),
       lockStyle: state.lockStyle,
     });
+    const nextLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
+    if (lockImageNode && nextLockImage && lockImageSrc === nextLockImage.getAttribute('src')) {
+      lockImageNode.alt = nextLockImage.alt;
+      lockImageNode.className = nextLockImage.className;
+      if (lockImageNode !== nextLockImage) nextLockImage.replaceWith(lockImageNode);
+    } else if (nextLockImage) {
+      lockImageNode = nextLockImage;
+      lockImageSrc = nextLockImage.getAttribute('src') || '';
+    }
     if (ui.conflict) {
       for (const child of surface.children) child.inert = !child.classList.contains('phone-dialog-backdrop');
       root.querySelector('[data-action="conflict-continue"]').focus({ preventScroll: true });
     }
     clock.refresh();
     resizeDraft();
+    const draft = root.querySelector('#sms-draft');
+    if (selection && draft?.value === selection.text) draft.setSelectionRange(selection.start, selection.end);
+    if (socialSelection) {
+      const textarea = root.querySelector(`[data-social-comment-form="${CSS.escape(socialSelection.postId)}"] textarea`);
+      if (textarea?.value === socialSelection.text) {
+        textarea.setSelectionRange(socialSelection.start, socialSelection.end);
+        textarea.focus({ preventScroll: true });
+      }
+    }
     chatScroll.attach();
     if (settingsScroll !== undefined && ui.view === 'settings') root.querySelector('.view-settings').scrollTop = settingsScroll;
     if (socialScroll !== undefined && ['social', 'social-profile'].includes(ui.view)) root.querySelector('.phone-main').scrollTop = socialScroll;
@@ -263,6 +301,20 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     root.querySelector('[data-action="models-menu"]')?.setAttribute('aria-expanded', 'false');
   }
   function dismissMenus(event) {
+    if (event) {
+      const path = event.composedPath();
+      for (const form of root.querySelectorAll('.social-comment-form')) {
+        const postId = form.dataset.socialCommentForm;
+        if (path.includes(form) || path.some(node => node.dataset?.action === 'social-comment-toggle' && node.dataset.socialPost === postId)) continue;
+        const input = form.querySelector('textarea');
+        if (root.activeElement === input) input.blur();
+        if (input.value.trim()) continue;
+        ui.socialCommentOpen.delete(postId);
+        ui.socialDrafts.delete(postId);
+        form.remove();
+        root.querySelector(`[data-action="social-comment-toggle"][data-social-post="${CSS.escape(postId)}"]`)?.setAttribute('aria-expanded', 'false');
+      }
+    }
     if (ui.attachment && event && !event.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.attachment-panel, .attachment-button'))) {
       ui.attachment = ''; root.querySelector('.attachment-panel')?.remove();
     }
@@ -332,6 +384,14 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       draft.background = button.dataset.chatBackground; render(); return;
     }
     if (button.dataset.calendarDay) { ui.calendarDay = Number(button.dataset.calendarDay); render(); return; }
+    if (button.dataset.inlineEmoji) {
+      const emoji = findBlobEmoji(button.dataset.inlineEmoji), draft = root.querySelector('#sms-draft');
+      if (emoji && draft && !draft.disabled) {
+        draft.setRangeText(emoji.emoji, draft.selectionStart, draft.selectionEnd, 'end');
+        input({ target: draft });
+      }
+      return;
+    }
     if (button.dataset.stickerPack) { ui.stickerPack = button.dataset.stickerPack; render(); return; }
     if (button.dataset.sticker) {
       const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
@@ -363,7 +423,33 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'unlock': showPage('desktop'); break;
       case 'system-home': showPage('desktop'); break;
       case 'system-back': goBack(); break;
-      case 'social-refresh': void perform('social', () => social.refresh()); break;
+      case 'social-like': {
+        const postId = button.dataset.socialPost;
+        void perform(`social-like:${postId}`, () => social.toggleLike(postId));
+        break;
+      }
+      case 'social-refresh': {
+        const previousIds = new Set((store.read().social?.posts || []).map(post => post.id));
+        void perform('social', () => social.refresh(), result => {
+          const currentIds = new Set((Array.isArray(result) ? result : store.read().social?.posts || []).map(post => post.id));
+          for (const postId of previousIds) {
+            if (!currentIds.has(postId)) {
+              ui.socialDrafts.delete(postId);
+              ui.socialCommentOpen.delete(postId);
+            }
+          }
+          onContextChange();
+        });
+        break;
+      }
+      case 'social-comment-toggle': {
+        const postId = button.dataset.socialPost;
+        if (ui.socialCommentOpen.has(postId)) ui.socialCommentOpen.delete(postId);
+        else ui.socialCommentOpen.add(postId);
+        render();
+        if (ui.socialCommentOpen.has(postId)) root.querySelector(`[data-social-comment-form="${CSS.escape(postId)}"] textarea`)?.focus({ preventScroll: true });
+        break;
+      }
       case 'social-author': {
         const authorId = button.dataset.socialAuthor;
         if (ui.view !== 'social-profile' || ui.socialAuthorId !== authorId) {
@@ -499,6 +585,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       ui.drafts.set(conversationId(), event.target.value);
       resizeDraft();
     }
+    const socialComment = event.target.closest('.social-comment-form');
+    if (socialComment && event.target.name === 'comment') ui.socialDrafts.set(socialComment.dataset.socialCommentForm, event.target.value);
     if (event.target.closest('.api-form') && event.target.name) ui.apiDraft[event.target.name] = event.target.value;
     if (event.target.id === 'model-search') {
       ui.modelSearch = event.target.value;
@@ -577,6 +665,15 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       const send = root.querySelector('[data-action="send"]');
       send?.click();
     }
+    if (event.target.matches('.social-comment-form')) {
+      const postId = event.target.dataset.socialCommentForm;
+      const text = (ui.socialDrafts.get(postId) || '').trim();
+      if (!text) return;
+      void perform(`social-comment:${postId}`, () => social.comment(postId, text), () => {
+        if ((ui.socialDrafts.get(postId) || '').trim() === text) ui.socialDrafts.delete(postId);
+        onContextChange();
+      });
+    }
     if (event.target.matches('.api-form')) void perform('api', () => apiSettings.saveManual({ ...ui.apiDraft }), () => { ui.apiDraft = {}; ui.manual = false; ui.feedback = { text: '连接已保存。' }; });
     if (event.target.matches('.profile-form')) {
       const draft = { ...ui.profileDraft }, kind = ui.editor, editId = ui.editId;
@@ -644,6 +741,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       particles?.dispose();
       chatScroll.dispose();
       windowControls.dispose();
+      lockImageNode = null;
+      lockImageSrc = '';
       doc.defaultView.removeEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
       doc.removeEventListener('pointerdown', dismissMenus, true);
       root.removeEventListener('keydown', keydown);

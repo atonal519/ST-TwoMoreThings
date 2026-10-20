@@ -136,7 +136,7 @@ if (new URLSearchParams(location.search).get('entry') === 'extension') {
   await import(new URL(`../${manifest.js}`, import.meta.url));
 } else {
   const { initialize } = await import('../index.js');
-  const app = initialize({ host, documentRef: document, qqjBridgeProvider: () => null });
+  const app = initialize({ host, documentRef: document, qqjBridgeProvider: () => h.qqjBridge || null });
   h.app = app;
   app.open();
 }

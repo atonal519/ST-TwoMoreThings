@@ -2,6 +2,7 @@ import { action, escape, icon, renderBilingual } from './shared.js';
 import { findSticker, stickerPacks, stickers } from '../stickers.js';
 import { displayName } from '../profiles.js';
 import { imageSource } from '../image-files.js';
+import { blobEmojis } from '../emojis.js';
 
 export function renderCardBody(message, generating = false) {
   if (message.type === 'sticker') {
@@ -53,15 +54,16 @@ export function renderAttachments(state, ui, busy, contact, isGroup) {
     </div>
   </section>`;
   if (ui.attachment === 'stickers') {
-    const pack = stickerPacks.find(item => item.id === ui.stickerPack) || stickerPacks[0];
-    const tabs = stickerPacks.map(item => `<button type="button" role="tab" aria-selected="${item.id === pack.id}" data-sticker-pack="${item.id}">${item.name}</button>`).join('');
-    const choices = stickers.filter(item => item.pack === pack.id).map(item => `<button type="button" data-sticker="${item.id}" aria-label="发送表情：${item.label}" ${busy.has(`send:${contact.id}`) ? 'disabled' : ''}>
+    const packs = [{ id: 'emoji', name: '小表情', credit: 'Google / C1710 · Apache 2.0' }, ...stickerPacks];
+    const pack = packs.find(item => item.id === ui.stickerPack) || packs[0], inline = pack.id === 'emoji';
+    const tabs = packs.map(item => `<button type="button" role="tab" aria-selected="${item.id === pack.id}" data-sticker-pack="${item.id}">${item.name}</button>`).join('');
+    const choices = (inline ? blobEmojis : stickers.filter(item => item.pack === pack.id)).map(item => `<button type="button" ${inline ? `data-inline-emoji="${item.code}"` : `data-sticker="${item.id}"`} aria-label="${inline ? '插入' : '发送'}表情：${item.label}" ${busy.has(`send:${contact.id}`) ? 'disabled' : ''}>
       <img src="${escape(item.src)}" alt="" loading="lazy" draggable="false">
     </button>`).join('');
     return `<section class="attachment-panel sticker-picker">
       ${heading}
       <div class="sticker-tabs" role="tablist" aria-label="表情包">${tabs}</div>
-      <div class="sticker-grid">${choices}</div>
+      <div class="sticker-grid ${inline ? 'emoji-grid' : ''}">${choices}</div>
       <small class="sticker-credit">${escape(pack.credit)}</small>
     </section>`;
   }

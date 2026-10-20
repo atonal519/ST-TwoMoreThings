@@ -4,7 +4,10 @@ import { latestAiFloor } from './time.js';
 import { readTimeline, currentMessages } from './timeline.js';
 import { contextMessage, messageText } from './content.js';
 import { stickerChoices } from './stickers.js';
+import { emojiChoices } from './emojis.js';
 import { createCalendarReader } from './calendar.js';
+import { getSocialAuthor, readSocialFeed } from './social.js';
+import { publicationLabel } from './social-time.js';
 
 function recentStory(messages) {
   const floor = latestAiFloor(messages)?.message;
@@ -12,6 +15,34 @@ function recentStory(messages) {
 }
 const phoneHistory = (state, id, batch) => currentMessages(state.conversations[id] || [], batch);
 const cardText = character => character ? `${character.name}\n${character.description}\n${character.personality}\n${character.scenario}`.slice(0, 10000) : '';
+
+// 卡口用于页面分组和正文回流；人物续聊仍需保留近期已经说定的事，不另存一份摘要。
+function recentPhoneHistory(state, id, skipBatchKey) {
+  const source = state.conversations[id] || [], history = [];
+  let characters = 0;
+  for (let index = source.length - 1; index >= 0 && history.length < 20; index--) {
+    const message = source[index];
+    if (skipBatchKey !== undefined && message.batch?.key === skipBatchKey) continue;
+    const content = contextMessage(message);
+    history.push({ ...content, time: [message.storyDate, message.timeLabel].filter(Boolean).join(' ') || message.batch?.label || '' });
+    characters += content.text.length + (content.translation?.length || 0);
+    if (characters >= 4000) break;
+  }
+  return history.reverse();
+}
+
+// 动态仍以当前已存首页为准；跨到下一楼不抹去人物已公开发布的内容。
+function publicSocialContext(state) {
+  return readSocialFeed(state).slice(0, 5).flatMap(post => {
+    const author = getSocialAuthor(state, post.authorId);
+    if (!author) return [];
+    return [{ author: author.nickname || author.name, text: post.text || '', publishedAt: publicationLabel(post),
+      ...(post.translation ? { translation: post.translation } : {}),
+      ...(post.image?.description ? { image: { description: post.image.description } } : {}),
+      comments: (post.comments || []).slice(-6).map(({ name, text, translation }) => ({ name, text, ...(translation ? { translation } : {}) })),
+    }];
+  });
+}
 
 function actorIds(people, bridge, snapshot) {
   const ids = new Map(people.filter(person => person.source?.kind === 'qqj').map(person => [person.id, person.source.entityId]));
@@ -38,6 +69,8 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       if (!contact) throw new Error('这个联系人已不存在，请返回短信重新选择。');
       const current = base();
       const history = phoneHistory(state, id, current.batch);
+      const previousMessages = recentPhoneHistory(state, id, current.batch.key);
+      const social = publicSocialContext(state);
       const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'));
       let related = '';
       const bridge = qqjBridgeProvider?.();
@@ -47,7 +80,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         const context = await bridge.readContext({ query, entityIds: [entityId], maxCharacters: 4000 });
         if (context?.status === 'ready') related = (context.actors || []).filter(x => x.entityId === entityId).map(x => [x.stateText, x.memoryText].filter(Boolean).join('\n')).join('\n').slice(0, 4000);
       }
-      return { ...current, ...(calendarReference ? { calendar: calendarReference } : {}), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, history: history.map(contextMessage), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText)].join('\n') }) };
+      return { ...current, ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, previousMessages, history: history.map(contextMessage), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
     },
     async readForForum() {
       const current = base();
@@ -55,8 +88,8 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       return { clock: current.clock, setting: current.character, storyBackground: current.story,
         worldbook: await target.readWorldInfo({ scanText: current.story.map(item => item.text).join('\n') }) };
     },
-    async readForSocial(authors) {
-      const current = base(), bridge = qqjBridgeProvider?.();
+    async readForSocial(authors, { includePrivateMessages = false } = {}) {
+      const current = base(), bridge = qqjBridgeProvider?.(), state = store.read();
       const contacts = authors.filter(person => person.kind !== 'npc');
       const ids = actorIds(contacts, bridge), entityIds = [...new Set(ids.values())];
       const scanText = [...current.story.map(item => item.text), ...authors.map(person => person.name || '')].join('\n');
@@ -68,6 +101,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       return { ...current, authors: authors.map(person => ({ id: person.id, kind: person.kind,
         name: person.name, nickname: person.nickname || '', description: person.description || '',
         personality: person.personality || '', expression: person.expression || '', language: person.language || '',
+        ...(includePrivateMessages && person.kind !== 'npc' ? { privateHistory: recentPhoneHistory(state, person.id) } : {}),
         related: actors.filter(actor => ids.has(person.id) && actor.entityId === ids.get(person.id))
           .map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n'),
       })), worldbook: await target.readWorldInfo({ scanText }) };
@@ -84,6 +118,8 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       if (!group) throw new Error('这个群聊已不存在，请返回短信重新选择。');
       const current = base();
       const history = phoneHistory(state, id, current.batch);
+      const previousMessages = recentPhoneHistory(state, id, current.batch.key);
+      const social = publicSocialContext(state);
       const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'));
       const members = group.memberIds.map(key => {
         const person = state.contacts.find(item => item.id === key);
@@ -99,7 +135,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       }
       const roster = members.map(({ source, ...person }) => ({ ...person, related: actors.filter(actor => ids.has(person.id) && actor.entityId === ids.get(person.id)).map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n') }));
       if (group.userIsMember) roster.push({ id: '@user', ...current.userProfile });
-      return { ...current, ...(calendarReference ? { calendar: calendarReference } : {}), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, history: history.map(contextMessage), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText)].join('\n') }) };
+      return { ...current, ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, previousMessages, history: history.map(contextMessage), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
     },
 
   };
@@ -108,10 +144,13 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
 // 主楼生成前按实际注入文字判定长度；短聊天直接带入，超限才调用摘要。
 export function createBackflowService({ target, store, modelClient, isEnabled = () => true }) {
   return {
-    async prepare() {
+    async prepare(type = 'normal') {
       const state = store.read();
       if (!isEnabled() || !state.injectEnabled) return '';
-      const batch = readTimeline(target.messages);
+      // 重生成事件发生时旧回答可能尚未移除；参考取自该回答之前的短信卡口。
+      const last = target.messages.at(-1);
+      const replacing = ['regenerate', 'swipe'].includes(type) && last && !last.is_user && !last.is_system && !['user', 'system'].includes(last.role);
+      const batch = readTimeline(target.messages, target.messages.length - Number(Boolean(replacing)));
       const conversations = [];
       for (const person of [...state.contacts, ...(state.groups || []).filter(group => group.userIsMember)]) {
         const messages = phoneHistory(state, person.id, batch);

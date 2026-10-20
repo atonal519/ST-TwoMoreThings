@@ -1,4 +1,4 @@
-import { action, avatar, empty, escape, icon, pageHeading } from './shared.js';
+import { action, avatar, empty, escape, icon, pageHeading, renderEmojiText } from './shared.js';
 import { displayName } from '../profiles.js';
 import { partitionHistory } from '../timeline.js';
 import { messageText } from '../content.js';
@@ -27,7 +27,7 @@ export function renderInbox(state, { ui, busy }) {
           <strong>${escape(group.name)}</strong>
           <span class="contact-time">${escape(last?.timeLabel || '')}</span>
         </span>
-        <span class="contact-preview">${escape(preview)}</span>
+        <span class="contact-preview">${renderEmojiText(preview)}</span>
       </span>
       ${icon('next')}
     </button>`;
@@ -41,7 +41,7 @@ export function renderInbox(state, { ui, busy }) {
           <strong>${escape(displayName(contact))}</strong>
           <span class="contact-time">${escape(last?.timeLabel || '')}</span>
         </span>
-        ${last ? `<span class="contact-preview">${escape(messageText(last))}</span>` : ''}
+        ${last ? `<span class="contact-preview">${renderEmojiText(messageText(last))}</span>` : ''}
       </span>
       ${icon('next')}
     </button>`;
