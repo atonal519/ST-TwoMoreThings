@@ -89,7 +89,7 @@ test('an uncompleted checkbox is not story evidence: analysis receives the inter
   const { h, target, store } = setup([
     { is_user: false, mes: '约好吃饭。<!-- SDC-end | date=2026-10-18 | time=10:00 -->' },
     { is_user: true, mes: '吃完离开餐厅。' },
-    { is_user: false, mes: '午饭已经吃完，餐费结清。<!-- SDC-end | date=2026-10-18 | time=13:00 -->' },
+    { is_user: false, mes: '[[草稿<content>未吃饭</content>]]<content>午饭已经吃完，餐费结清。</content><!-- SDC-end | date=2026-10-18 | time=13:00 -->' },
     { is_user: false, mes: '晚上聊书。<!-- SDC-end | date=2026-10-18 | time=19:00 -->' },
   ]);
   target.metadata.pocketPhone.todos = [
@@ -99,12 +99,13 @@ test('an uncompleted checkbox is not story evidence: analysis receives the inter
   ];
   await store.appendMessage('lin', { id: 'long', role: 'user', text: '补充材料'.repeat(1000), batch: readTimeline(target.messages) });
   const before = structuredClone(store.read()), saves = h.metadataSaves, requests = [];
-  const result = await createBackflowService({ target, store, modelClient: client(requests, '今天午饭已经结束；另有明日与周予的午饭约定，进展未明。') }).prepare();
+  const result = await createBackflowService({ target, store, wrapperSettingsProvider: () => ({ keepTags: 'content', extraTags: '[[...]]' }), modelClient: client(requests, '今天午饭已经结束；另有明日与周予的午饭约定，进展未明。') }).prepare();
   const input = JSON.parse(requests[0].messages[0].content);
   assert.equal(input.todos.length, 2);
   assert.equal(input.todos[0].status, 'open');
   assert.notEqual(input.todos[0].startAt, input.todos[1].startAt);
   assert.ok(JSON.stringify(input.storyProgress).includes('午饭已经吃完'));
+  assert.ok(!JSON.stringify(input.storyProgress).includes('草稿'));
   assert.equal(input.storyProgress.complete, true);
   assert.ok(!JSON.stringify(input).includes('未确认秘密'));
   assert.ok(result.includes('今天午饭已经结束'));

@@ -9,11 +9,11 @@ import { createForumService } from '../src/forum.js';
 for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh saves separate translations and reads them without another request`, async () => {
   const main = [{ is_user: false, mes: '广场开放周末集市。<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }];
   const translated = {
-    title: 'Weekend market', titleTranslation: '周末集市', author: 'Market visitor',
-    content: 'The market opens on Saturday.', contentTranslation: '集市周六开放。', category: '城市生活',
-    comments: [{ author: 'Neighbor', text: 'See you there.', translation: '到时见。' }],
+    title: 'Marché du week-end', titleTranslation: '周末集市', author: 'Une passante',
+    content: 'Le marché ouvre samedi.', contentTranslation: '集市周六开放。', category: '城市生活',
+    comments: [{ author: 'Voisine', text: 'À bientôt.', translation: '到时见。' }],
   };
-  const chinese = { title: '街角书店', author: '读者', content: '书店周末开放阅读区。', comments: [{ author: '路人', text: '好耶！' }] };
+  const chinese = { title: '街角书店', author: '读者', content: '书店周末开放阅读区。', comments: [{ author: '路人', text: '好耶！' }, { author: '邻居', text: '👍' }] };
   const h = createHarness({ hostKind, messages: main, metadata: { foreign: { keep: true } },
     settings: { qianqianjie: { apiUrl: 'https://example.invalid', apiKey: 'mock-key', apiModel: 'mock-model' } },
     completion: { choices: [{ message: { content: JSON.stringify({ posts: [translated, chinese] }) } }] },
@@ -33,7 +33,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
   const sent = JSON.parse(h.modelRequests[0].body.messages.find(message => message.role === 'user').content);
   assert.deepEqual(Object.keys(sent).sort(), ['clock', 'setting', 'storyBackground', 'worldbook']);
   assert.equal(sent.clock.time, '18:00');
-  assert.equal(sent.storyBackground[0].text, main[0].mes);
+  assert.equal(sent.storyBackground[0].text, '广场开放周末集市。');
   for (const privateText of ['私有用户姓名', '私有用户网名', '不应发给论坛的私聊']) assert.equal(JSON.stringify(sent).includes(privateText), false);
   const posts = store.read().forum.posts;
   assert.equal(posts.length, 2);
@@ -43,6 +43,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
   assert.equal('titleTranslation' in posts[1], false);
   assert.equal('contentTranslation' in posts[1], false);
   assert.equal('translation' in posts[1].comments[0], false);
+  assert.equal('translation' in posts[1].comments[1], false);
   assert.deepEqual(createPhoneStore({ target }).read().forum.posts, posts, 'reopening uses the persisted bilingual fields');
   assert.deepEqual(service.getPost(id), posts[0]);
   assert.equal(h.modelRequests.length, 1, 'reading original and translation needs no translation request');

@@ -7,7 +7,7 @@ import { readTimeline } from '../src/timeline.js';
 async function setup(reply, hostKind = 'native') {
   const h = createHarness({ hostKind, messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026年10月4日 | weekday=周日 | time=22:15 -->' }], settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test', apiModel: 'm' } }, completion: { choices: [{ message: { content: JSON.stringify(reply) } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
-  await store.upsertContacts([{ id: 'lin', name: '林舟', expression: '短句不用句号' }, { id: 'zhou', name: '周予', expression: '熟人间调侃' }, { id: 'xu', name: '许知' }]);
+  await store.upsertContacts([{ id: 'lin', name: '林舟', expression: '短句不用句号' }, { id: 'zhou', name: '周予', expression: '熟人间调侃', language: '日语，附中文译文' }, { id: 'xu', name: '许知' }]);
   assert.equal(typeof store.saveGroup, 'function', '应能保存当前聊天内的群聊');
   const { createGroupService } = await import('../src/groups.js');
   const { createContextReader } = await import('../src/context.js');
@@ -18,7 +18,7 @@ async function setup(reply, hostKind = 'native') {
 }
 
 for (const kind of ['native', 'luker']) test(`${kind}: observer group generates several speakers in one request and preserves identity/time`, async () => {
-  const { h, store, service } = await setup({ anchor: { memberIds: ['lin', 'zhou', 'xu'], speakerIds: ['lin', 'zhou'] }, messages: [{ speakerId: 'lin', text: '周予，你到哪了？' }, { speakerId: 'zhou', text: 'On my way.', translation: '在路上。' }, { speakerId: 'lin', text: '好' }] }, kind);
+  const { h, store, service } = await setup({ anchor: { memberIds: ['lin', 'zhou', 'xu'], speakerIds: ['lin', 'zhou'] }, messages: [{ speakerId: 'lin', text: '周予，你到哪了？' }, { speakerId: 'zhou', text: '向かってる。', translation: '在路上。' }, { speakerId: 'lin', text: '👌' }] }, kind);
   const group = await store.saveGroup('', { name: '晚饭', avatar: 'https://example.invalid/group.png', memberIds: ['lin', 'zhou', 'xu'], userIsMember: false });
   assert.equal(store.read().groups[0].avatar, 'https://example.invalid/group.png');
   await assert.rejects(service.send(group.id, '旁观者不能代发'), /不在这个群/);
@@ -28,13 +28,18 @@ for (const kind of ['native', 'luker']) test(`${kind}: observer group generates 
   assert.equal(h.metadataSaves, before + 1);
   const history = store.read().conversations[group.id];
   assert.deepEqual(history.map(x => x.speakerId), ['lin', 'zhou', 'lin']);
+  assert.deepEqual(history.map(x => x.text), ['周予，你到哪了？', '向かってる。', '👌']);
   assert.equal(history[1].translation, '在路上。');
+  assert.equal('translation' in history[0], false);
+  assert.equal('translation' in history[2], false);
   assert.equal(history[0].timeLabel, '22:15');
   assert.ok(Date.parse(history[0].createdAt));
   const input = JSON.parse(h.modelRequests[0].body.messages[1].content);
   assert.equal(JSON.stringify(input).includes('https://example.invalid/group.png'), false, '群头像仅用于显示，不送模型');
   assert.deepEqual(input.group.members.map(x => x.id), ['lin', 'zhou', 'xu']);
   assert.equal(input.group.members[0].expression, '短句不用句号');
+  assert.equal(input.group.members[1].language, '日语，附中文译文');
+  assert.equal(store.read().contacts.find(person => person.id === 'zhou').language, '日语，附中文译文');
   await store.deleteMessage(group.id, history[0].id);
   assert.equal(store.read().conversations[group.id].length, 2);
   await store.clearConversation(group.id, readTimeline(h.context.chat));

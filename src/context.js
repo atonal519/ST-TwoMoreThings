@@ -1,3 +1,4 @@
+import { sanitizeStoryBody } from './shared-body-wrappers.js';
 import { parseJsonObject } from './api.js';
 import { SUMMARY_PROMPT } from './prompts.js';
 import { latestAiFloor } from './time.js';
@@ -11,9 +12,10 @@ import { publicationLabel } from './social-time.js';
 import { readTodos } from './todos.js';
 import { replyContext } from './replies.js';
 
-function recentStory(messages, beforeIndex = messages.length) {
+function recentStory(messages, beforeIndex = messages.length, wrappers = {}) {
   const floor = latestAiFloor(messages, beforeIndex)?.message;
-  return floor ? [{ speaker: floor.name || '角色', text: floor.mes }] : [];
+  const text = floor ? sanitizeStoryBody(floor.mes, wrappers) : '';
+  return text ? [{ speaker: floor.name || '角色', text }] : [];
 }
 const phoneHistory = (state, id, batch) => currentMessages(state.conversations[id] || [], batch);
 const cardText = character => character ? `${character.name}\n${character.description}\n${character.personality}\n${character.scenario}`.slice(0, 10000) : '';
@@ -24,18 +26,21 @@ function batchFloor(batch) {
 }
 
 // 只从实际来源楼之后取正文证据；截断或缺少来源锚点时明确告知模型证据不全。
-function storyProgress(messages, batches, beforeIndex = messages.length) {
+function storyProgress(messages, batches, beforeIndex = messages.length, wrappers = {}) {
   const indexes = batches.map(batchFloor), known = indexes.filter(index => index !== null && index < beforeIndex);
   const anchored = batches.length > 0 && known.length === indexes.length;
   const start = anchored && known.length ? Math.min(...known) + 1 : 0;
-  let complete = anchored, remaining = 16000;
+  let complete = anchored, remaining = 16000, candidates = 0;
   const progress = [];
   for (let index = beforeIndex - 1; index >= start; index--) {
     const message = messages[index];
     if (message?.is_system || message?.role === 'system') continue;
-    const text = String(message?.mes ?? message?.content ?? '');
+    const raw = String(message?.mes ?? message?.content ?? '');
+    if (!raw) continue;
+    if (candidates >= 24 || !remaining) { complete = false; break; }
+    candidates += 1;
+    const text = sanitizeStoryBody(raw, wrappers);
     if (!text) continue;
-    if (progress.length >= 24 || !remaining) { complete = false; break; }
     const clipped = text.length > remaining;
     progress.push({ speaker: message.name || (message.is_user || message.role === 'user' ? '用户' : '角色'), role: message.is_user || message.role === 'user' ? 'user' : 'assistant', text: clipped ? text.slice(-remaining) : text });
     remaining -= Math.min(text.length, remaining);
@@ -99,12 +104,12 @@ function actorIds(people, bridge, snapshot) {
   return ids;
 }
 
-export function createContextReader({ target, store, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader() }) {
+export function createContextReader({ target, store, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), wrapperSettingsProvider = () => ({}) }) {
   const base = () => {
     const person = store.read().userProfile, batch = readTimeline(target.messages);
     return { character: cardText(target.character), user: person?.name || target.user,
       userProfile: { name: person?.name || target.user, nickname: person?.nickname || '' },
-      clock: batch.clock, batch, story: recentStory(target.messages) };
+      clock: batch.clock, batch, story: recentStory(target.messages, target.messages.length, wrapperSettingsProvider()) };
   };
   return {
     async readForContact(id) {
@@ -124,7 +129,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         const context = await bridge.readContext({ query, entityIds: [entityId], maxCharacters: 4000 });
         if (context?.status === 'ready') related = (context.actors || []).filter(x => x.entityId === entityId).map(x => [x.stateText, x.memoryText].filter(Boolean).join('\n')).join('\n').slice(0, 4000);
       }
-      return { ...current, todoPeople: [{ id: '@user', name: current.user }, { id, name: contact.name }], todos: todos.map(todo => todoReference(todo, state, current.user)), ...(todos.length || previousMessages.length ? { storyProgress: storyProgress(target.messages, [...previousMessages.map(message => message.sourceBatch), ...todos.map(todo => todo.sourceBatch)]) } : {}), ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, previousMessages, history: history.map(message => contextMessage(message, state.conversations[id] || [])), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
+      return { ...current, todoPeople: [{ id: '@user', name: current.user }, { id, name: contact.name }], todos: todos.map(todo => todoReference(todo, state, current.user)), ...(todos.length || previousMessages.length ? { storyProgress: storyProgress(target.messages, [...previousMessages.map(message => message.sourceBatch), ...todos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, previousMessages, history: history.map(message => contextMessage(message, state.conversations[id] || [])), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
     },
     async readForForum() {
       const current = base();
@@ -144,7 +149,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       }
       const privateHistories = new Map(includePrivateMessages ? contacts.map(person => [person.id, recentPhoneHistory(state, person.id)]) : []);
       const privateTodos = includePrivateMessages ? relevantTodos(state, contacts.map(person => person.id)) : [];
-      return { ...current, ...(includePrivateMessages && (privateTodos.length || [...privateHistories.values()].some(history => history.length)) ? { storyProgress: storyProgress(target.messages, [...[...privateHistories.values()].flatMap(history => history.map(message => message.sourceBatch)), ...privateTodos.map(todo => todo.sourceBatch)]) } : {}), authors: authors.map(person => {
+      return { ...current, ...(includePrivateMessages && (privateTodos.length || [...privateHistories.values()].some(history => history.length)) ? { storyProgress: storyProgress(target.messages, [...[...privateHistories.values()].flatMap(history => history.map(message => message.sourceBatch)), ...privateTodos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), authors: authors.map(person => {
         const todos = includePrivateMessages && person.kind !== 'npc' ? relevantTodos(state, [person.id]) : [];
         return { id: person.id, kind: person.kind,
         name: person.name, nickname: person.nickname || '', description: person.description || '',
@@ -195,14 +200,14 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         return messages.length ? [{ contactId: person.id, knownToIds: ['@user', person.id], messages }] : [];
       });
       const evidence = [...previousMessages, ...privateHistories.flatMap(thread => thread.messages)].map(message => message.sourceBatch);
-      return { ...current, todoPeople: roster.map(({ id, name }) => ({ id, name })), todos: todos.map(todo => todoReference(todo, state, current.user)), privateHistories, ...(todos.length || evidence.length ? { storyProgress: storyProgress(target.messages, [...evidence, ...todos.map(todo => todo.sourceBatch)]) } : {}), ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, previousMessages, history: history.map(message => contextMessage(message, state.conversations[id] || [])), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
+      return { ...current, todoPeople: roster.map(({ id, name }) => ({ id, name })), todos: todos.map(todo => todoReference(todo, state, current.user)), privateHistories, ...(todos.length || evidence.length ? { storyProgress: storyProgress(target.messages, [...evidence, ...todos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, previousMessages, history: history.map(message => contextMessage(message, state.conversations[id] || [])), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
     },
 
   };
 }
 
 // 短材料由主楼本轮判断采用；长材料沿用一次摘要并核对进展，不另加分析请求。
-export function createBackflowService({ target, store, modelClient, isEnabled = () => true }) {
+export function createBackflowService({ target, store, modelClient, isEnabled = () => true, wrapperSettingsProvider = () => ({}) }) {
   return {
     async prepare(type = 'normal') {
       const state = store.read();
@@ -251,8 +256,8 @@ export function createBackflowService({ target, store, modelClient, isEnabled = 
       const maxCharacters = 100;
       const reply = await modelClient.complete({ system: SUMMARY_PROMPT, messages: [{ role: 'user', content: JSON.stringify({
         time: batch.label, conversations, todos: todos.map(todo => todoReference(todo, state, target.user)),
-        story: recentStory(target.messages, beforeIndex),
-        storyProgress: storyProgress(target.messages, [...conversations.map(() => batch), ...todos.map(todo => todo.sourceBatch)], beforeIndex), maxCharacters,
+        story: recentStory(target.messages, beforeIndex, wrapperSettingsProvider()),
+        storyProgress: storyProgress(target.messages, [...conversations.map(() => batch), ...todos.map(todo => todo.sourceBatch)], beforeIndex, wrapperSettingsProvider()), maxCharacters,
       }) }], maxTokens: 400 });
       const answer = parseJsonObject(reply);
       const value = answer.summary ?? answer.reference;

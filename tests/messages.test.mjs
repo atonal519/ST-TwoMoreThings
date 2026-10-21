@@ -31,11 +31,21 @@ test('send and continue are separate and do not write any main floor', async () 
   assert.equal(h.persistedMetadata.pocketPhone.conversations.lin.length, 3);
 });
 
-test('continue works without a new user message and saves several bubbles once', async () => {
-  const { h, store, service } = await serviceHarness({ completion: { choices: [{ message: { content: '{"messages":[{"text":"在忙吗？"},{"text":"想和你说件事。"}]}' } }] } });
+test('continue saves originals and optional translations for several bubbles in one request', async () => {
+  const { h, target, store, service } = await serviceHarness({ completion: { choices: [{ message: { content: '{"messages":[{"text":"在忙吗？"},{"text":"少し話したいことがある。","translation":"想和你说件事。"},{"text":"?"}]}' } }] } });
+  await store.upsertContacts([{ id: 'lin', name: '林舟', language: '日语，附中文译文' }]);
   const before = h.metadataSaves;
   await service.continueChat('lin');
-  assert.deepEqual(store.read().conversations.lin.map(x => x.role), ['assistant', 'assistant']);
+  const messages = store.read().conversations.lin;
+  assert.deepEqual(messages.map(({ role, text, translation }) => ({ role, text, translation })), [
+    { role: 'assistant', text: '在忙吗？', translation: undefined },
+    { role: 'assistant', text: '少し話したいことがある。', translation: '想和你说件事。' },
+    { role: 'assistant', text: '?', translation: undefined },
+  ]);
+  assert.deepEqual(createPhoneStore({ target }).read().conversations.lin, messages);
+  assert.equal(store.read().contacts[0].language, '日语，附中文译文');
+  const input = JSON.parse(h.modelRequests[0].body.messages.find(message => message.role === 'user').content);
+  assert.equal(input.contact.language, '日语，附中文译文');
   assert.equal(h.metadataSaves, before + 1);
   assert.equal(h.modelRequests.length, 1);
 });

@@ -4,6 +4,51 @@ import { createHarness } from './harness.mjs';
 import { createPhoneStore } from '../src/store.js';
 import { createContextReader, createBackflowService } from '../src/context.js';
 
+test('剧情正文副本共用包裹规则，短信自身文本和原始时间楼保持原样', async () => {
+  const raw = '[[<content>草稿</content>]]<content>正式正文</content><!-- SDC-end | date=2026-10-18 | time=15:30 -->';
+  const h = createHarness({ messages: [{ is_user: false, mes: raw }], metadata: { pocketPhone: {
+    contacts: [{ id: 'lin', name: '林舟' }], groups: [], conversations: { lin: [{ id: 'sms', role: 'assistant', text: '[DRAFT]短信自身文字[/DRAFT]', batch: { key: '[-1,"2026-10-18","15:30"]' } }] },
+  } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  const reader = createContextReader({ target, store, qqjBridgeProvider: () => null, wrapperSettingsProvider: () => ({ keepTags: 'content', extraTags: '[[...]]' }) });
+  const context = await reader.readForContact('lin');
+  assert.equal(context.story[0].text, '正式正文');
+  assert.equal(context.storyProgress.messages[0].text, '正式正文');
+  assert.match(JSON.stringify(context.previousMessages), /短信自身文字/);
+  assert.equal(target.messages[0].mes, raw);
+  assert.match(context.batch.key, /2026-10-18/);
+});
+
+test('进展范围只考察原24条候选，清空不回找旧楼且净文字计量', async () => {
+  const messages = [{ is_user: false, mes: '<content>不应回找的旧楼</content>' },
+    ...Array.from({ length: 24 }, () => ({ is_user: false, mes: '[[草稿]]' }))];
+  messages.at(-1).mes += '<!-- SDC-end | date=2026-10-18 | time=15:30 -->';
+  const h = createHarness({ messages, metadata: { pocketPhone: { contacts: [{ id: 'lin', name: '林舟' }], groups: [], conversations: { lin: [{ id: 'sms', role: 'assistant', text: '约定', batch: { key: '[-1,"2026-10-18","15:30"]' } }] } } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  const reader = createContextReader({ target, store, qqjBridgeProvider: () => null, wrapperSettingsProvider: () => ({ keepTags: 'content', extraTags: '[[...]]' }) });
+  const result = await reader.readForContact('lin');
+  assert.deepEqual(result.storyProgress.messages, []);
+  assert.equal(result.storyProgress.complete, false);
+});
+
+test('进展16000字预算计算净正文，保留来源时间且后续读取新共享值', async () => {
+  const messages = [
+    { is_user: false, mes: `[[${'草'.repeat(20000)}]]<content>${'甲'.repeat(9000)}</content>` },
+    { is_user: false, mes: `<content>${'乙'.repeat(9000)}</content><!-- QQJ-end | date=2026-10-18 | time=15:30 -->` },
+  ];
+  const h = createHarness({ messages, metadata: { pocketPhone: { contacts: [{ id: 'lin', name: '林舟' }], groups: [], conversations: { lin: [{ id: 'sms', role: 'assistant', text: '约定', batch: { key: '[-1,"2026-10-18","15:30"]' } }] } } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  let wrappers = { keepTags: 'content', extraTags: '[[...]]' };
+  const reader = createContextReader({ target, store, qqjBridgeProvider: () => null, wrapperSettingsProvider: () => wrappers });
+  const result = await reader.readForContact('lin');
+  assert.deepEqual(result.storyProgress.messages.map(row => row.text), ['甲'.repeat(7000), '乙'.repeat(9000)]);
+  assert.equal(result.storyProgress.complete, false);
+  assert.equal(result.clock.time, '15:30');
+  wrappers = { keepTags: '', extraTags: '' };
+  assert.deepEqual((await reader.readForForum()).storyBackground, []);
+  assert.deepEqual(target.messages, messages);
+});
+
 test('SMS continuity retains recent prior batches and scopes proactive references to their own contact', async () => {
   const h = createHarness({ messages: [
     { is_user: false, mes: '午后休假。<!-- SDC-end | date=2026-10-18 | time=15:30 -->' },
@@ -81,10 +126,10 @@ test('forum receives one story background and setting without user identity or p
   const before = structuredClone(target.metadata), saves = h.metadataSaves;
   const context = await reader.readForForum();
   assert.deepEqual(Object.keys(context).sort(), ['clock', 'setting', 'storyBackground', 'worldbook']);
-  assert.deepEqual(context.storyBackground, [{ speaker: '叙述', text: latest }]);
+  assert.deepEqual(context.storyBackground, [{ speaker: '叙述', text: '周予经过广场。' }]);
   assert.ok(context.setting.includes(target.character.description));
   assert.equal(context.clock.time, '18:00');
-  assert.deepEqual(scans, [{ scanText: latest }], 'worldbook activation still uses only the latest AI floor');
+  assert.deepEqual(scans, [{ scanText: '周予经过广场。' }], 'worldbook activation uses the actual latest AI narrative copy');
   const serialized = JSON.stringify(context);
   for (const privateText of ['用户私有姓名', '用户私有网名', '短信私有内容', '随后用户的私下发言', '上一楼']) assert.equal(serialized.includes(privateText), false);
   assert.deepEqual(target.metadata, before);

@@ -1,3 +1,4 @@
+import { getSharedBodyWrappers } from './shared-body-wrappers.js';
 import { createHostAdapter } from './host.js';
 import { createPhoneStore } from './store.js';
 import { createApiSettings, createModelClient } from './api.js';
@@ -23,6 +24,7 @@ import { createAppearanceSettings } from './appearance.js';
 export { createPhoneControl, createPhoneImageService };
 
 export function initialize({ host = createHostAdapter(), documentRef = document, qqjBridgeProvider, preset } = {}) {
+  const wrapperSettingsProvider = () => ({ ...getSharedBodyWrappers(host.readSettings()) });
   const initialState = preset ? stateFromPreset(preset) : undefined;
   const files = createImageFiles({ host });
   const imageProviders = createImageProviders({ host });
@@ -42,7 +44,7 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
     if (!control.isEnabled()) return;
     const store = makeStore(target);
     const modelClient = createModelClient({ host, sourceProvider: createApiSettings({ host }), onBusyChange });
-    try { host.setPrompt(await createBackflowService({ target, store, modelClient, isEnabled: control.isEnabled }).prepare(type)); }
+    try { host.setPrompt(await createBackflowService({ target, store, modelClient, isEnabled: control.isEnabled, wrapperSettingsProvider }).prepare(type)); }
     catch (error) { host.reportError(`手机参考准备失败，本次正文未带入手机消息。${error.message || '请检查手机生成连接后重试。'}`); }
   });
   const unsubscribeTime = host.onStoryChanged(() => phone?.refreshTime());
@@ -58,7 +60,7 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
     const client = createModelClient({ host, sourceProvider: apiSettings, onBusyChange });
     const modelClient = { async complete(request) { control.assertEnabled(); const answer = await client.complete(request); control.assertEnabled(); return answer; } };
     const calendar = createCalendarReader();
-    const contextReader = createContextReader({ target, store, qqjBridgeProvider, calendar });
+    const contextReader = createContextReader({ target, store, qqjBridgeProvider, calendar, wrapperSettingsProvider });
     currentPhone = mountPhone({ mount: documentRef.documentElement, store, qqjBridgeProvider, defaultUser: target.user, readTime: () => readPhoneTime(target.messages), readTimeline: () => readTimeline(target.messages),
       messages: createMessageService({ target, store, contextReader, modelClient }),
       groups: createGroupService({ target, store, contextReader, modelClient }),

@@ -47,6 +47,7 @@ test('feed chooses five friends, replaces the previous batch and its profile his
   assert.equal(first[0].batch.clock.time, '14:20', '生成卡口不随发布时间移动');
   assert.deepEqual([first[0].likes, first[0].reposts, first[0].commentsCount], [12, 2, 3]);
   assert.deepEqual(first[0].comments, [{ name: '路过的人', text: '下午好。' }]);
+  assert.equal('translation' in first[0], false);
   assert.deepEqual(first[0].image, { description: '窗边的一杯茶。' }, 'text generation cannot supply a generated image path');
   await store.updateSocial(social => ({ ...social, posts: [...social.posts, { id: 'old-history', authorId: first[0].authorId, text: '过去的日常。' }],
     npcs: [{ id: 'old-npc', name: '旧路人' }], expandedAuthors: [first[0].authorId] }));
@@ -82,14 +83,18 @@ test('four friends are supplemented by one stable NPC without inserting it in co
 test('foreign post and comment translations survive generation, storage and read-only queries', async () => {
   const { h, store, service } = await setup(1);
   h.completion = { choices: [{ message: { content: JSON.stringify({ posts: [{ authorId: 'friend-0',
-    text: 'The bakery opened early today.', translation: '今天面包店开门很早。',
-    comments: [{ name: '路人', text: 'The bread smells wonderful.', translation: '面包闻起来真香。' }],
+    text: '今日はパン屋が早く開いた。', translation: '今天面包店开门很早。',
+    comments: [{ name: '路人', text: 'Le pain sent bon.', translation: '面包闻起来真香。' }, { name: '邻居', text: '👍' }],
   }] }) } }] };
   await service.refresh();
   const post = service.readPosts({ authorId: 'friend-0' })[0];
+  assert.equal(post.text, '今日はパン屋が早く開いた。');
   assert.equal(post.translation, '今天面包店开门很早。');
+  assert.equal(post.comments[0].text, 'Le pain sent bon.');
   assert.equal(post.comments[0].translation, '面包闻起来真香。');
+  assert.deepEqual(post.comments[1], { name: '邻居', text: '👍' });
   assert.deepEqual(store.read().social.posts[0], post);
+  assert.equal(h.modelRequests.length, 1);
 });
 
 test('explicit author refresh appends posts without changing the home feed and can be requested again', async () => {
@@ -297,7 +302,7 @@ test('comment uses one model call after publishing the user comment, then saves 
   h.completion = { choices: [{ message: { content: JSON.stringify({
     comments: [
       { authorId: post.authorId, text: '看到啦。' },
-      { authorId: 'friend-0', text: 'I want to go too.', translation: '我也想去。' },
+      { authorId: 'friend-0', text: '私も行きたい。', translation: '我也想去。' },
       { authorId: 'invented', text: '不应保存。' },
     ],
     proactiveMessages: [{ contactId: post.authorId, messages: [{ text: '你刚才的留言我看到了。' }] }],
@@ -311,10 +316,11 @@ test('comment uses one model call after publishing the user comment, then saves 
   assert.deepEqual(saved.comments.slice(-3).map(({ id, createdAt, replyToId, read, ...comment }) => comment), [
     { role: 'user', name: '我', text: '我也喜欢这里。' },
     { name: '昵称1', text: '看到啦。', authorId: 'friend-1' },
-    { name: '昵称0', text: 'I want to go too.', translation: '我也想去。', authorId: 'friend-0' },
+    { name: '昵称0', text: '私も行きたい。', translation: '我也想去。', authorId: 'friend-0' },
   ]);
   assert.equal(store.read().conversations[post.authorId].length, 1);
   assert.equal(store.read().conversations[post.authorId][0].read, false);
+  assert.equal('translation' in store.read().conversations[post.authorId][0], false);
   assert.equal(result.id, post.id);
   const userComment = saved.comments.at(-3);
   assert.ok(userComment.id);
@@ -408,11 +414,13 @@ test('feed accepts proactive text only once and rejects a contact not present in
   const { h, store, service } = await setup(2);
   h.completion = { choices: [{ message: { content: JSON.stringify({ posts: [{ authorId: 'friend-0', text: '新动态。' }], proactiveMessages: [
     { contactId: 'friend-1', messages: [{ text: '不应因为未出现在动态中而发送。' }] },
-    { contactId: 'friend-0', messages: [{ text: '这条短信应保存。' }] },
+    { contactId: 'friend-0', messages: [{ text: 'あとで写真を送るね。', translation: '晚点把照片发给你。' }] },
   ] }) } }] };
   await service.refresh();
   assert.equal(h.modelRequests.length, 1);
   assert.equal(store.read().conversations['friend-0'].length, 1);
+  assert.equal(store.read().conversations['friend-0'][0].text, 'あとで写真を送るね。');
+  assert.equal(store.read().conversations['friend-0'][0].translation, '晚点把照片发给你。');
   assert.equal(store.read().conversations['friend-1'], undefined);
   h.saveFailure = new Error('save failed');
   await assert.rejects(service.refresh());
