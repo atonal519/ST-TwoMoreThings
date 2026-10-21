@@ -36,3 +36,24 @@ test('reports a real save failure without presenting the unpersisted message as 
   assert.equal(store.read().conversations.lin, undefined);
   assert.equal(h.context.chatMetadata.foreign, 'keep');
 });
+
+test('incoming message notices refer only to the messages this operation actually saved', async () => {
+  const h = createHarness({ metadata: { pocketPhone: { contacts: [{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }], conversations: {}, forum: { posts: [] } } } });
+  const notices = [];
+  const store = createPhoneStore({ target: h.host.captureChat(), onIncomingMessage: id => {
+    assert.ok(h.persistedMetadata.pocketPhone.conversations[id].some(message => message.role === 'assistant'), 'notice follows successful persistence');
+    notices.push(id);
+  } });
+  await store.appendMessage('lin', { id: 'sent', role: 'user', text: '我先留言。' });
+  assert.deepEqual(notices, []);
+  await Promise.all([
+    store.appendMessages('lin', [{ id: 'reply-1', role: 'assistant', text: '来了。' }, { id: 'reply-2', role: 'assistant', text: '晚点见。' }]),
+    store.updateSocial(social => social, { incomingMessages: [{ contactId: 'zhou', messages: [{ id: 'reply-3', role: 'assistant', text: '我也在。' }] }] }),
+  ]);
+  assert.deepEqual(notices, ['lin', 'zhou']);
+  await store.updateSocial(social => ({ ...social, feedIds: [] }));
+  assert.deepEqual(notices, ['lin', 'zhou'], 'a separate social save never repeats another task’s SMS notice');
+  h.saveFailure = new Error('保存失败');
+  await assert.rejects(store.appendMessage('lin', { id: 'failed', role: 'assistant', text: '没存成。' }));
+  assert.deepEqual(notices, ['lin', 'zhou']);
+});

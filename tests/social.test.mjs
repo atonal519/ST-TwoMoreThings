@@ -18,7 +18,7 @@ async function setup(count = 5, bridge = null) {
   })));
   const contextReader = createContextReader({ target: h.host.captureChat(), store, qqjBridgeProvider: () => bridge });
   const modelClient = createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) });
-  const create = () => createSocialService({ store, contextReader, modelClient, random: () => 0 });
+  const create = (options = {}) => createSocialService({ store, contextReader, modelClient, random: () => 0, ...options });
   h.completion = (_path, init) => {
     const input = JSON.parse(JSON.parse(init.body).messages[1].content);
     return { choices: [{ message: { content: JSON.stringify({
@@ -288,7 +288,7 @@ test('social context scopes selected friends private SMS for proactive replies a
   assert.equal(input.authors.filter(author => author.id !== 'friend-0').some(author => JSON.stringify(author).includes('不应进入动态的私信')), false);
 });
 
-test('comment uses one model call, saves the user comment and identified replies, preserves virtual count, and can atomically add unread SMS', async () => {
+test('comment uses one model call after publishing the user comment, then saves replies and unread SMS together', async () => {
   const { h, store, service } = await setup(2);
   await service.refresh();
   const post = store.read().social.posts[0];
@@ -305,10 +305,10 @@ test('comment uses one model call, saves the user comment and identified replies
   const before = h.metadataSaves;
   const result = await service.comment(post.id, '我也喜欢这里。');
   assert.equal(h.modelRequests.length, 2);
-  assert.equal(h.metadataSaves, before + 1);
+  assert.equal(h.metadataSaves, before + 2);
   const saved = store.read().social.posts.find(item => item.id === post.id);
   assert.equal(saved.commentsCount, 6, 'virtual count 3 plus user comment and two accepted replies');
-  assert.deepEqual(saved.comments.slice(-3), [
+  assert.deepEqual(saved.comments.slice(-3).map(({ id, createdAt, replyToId, read, ...comment }) => comment), [
     { role: 'user', name: '我', text: '我也喜欢这里。' },
     { name: '昵称1', text: '看到啦。', authorId: 'friend-1' },
     { name: '昵称0', text: 'I want to go too.', translation: '我也想去。', authorId: 'friend-0' },
@@ -316,19 +316,83 @@ test('comment uses one model call, saves the user comment and identified replies
   assert.equal(store.read().conversations[post.authorId].length, 1);
   assert.equal(store.read().conversations[post.authorId][0].read, false);
   assert.equal(result.id, post.id);
+  const userComment = saved.comments.at(-3);
+  assert.ok(userComment.id);
+  assert.ok(saved.comments.slice(-2).every(comment => comment.replyToId === userComment.id && comment.read === false));
 });
 
-test('comment keeps the original post and draft when model parsing or atomic save fails', async () => {
+test('comment is persisted and reported before the reply finishes, while later likes and drafts remain independent', async () => {
+  const { store, service, create } = await setup(1);
+  await service.refresh();
+  const post = store.read().social.posts[0];
+  let finish, start, posted;
+  const waiting = new Promise(resolve => { finish = resolve; });
+  const started = new Promise(resolve => { start = resolve; });
+  const slow = create({ modelClient: { complete: async () => { start(); return waiting; } } });
+  const pending = slow.comment(post.id, '先发布的留言', { onPosted: comment => { posted = comment; } });
+  try {
+    await started;
+    const saved = store.read().social.posts[0];
+    assert.equal(saved.comments.at(-1).text, '先发布的留言');
+    assert.equal(posted.id, saved.comments.at(-1).id);
+    await service.toggleLike(post.id);
+  } finally { finish(JSON.stringify({ comments: [{ authorId: post.authorId, text: '稍后到达的回复' }] })); await pending; }
+  const saved = store.read().social.posts[0];
+  assert.equal(saved.userLiked, true);
+  assert.equal(saved.comments.filter(comment => comment.text === '先发布的留言').length, 1);
+  assert.equal(saved.comments.at(-1).replyToId, posted.id);
+});
+
+test('model failure retains the published comment, while an initial save failure sends no model request', async () => {
   const { h, store, service } = await setup(1);
   await service.refresh();
-  const post = structuredClone(store.read().social.posts[0]);
+  const post = store.read().social.posts[0];
   h.completion = { choices: [{ message: { content: '这不是JSON' } }] };
-  await assert.rejects(service.comment(post.id, '保留草稿'), /JSON/);
-  assert.deepEqual(store.read().social.posts[0], post);
-  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [{ authorId: post.authorId, text: '回应' }] }) } }] };
+  await assert.rejects(service.comment(post.id, '已经发布'), /评论已发布/);
+  assert.equal(store.read().social.posts[0].comments.at(-1).text, '已经发布');
+  const saved = structuredClone(store.read().social.posts[0]), requests = h.modelRequests.length;
   h.saveFailure = new Error('save failed');
   await assert.rejects(service.comment(post.id, '保存失败草稿'));
-  assert.deepEqual(store.read().social.posts[0], post);
+  assert.deepEqual(store.read().social.posts[0], saved);
+  assert.equal(h.modelRequests.length, requests);
+});
+
+test('reply save failure retains the published comment and does not create unread replies or SMS', async () => {
+  const { h, store, service } = await setup(1);
+  await service.refresh();
+  const post = store.read().social.posts[0];
+  h.completion = () => {
+    h.saveFailure = new Error('save failed');
+    return { choices: [{ message: { content: JSON.stringify({ comments: [{ authorId: post.authorId, text: '回应' }], proactiveMessages: [{ contactId: post.authorId, messages: [{ text: '私信' }] }] }) } }] };
+  };
+  await assert.rejects(service.comment(post.id, '我已发送'), /评论已发布.*保存/);
+  assert.equal(store.read().social.posts[0].comments.at(-1).text, '我已发送');
+  assert.equal(store.read().conversations[post.authorId], undefined);
+  assert.equal(store.read().social.posts[0].comments.some(comment => comment.read === false), false);
+});
+
+test('only actual new comment replies create unread notifications and reading keeps their content', async () => {
+  const { unreadSocialReplies } = await import('../src/notifications.js');
+  const { h, store, service, create } = await setup(1);
+  await service.refresh();
+  const post = store.read().social.posts[0];
+  assert.deepEqual(unreadSocialReplies(store.read()), [], 'existing generated comments are not new reply notifications');
+  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [{ authorId: post.authorId, text: '看到你了。' }, { name: '路人甲', text: '欢迎！' }] }) } }] };
+  await service.comment(post.id, '我来啦');
+  const notices = unreadSocialReplies(store.read());
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].id, post.id);
+  assert.equal(notices[0].count, 2);
+  assert.equal(notices[0].preview, '欢迎！');
+  const before = store.read().social.posts[0].comments.map(comment => comment.text);
+  await service.markRepliesRead(post.id);
+  assert.deepEqual(unreadSocialReplies(store.read()), []);
+  assert.deepEqual(store.read().social.posts[0].comments.map(comment => comment.text), before);
+  await create({ isReadingPost: id => id === post.id }).comment(post.id, '我就在这里看着');
+  assert.deepEqual(unreadSocialReplies(store.read()), [], 'a reply already visible in its post is saved as read');
+  h.completion = { choices: [{ message: { content: '{"comments":[]}' } }] };
+  await service.comment(post.id, '也可以没有回应');
+  assert.deepEqual(unreadSocialReplies(store.read()), []);
 });
 
 test('historical author generation ignores optional proactive messages', async () => {
@@ -392,7 +456,7 @@ test('an identified existing commenter can send a private SMS without adding a p
   }) } }] };
   const before = h.metadataSaves, calls = h.modelRequests.length;
   await service.comment(post.id, '在哪儿？');
-  assert.equal(h.metadataSaves, before + 1);
+  assert.equal(h.metadataSaves, before + 2);
   assert.equal(h.modelRequests.length, calls + 1);
   assert.deepEqual(store.read().conversations['friend-0'].map(item => item.text), ['保留原短信。', '我私下把地址发给你。']);
   assert.equal(store.read().conversations['friend-0'].at(-1).read, false);

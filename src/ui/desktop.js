@@ -1,5 +1,6 @@
 import { homeImage } from './home.js';
 import { escape, icon } from './shared.js';
+import { pendingTodoCount } from '../todos.js';
 
 function renderCalendarWidget(calendar) {
   if (!calendar) return '';
@@ -29,13 +30,14 @@ function renderCalendarWidget(calendar) {
 
 export function renderDesktop(state, { apps, calendar }) {
   const image = homeImage(state);
+  const pending = pendingTodoCount(state);
   return `<img class="desktop-wallpaper ${image.custom ? 'is-custom' : ''}"
       src="${escape(image.src)}" alt="" draggable="false">
     <div class="desktop-content">
       ${renderCalendarWidget(calendar)}
       <nav class="desktop-apps" aria-label="桌面应用">
-        ${apps.map(({ id, label }) => `<button type="button" class="desktop-app" data-tab="${id}" aria-label="${label}">
-          <span class="desktop-app-icon desktop-app-${id}">${icon(id)}</span>
+        ${apps.map(({ id, label }) => `<button type="button" class="desktop-app" data-tab="${id}" aria-label="${id === 'todos' && pending ? `${label}，${pending} 项未完成` : label}">
+          <span class="desktop-app-icon desktop-app-${id}">${icon(id)}${id === 'todos' && pending ? `<b class="desktop-app-badge" aria-hidden="true">${pending > 99 ? '99+' : pending}</b>` : ''}</span>
           <span>${label}</span>
         </button>`).join('')}
       </nav>

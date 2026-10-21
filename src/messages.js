@@ -1,8 +1,9 @@
 import { parsePayload, parseJsonObject } from './api.js';
-import { CONTACTS_PROMPT, MESSAGES_PROMPT } from './prompts.js';
+import { CONTACTS_PROMPT, MESSAGES_PROMPT, TODO_SUGGESTIONS_PROMPT } from './prompts.js';
 import { readTimeline } from './timeline.js';
 import { normalizeContent, RICH_MESSAGES_PROMPT } from './content.js';
 import { CALENDAR_PROMPT } from './calendar.js';
+import { parseTodoCandidates } from './todos.js';
 
 export function record(role, text, clock, translation, batch) {
   const now = new Date();
@@ -43,17 +44,20 @@ export function createMessageService({ target, store, contextReader, modelClient
       const context = await contextReader.readForContact(id);
       const clock = context.clock;
       const reply = await modelClient.complete({
-        system: `${MESSAGES_PROMPT}\n${RICH_MESSAGES_PROMPT}${context.calendar ? `\n${CALENDAR_PROMPT}` : ''}`,
+        system: `${MESSAGES_PROMPT}\n${RICH_MESSAGES_PROMPT}\n${TODO_SUGGESTIONS_PROMPT}${context.calendar ? `\n${CALENDAR_PROMPT}` : ''}`,
         messages: [{ role: 'user', content: JSON.stringify(context) }],
       });
       const answer = parseJsonObject(reply);
       const actions = Array.isArray(answer.transferActions) ? answer.transferActions : [];
-      const messages = parsePayload(reply, 'messages', { allowEmpty: actions.length > 0 }).map(content => {
+      const indexedMessages = parsePayload(reply, 'messages', { allowEmpty: actions.length > 0, indexed: true }).map(content => {
+        if (!content) return null;
         if (content.type === 'transfer') content.transfer.recipientId = '@user';
         return { ...record('assistant', content.text, clock, content.translation, context.batch), ...content };
       });
+      const messages = indexedMessages.filter(Boolean);
+      const todoCandidates = parseTodoCandidates(answer.todoSuggestions ?? answer.todos, { conversationId: id, messages: indexedMessages, participantIds: (context.todoPeople || []).map(person => person.id) });
       for (const item of actions) await store.respondTransfer(id, item.transferId, item.status, id, context.batch);
-      if (messages.length) await store.appendMessages(id, messages);
+      if (messages.length) await store.appendMessages(id, messages, { todoCandidates });
       return messages;
     },
   };

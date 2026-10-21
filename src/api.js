@@ -126,7 +126,7 @@ function extract(value, kind) {
   return null;
 }
 
-export function parsePayload(text, kind, { allowEmpty = false } = {}) {
+export function parsePayload(text, kind, { allowEmpty = false, indexed = false } = {}) {
   const source = String(text).trim();
   const candidates = [source, ...[...source.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(x => x[1])];
   const first = source.indexOf('{');
@@ -139,9 +139,9 @@ export function parsePayload(text, kind, { allowEmpty = false } = {}) {
   }
   const valid = (items || []).flatMap(item => {
     if (kind === 'messages') {
-      if (item?.role && !['assistant', 'char'].includes(item.role)) return [];
+      if (item?.role && !['assistant', 'char'].includes(item.role)) return indexed ? [null] : [];
       const content = normalizeContent(item);
-      return content ? [content] : [];
+      return content ? [content] : indexed ? [null] : [];
     }
     if (!item || typeof item !== 'object') return [];
     if (kind === 'contacts') {
@@ -165,7 +165,7 @@ export function parsePayload(text, kind, { allowEmpty = false } = {}) {
       ...(titleTranslation ? { titleTranslation } : {}), ...(contentTranslation ? { contentTranslation } : {}),
     }];
   });
-  if (!valid.length && !allowEmpty) throw new Error(kind === 'contacts' ? '回答中没有可用的联系人，请检查角色卡和世界书后重新整理。' : kind === 'forum' ? '回答中没有可用的完整帖子，请重新刷新。' : '回答中没有可用的对方短信，请点继续重试。');
+  if (!valid.some(Boolean) && !allowEmpty) throw new Error(kind === 'contacts' ? '回答中没有可用的联系人，请检查角色卡和世界书后重新整理。' : kind === 'forum' ? '回答中没有可用的完整帖子，请重新刷新。' : '回答中没有可用的对方短信，请点继续重试。');
   return valid;
 }
 

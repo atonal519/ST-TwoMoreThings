@@ -49,9 +49,11 @@ try {
   await openApp(page, '设置');
   await page.getByRole('button',{name:'恢复默认',exact:true}).click();
   await page.waitForFunction(()=>previewHarness.metadata.pocketPhone.wallpapers.day==='');
+  const fabColor = await fab.evaluate(host => getComputedStyle(host.shadowRoot.querySelector('button')).color);
   await page.getByLabel('外观主题').selectOption('night');
   await page.waitForFunction(()=>document.querySelector('.pocket-phone').dataset.theme==='night');
-  assert.equal(await fab.getAttribute('data-theme-mode'),'night');
+  await page.waitForTimeout(350);
+  assert.equal(await fab.evaluate(host => getComputedStyle(host.shadowRoot.querySelector('button')).color),fabColor,'手机主题不改变悬浮球配色');
   await page.getByLabel('使用的配置').selectOption('manual');
   await page.getByLabel('接口地址',{exact:true}).fill('https://example.invalid/v1');
   await page.getByLabel('密钥',{exact:true}).fill('mock-only');

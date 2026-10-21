@@ -153,13 +153,13 @@ try {
       return { requests: h.requests.length, saves: h.metadataSaves, count: post.commentsCount, date: post.publishedAt, authorId: post.authorId };
     }, commentPost);
     await page.locator(`[data-social-post="${commentPost}"] .social-comment-send`).click();
-    await page.waitForFunction(id => previewHarness.metadata.pocketPhone.social.posts.find(post => post.id === id)?.comments.some(comment => comment.text === '我也喜欢这段日常。'), commentPost);
+    await page.waitForFunction(id => previewHarness.metadata.pocketPhone.social.posts.find(post => post.id === id)?.comments.some(comment => comment.text === 'I saw your comment.'), commentPost);
     const commentArticle = page.locator(`[data-social-post="${commentPost}"]`);
     assert.equal(await commentArticle.getByText('I saw your comment.', { exact: true }).count(), 1);
     assert.equal(await commentArticle.getByText('看到你的留言啦。', { exact: true }).count(), 1);
     assert.equal(await commentArticle.locator('textarea').inputValue(), '');
     assert.equal(await page.evaluate(() => previewHarness.requests.length), beforeComment.requests + 1);
-    assert.equal(await page.evaluate(() => previewHarness.metadataSaves), beforeComment.saves + 1);
+    assert.equal(await page.evaluate(() => previewHarness.metadataSaves), beforeComment.saves + 2);
     const savedComment = await page.evaluate(({ id, authorId }) => {
       const state = previewHarness.metadata.pocketPhone, post = state.social.posts.find(item => item.id === id);
       return { count: post.commentsCount, date: post.publishedAt, sms: state.conversations[authorId].at(-1) };
@@ -173,21 +173,22 @@ try {
     assert.equal(await page.locator(`[data-social-post="${commentPost}"]`).getByText('I saw your comment.', { exact: true }).count(), 1, '人物页引用同一份已保存评论');
     await page.getByRole('button', { name: '返回动态', exact: true }).click();
     await page.evaluate(() => { previewHarness.reply = 'not JSON'; });
-    const unchanged = await page.evaluate(() => JSON.stringify(previewHarness.metadata));
     if (!await commentArticle.locator('textarea').isVisible()) await commentArticle.locator('.social-comment-toggle').click();
-    await commentArticle.locator('textarea').fill('模型失败时保留草稿');
+    await commentArticle.locator('textarea').fill('模型失败时留言仍然发布');
     await commentArticle.locator('.social-comment-send').click();
     await page.getByRole('alert').waitFor();
-    assert.equal(await commentArticle.locator('textarea').inputValue(), '模型失败时保留草稿');
-    assert.equal(await page.evaluate(() => JSON.stringify(previewHarness.metadata)), unchanged);
+    assert.equal(await commentArticle.locator('textarea').inputValue(), '');
+    assert.equal(await commentArticle.getByText('模型失败时留言仍然发布', { exact: true }).count(), 1);
+    const unchanged = await page.evaluate(() => JSON.stringify(previewHarness.metadata));
     await page.evaluate(() => {
       previewHarness.reply = { comments: [] };
       previewHarness.originalSaveMetadata = previewHarness.context.saveMetadata;
       previewHarness.context.saveMetadata = async () => { throw new Error('保存失败'); };
     });
+    await commentArticle.locator('textarea').fill('保存失败时保留草稿');
     await commentArticle.locator('.social-comment-send').click();
     await page.getByRole('alert').filter({ hasText: '保存失败' }).waitFor();
-    assert.equal(await commentArticle.locator('textarea').inputValue(), '模型失败时保留草稿');
+    assert.equal(await commentArticle.locator('textarea').inputValue(), '保存失败时保留草稿');
     assert.equal(await page.evaluate(() => JSON.stringify(previewHarness.metadata)), unchanged);
     await page.evaluate(() => {
       previewHarness.context.saveMetadata = previewHarness.originalSaveMetadata;
@@ -199,5 +200,5 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log('ainstgram: native/Luker 320/390; manual feed/history, bilingual text/images, comment/reply and private SMS in one call/save, failed model/save retain drafts, shared author page, and scroll passed. Mock APIs/storage only.');
+  console.log('ainstgram: native/Luker 320/390; manual feed/history, bilingual text/images, immediate comments and later replies/SMS in one call, failed reply retains published comment, failed initial save retains draft, shared author page, and scroll passed. Mock APIs/storage only.');
 } finally { await browser.close(); }

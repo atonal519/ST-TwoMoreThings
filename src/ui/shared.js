@@ -11,6 +11,7 @@ const icons = {
   wifi: '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 19c0-4.2-2.8-7-7-7m14 7c0-8.4-5.6-14-14-14m0 14.01l.01-.011"/>',
   battery: '<g fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M23 10v4"/><path d="M1 16V8a2 2 0 0 1 2-2h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2Z"/><path d="M4 14.4V9.6a.6.6 0 0 1 .6-.6h8.8a.6.6 0 0 1 .6.6v4.8a.6.6 0 0 1-.6.6H4.6a.6.6 0 0 1-.6-.6Z"/></g>',
   calendar: '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16.5 5V3m-9 2V3M3.25 8h17.5M10 14h4M3 10.044c0-2.115 0-3.173.436-3.981a3.9 3.9 0 0 1 1.748-1.651C6.04 4 7.16 4 9.4 4h5.2c2.24 0 3.36 0 4.216.412c.753.362 1.364.94 1.748 1.65c.436.81.436 1.868.436 3.983v4.912c0 2.115 0 3.173-.436 3.981a3.9 3.9 0 0 1-1.748 1.651C17.96 21 16.84 21 14.6 21H9.4c-2.24 0-3.36 0-4.216-.412a3.9 3.9 0 0 1-1.748-1.65C3 18.128 3 17.07 3 14.955z"/>',
+  todos: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h3m2 0h3M8 16h2m2 0h4"/>',
   smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14q4 5 8 0M8 9h.01M16 9h.01"/>',
   location: '<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/>',
   transfer: '<path d="M4 8h15l-4-4M20 16H5l4 4"/>',
@@ -22,6 +23,8 @@ const icons = {
   settings: '<path d="m9.1 5 2.2-2.2a1 1 0 0 1 1.4 0L14.9 5H18a1 1 0 0 1 1 1v3.1l2.2 2.2a1 1 0 0 1 0 1.4L19 14.9V18a1 1 0 0 1-1 1h-3.1l-2.2 2.2a1 1 0 0 1-1.4 0L9.1 19H6a1 1 0 0 1-1-1v-3.1l-2.2-2.2a1 1 0 0 1 0-1.4L5 9.1V6a1 1 0 0 1 1-1Z"/><circle cx="12" cy="12" r="4"/>',
   arrow: '<path d="m14 5-7 7 7 7"/>',
   back: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M4.5 8H15s5 0 5 4.706C20 18 15 18 15 18H6.286"/><path d="M7.5 11.5L4 8l3.5-3.5"/></g>',
+  'message-reply': '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M17 3.33782C15.5291 2.48697 13.8214 2 12 2C6.47715 2 2 6.47715 2 12C2 13.5997 2.37562 15.1116 3.04346 16.4525C3.22094 16.8088 3.28001 17.2161 3.17712 17.6006L2.58151 19.8267C2.32295 20.793 3.20701 21.677 4.17335 21.4185L6.39939 20.8229C6.78393 20.72 7.19121 20.7791 7.54753 20.9565C8.88837 21.6244 10.4003 22 12 22C17.5228 22 22 17.5228 22 12C22 10.1786 21.513 8.47087 20.6622 7"/><path stroke-linejoin="round" d="M10.4989 15.0016L7.49609 11.9989L10.4989 8.99609M7.49609 11.9989L13.5016 11.9989C14.5026 11.9989 16.5044 12.5994 16.5044 15.0016"/></g>',
+  'message-delete': '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M17 3.33782C15.5291 2.48697 13.8214 2 12 2C6.47715 2 2 6.47715 2 12C2 13.5997 2.37562 15.1116 3.04346 16.4525C3.22094 16.8088 3.28001 17.2161 3.17712 17.6006L2.58151 19.8267C2.32295 20.793 3.20701 21.677 4.17335 21.4185L6.39939 20.8229C6.78393 20.72 7.19121 20.7791 7.54753 20.9565C8.88837 21.6244 10.4003 22 12 22C17.5228 22 22 17.5228 22 12C22 10.1786 21.513 8.47087 20.6622 7"/><path d="M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5"/></g>',
   next: '<path d="m9 5 7 7-7 7"/>',
   send: '<path d="m21 3-7 18-4-8-8-4 19-6ZM10 13 21 3"/>',
   play: '<path d="m9 5 10 7-10 7V5Z"/>',
@@ -44,6 +47,16 @@ export function renderEmojiText(text) {
   return splitEmojiText(text).map(part => part.emoji
     ? `<img class="inline-emoji" src="${escape(part.emoji.src)}" alt="${escape(part.text)}" title="${escape(part.emoji.label)}" draggable="false" loading="lazy">`
     : escape(part.text)).join('');
+}
+
+export function renderMentionText(text, people = []) {
+  const names = [...new Set(people.flatMap(person => [person?.name, person?.nickname]).filter(Boolean))]
+    .sort((a, b) => b.length - a.length);
+  if (!names.length) return renderEmojiText(text);
+  const pattern = new RegExp(`(@(?:${names.map(name => String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')}))`, 'gu');
+  return splitEmojiText(text).map(part => part.emoji
+    ? `<img class="inline-emoji" src="${escape(part.emoji.src)}" alt="${escape(part.text)}" title="${escape(part.emoji.label)}" draggable="false" loading="lazy">`
+    : part.text.split(pattern).map((piece, index) => index % 2 ? `<mark class="message-mention">${escape(piece)}</mark>` : escape(piece)).join('')).join('');
 }
 
 export function renderBilingual(text, translation) {

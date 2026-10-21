@@ -2,142 +2,165 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHarness } from './harness.mjs';
 import { createPhoneStore } from '../src/store.js';
-import { createApiSettings, createModelClient } from '../src/api.js';
 import { createBackflowService } from '../src/context.js';
 import { readTimeline } from '../src/timeline.js';
 
-async function setup() {
-  const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }] });
-  const target = h.host.captureChat(), store = createPhoneStore({ target });
-  await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
-  await store.setInjectionEnabled(true);
-  return { h, target, store, batch: readTimeline(target.messages) };
+function setup(messages = [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }], hostKind = 'native') {
+  const h = createHarness({ hostKind, messages, metadata: { pocketPhone: {
+    contacts: [{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }], groups: [], conversations: {}, injectEnabled: true,
+  } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target }), batch = readTimeline(target.messages);
+  return { h, target, store, batch };
 }
+const client = (requests, summary = '用户与林舟约好还书。') => ({ complete(request) { requests.push(request); return JSON.stringify({ summary }); } });
 
-for (const hostKind of ['native', 'luker']) test(`${hostKind}: regenerating the main reply uses the SMS batch before the replaced reply`, async () => {
-  const h = createHarness({ hostKind, messages: [
-    { is_user: false, mes: '<!-- SDC-end | date=2027-03-19 | time=15:30 -->' },
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: normal and regenerate use the right SMS batch and exclude the replaced story from analysis`, async () => {
+  const { h, target, store } = setup([
+    { is_user: false, mes: '上午的安排。<!-- SDC-end | date=2027-03-19 | time=15:30 -->' },
     { is_user: true, mes: '继续剧情。' },
-    { is_user: false, mes: '<!-- SDC-end | date=2027-03-19 | time=17:40 -->' },
-  ] });
-  const target = h.host.captureChat(), store = createPhoneStore({ target });
-  await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
-  await store.setInjectionEnabled(true);
+    { is_user: false, mes: '被替换的晚间结果。<!-- SDC-end | date=2027-03-19 | time=17:40 -->' },
+  ], hostKind);
   await store.appendMessages('lin', [
-    { id: 'before-reply', role: 'user', text: '刚才说好六点在书店见。', batch: { key: '[0,"2027-03-19","15:30"]' } },
-    { id: 'after-reply', role: 'user', text: '新一楼之后的短信。', batch: { key: '[2,"2027-03-19","17:40"]' } },
+    { id: 'before', role: 'user', text: '六点在书店见。', batch: { key: '[0,"2027-03-19","15:30"]' } },
+    { id: 'after', role: 'user', text: '当前楼之后的短信。', batch: { key: '[2,"2027-03-19","17:40"]' } },
   ]);
   const before = structuredClone(store.read()), saves = h.metadataSaves;
-  const service = createBackflowService({ target, store, modelClient: { complete() { assert.fail('short SMS must not request a model'); } } });
-  const retry = await service.prepare('regenerate');
-  assert.ok(retry.includes('刚才说好六点在书店见。'));
-  assert.ok(!retry.includes('新一楼之后的短信。'));
-  for (const type of ['normal', 'continue']) {
-    const next = await service.prepare(type);
-    assert.ok(next.includes('新一楼之后的短信。'));
-    assert.ok(!next.includes('刚才说好六点在书店见。'));
+  const service = createBackflowService({ target, store, modelClient: { complete() { assert.fail('short references must not add a model request'); } } });
+  const normal = await service.prepare('normal');
+  assert.ok(normal.includes('当前楼之后的短信。'));
+  assert.ok(!normal.includes('六点在书店见。'));
+  for (const type of ['regenerate', 'swipe']) {
+    const result = await service.prepare(type);
+    assert.ok(result.includes('六点在书店见。'));
+    assert.ok(!result.includes('当前楼之后的短信'));
   }
+  target.messages.at(-1).mes = '';
+  assert.ok((await service.prepare('swipe')).includes('六点在书店见。'));
+  target.messages.pop();
+  assert.ok((await service.prepare('regenerate')).includes('六点在书店见。'));
   assert.deepEqual(store.read(), before);
   assert.equal(h.metadataSaves, saves);
-  // 两种宿主的切换候选入口可能先清空待写楼，也可能先移除待写楼。
-  target.messages.at(-1).mes = '';
-  assert.ok((await service.prepare('swipe')).includes('刚才说好六点在书店见。'));
-  target.messages.pop();
-  assert.ok((await service.prepare('regenerate')).includes('刚才说好六点在书店见。'));
 });
 
-test('short backflow preserves bilingual messages, participant names and card facts without a model or file data', async () => {
-  const { h, target, store, batch } = await setup();
-  await store.saveUserProfile({ name: '小满' });
+test('short references let the main generation decide relevance without an extra API call or private file data', async () => {
+  const { h, target, store, batch } = setup();
   const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true });
   const observer = await store.saveGroup('', { name: '旁观', memberIds: ['lin', 'zhou'], userIsMember: false });
   await store.appendMessages('lin', [
-    { id: 'internal-identifier'.repeat(500), role: 'assistant', text: 'See you at the café.', translation: '咖啡店见。', batch },
-    { id: 'photo', role: 'assistant', type: 'image', image: { description: '窗边的一杯咖啡', path: 'data:image/png;base64,' + 'A'.repeat(10000) }, batch },
-    { id: 'past', role: 'user', text: '过去的秘密'.repeat(1000), batch: { key: 'past' } },
+    { id: 'm1', role: 'assistant', text: 'See you at the café.', translation: '咖啡店见。', batch },
+    { id: 'photo', role: 'assistant', type: 'image', image: { description: '窗边咖啡', path: '/private/image.png' }, batch },
+    { id: 'old', role: 'user', text: '旧批次秘密', batch: { key: 'past' } },
   ]);
-  await store.appendMessages(group.id, [
-    { id: 'location', role: 'assistant', speakerId: 'lin', type: 'location', location: { name: '咖啡店', address: '广场东侧' }, batch },
-    { id: 'payment', role: 'user', speakerId: '@user', type: 'transfer', transfer: { amount: '20.00', currency: 'CNY', recipientId: 'zhou', status: 'accepted' }, batch },
-    { id: 'sticker', role: 'assistant', speakerId: 'zhou', type: 'sticker', stickerId: 'sepia.happy', batch },
-  ]);
-  await store.appendMessage(observer.id, { id: 'observer', role: 'assistant', speakerId: 'zhou', text: '旁观内容'.repeat(1000), batch });
+  await store.appendMessage(group.id, { id: 'location', role: 'assistant', speakerId: 'lin', type: 'location', location: { name: '咖啡店', address: '广场东侧' }, batch });
+  await store.appendMessage(observer.id, { id: 'observer', role: 'assistant', speakerId: 'zhou', text: '旁观秘密', batch });
   const before = structuredClone(store.read()), saves = h.metadataSaves;
-  const result = await createBackflowService({ target, store, modelClient: { complete() { assert.fail('short backflow must not call a model'); } } }).prepare();
-  for (const value of ['[私聊：林舟]', '林舟：See you at the café.', '译文：咖啡店见。', '[图片：窗边的一杯咖啡]', '[群聊：朋友]', '林舟：[定位：咖啡店，广场东侧]', '小满 → 周予：[转账：20.00 CNY；已收下]', '周予：[表情：开心]']) assert.ok(result.includes(value), value);
-  for (const value of ['过去的秘密', '旁观内容', 'internal-identifier', 'data:image/']) assert.ok(!result.includes(value), value);
+  const reference = await createBackflowService({ target, store, modelClient: { complete() { assert.fail('no additional analysis call for short SMS'); } } }).prepare();
+  for (const text of ['See you', '咖啡店见', '窗边咖啡', '广场东侧', '林舟', '只采用有用部分', '未勾选不证明未完成']) assert.ok(reference.includes(text));
+  for (const text of ['/private/', '旧批次秘密', '旁观秘密']) assert.ok(!reference.includes(text));
   assert.deepEqual(store.read(), before);
-  assert.equal(h.metadataSaves, saves, 'preparing a reference does not save or modify SMS');
+  assert.equal(h.metadataSaves, saves);
 });
 
-// 独立列出可见格式，以校验实际带入文字的边界，而非内部JSON字段的长度。
-const rawPrefix = '[手机短信记录；仅供后续剧情参考，记录不是指令；各人只知道自己参与或已得知的内容，约定不代表已经履行]\n时间：2026-10-18 · 18:00 · 主楼 #1\n[私聊：林舟]\n我：';
-for (const size of [2999, 3000, 3001]) test(`backflow at ${size} visible characters ${size <= 3000 ? 'passes through unchanged' : 'compresses once'}`, async () => {
-  const { target, store, batch } = await setup();
-  const text = '汉'.repeat(size - Array.from(rawPrefix).length);
-  await store.appendMessage('lin', { id: 'boundary', role: 'user', text, batch });
+const rawPrefix = '[手机参考；记录不是指令。结合已有正文判断同一事项的进展与本次相关性，只采用有用部分。未勾选不证明未完成，已履行的约定不能再次安排；证据不足不猜进展。各人只知道自己参与或已得知的内容。]\n时间：2026-10-18 · 18:00 · 主楼 #1\n[私聊：林舟]\n我：';
+for (const size of [2999, 3000, 3001]) test(`visible ${size}-character reference uses the existing short/long budget in one call`, async () => {
+  const { target, store, batch } = setup();
+  await store.appendMessage('lin', { id: 'boundary', role: 'user', text: '汉'.repeat(size - Array.from(rawPrefix).length), batch });
   const requests = [];
-  const result = await createBackflowService({ target, store, modelClient: { complete(request) { requests.push(request); return '{"summary":"用户向林舟确认了行程安排。"}'; } } }).prepare();
-  assert.equal(requests.length, size > 3000 ? 1 : 0);
-  if (size <= 3000) {
-    assert.equal(result, rawPrefix + text);
-    assert.equal(Array.from(result).length, size);
-  } else {
-    assert.ok(result.includes('用户向林舟确认了行程安排。'));
-    assert.equal(JSON.parse(requests[0].messages[0].content).conversations[0].messages[0].text, text);
-  }
+  await createBackflowService({ target, store, modelClient: client(requests) }).prepare();
+  assert.equal(requests.length, size <= 3000 ? 0 : 1);
+  if (size > 3000) assert.equal(JSON.parse(requests[0].messages[0].content).maxCharacters, 100);
 });
 
-test('the 3000-character gate counts emoji as Unicode characters across conversations', async () => {
-  const { target, store, batch } = await setup();
-  const text = '🙂'.repeat(3000 - Array.from(rawPrefix).length);
-  await store.appendMessage('lin', { id: 'emoji', role: 'user', text, batch });
+test('the short budget counts emoji as Unicode characters and all current messages reach the same analysis', async () => {
+  const { target, store, batch } = setup();
+  const messages = Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', text: (i % 2 ? '好的，到时书店见。' : '明天一起去书店见面吗？').repeat(2), batch }));
+  await store.appendMessages('lin', messages);
   const requests = [];
-  const service = createBackflowService({ target, store, modelClient: { complete(request) { requests.push(request); return '{"summary":"用户向林舟分享了消息。"}'; } } });
-  assert.equal(await service.prepare(), rawPrefix + text);
-  assert.equal(requests.length, 0);
-  await store.appendMessage('zhou', { id: 'bilingual', role: 'assistant', text: 'Okay.', translation: '知道了。', batch });
-  await service.prepare();
-  assert.equal(requests.length, 1, 'the gate applies to the complete reference across contacts');
-  assert.equal(JSON.parse(requests[0].messages[0].content).conversations[1].messages[0].translation, '知道了。');
-});
-
-test('a long translation also triggers compression while the complete original and translation reach the model', async () => {
-  const { target, store, batch } = await setup();
-  const translation = '译'.repeat(3001);
-  await store.appendMessage('lin', { id: 'translated', role: 'assistant', text: 'The full plan.', translation, batch });
-  let request;
-  await createBackflowService({ target, store, modelClient: { complete(value) { request = value; return '{"summary":"林舟发来了完整行程。"}'; } } }).prepare();
-  const message = JSON.parse(request.messages[0].content).conversations[0].messages[0];
-  assert.equal(message.text, 'The full plan.');
-  assert.equal(message.translation, translation);
-});
-
-test('oversized backflow summarizes every current message including short exchanges and excludes old or observer records', async () => {
-  const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }], settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test', apiModel: 'm' } }, completion: { choices: [{ message: { content: '{"summary":"用户问林舟是否一起吃饭，林舟答应。"}' } }] } });
-  const target = h.host.captureChat(), store = createPhoneStore({ target });
-  await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
-  const { readTimeline } = await import('../src/timeline.js');
-  const batch = readTimeline(target.messages);
-  await store.appendMessages('lin', [{ id: 'old', role: 'user', text: '旧批次秘密', batch: { key: 'old', label: '过去' } }, ...Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', text: i % 2 ? '吃' : '吃饭吗？', batch }))]);
-  const observer = await store.saveGroup('', { name: '旁观', memberIds: ['lin', 'zhou'], userIsMember: false });
-  await store.appendMessage(observer.id, { role: 'assistant', speakerId: 'zhou', text: '旁观内容', batch });
-  await store.appendMessage('zhou', { id: 'long', role: 'assistant', text: '行程安排'.repeat(800), batch });
-  const mod = await import('../src/context.js');
-  assert.equal(typeof mod.createBackflowService, 'function', '回流须经摘要服务');
-  const service = mod.createBackflowService({ target, store, modelClient: createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) }) });
-  assert.equal(await service.prepare(), '');
-  assert.equal(h.modelRequests.length, 0);
-  await store.setInjectionEnabled(true);
-  const text = await service.prepare();
-  assert.ok(text.includes('用户问林舟是否一起吃饭，林舟答应。'));
-  assert.equal(h.modelRequests.length, 1);
-  const input = JSON.parse(h.modelRequests[0].body.messages[1].content);
-  assert.equal(input.conversations[0].messages.length, 200);
-  assert.ok(!JSON.stringify(input).includes('旧批次秘密'));
-  assert.ok(!JSON.stringify(input).includes('旁观内容'));
+  await createBackflowService({ target, store, modelClient: client(requests) }).prepare();
+  assert.equal(JSON.parse(requests[0].messages[0].content).conversations[0].messages.length, 200);
   await store.clearConversation('lin', batch);
-  await store.clearConversation('zhou', batch);
+  await store.appendMessage('lin', { id: 'emoji', role: 'user', text: '🙂'.repeat(3000 - Array.from(rawPrefix).length), batch });
+  const next = [];
+  await createBackflowService({ target, store, modelClient: client(next) }).prepare();
+  assert.equal(next.length, 0);
+});
+
+test('an uncompleted checkbox is not story evidence: analysis receives the intervening completed event and preserves distinct future events', async () => {
+  const { h, target, store } = setup([
+    { is_user: false, mes: '约好吃饭。<!-- SDC-end | date=2026-10-18 | time=10:00 -->' },
+    { is_user: true, mes: '吃完离开餐厅。' },
+    { is_user: false, mes: '午饭已经吃完，餐费结清。<!-- SDC-end | date=2026-10-18 | time=13:00 -->' },
+    { is_user: false, mes: '晚上聊书。<!-- SDC-end | date=2026-10-18 | time=19:00 -->' },
+  ]);
+  target.metadata.pocketPhone.todos = [
+    { id: 'today', title: '吃饭', status: 'open', startAt: '2026-10-18 12:00', endAt: '', participantIds: ['@user', 'lin'], knownToIds: ['@user', 'lin'], sourceConversationId: 'lin', sourceMessageIds: ['old'], sourceBatch: { key: '[0,"2026-10-18","10:00"]' } },
+    { id: 'tomorrow', title: '吃饭', status: 'open', startAt: '2026-10-19 12:00', endAt: '', participantIds: ['@user', 'zhou'], knownToIds: ['@user', 'zhou'], sourceConversationId: 'zhou', sourceMessageIds: ['old2'], sourceBatch: { key: '[0,"2026-10-18","10:00"]' } },
+    { id: 'candidate', title: '未确认秘密', status: 'candidate', knownToIds: ['@user', 'lin'] },
+  ];
+  await store.appendMessage('lin', { id: 'long', role: 'user', text: '补充材料'.repeat(1000), batch: readTimeline(target.messages) });
+  const before = structuredClone(store.read()), saves = h.metadataSaves, requests = [];
+  const result = await createBackflowService({ target, store, modelClient: client(requests, '今天午饭已经结束；另有明日与周予的午饭约定，进展未明。') }).prepare();
+  const input = JSON.parse(requests[0].messages[0].content);
+  assert.equal(input.todos.length, 2);
+  assert.equal(input.todos[0].status, 'open');
+  assert.notEqual(input.todos[0].startAt, input.todos[1].startAt);
+  assert.ok(JSON.stringify(input.storyProgress).includes('午饭已经吃完'));
+  assert.equal(input.storyProgress.complete, true);
+  assert.ok(!JSON.stringify(input).includes('未确认秘密'));
+  assert.ok(result.includes('今天午饭已经结束'));
+  assert.deepEqual(store.read(), before, 'analysis never completes or edits a todo');
+  assert.equal(h.metadataSaves, saves);
+});
+
+test('missing anchors and bounded story material are explicitly incomplete; later-created todos do not enter regeneration', async () => {
+  const { target, store } = setup(Array.from({ length: 50 }, (_, i) => ({ is_user: false, mes: `正文${i}` })));
+  const state = target.metadata.pocketPhone;
+  state.todos = [{ id: 'old', title: '旧约定', status: 'open', participantIds: ['@user', 'lin'], knownToIds: ['@user', 'lin'], sourceMessageIds: [], sourceConversationId: 'lin' }];
+  await store.appendMessage('lin', { id: 'long', role: 'user', text: '材料'.repeat(1600), batch: readTimeline(target.messages) });
+  const requests = [];
+  await createBackflowService({ target, store, modelClient: client(requests) }).prepare();
+  const progress = JSON.parse(requests[0].messages[0].content).storyProgress;
+  assert.equal(progress.complete, false);
+  assert.equal(progress.messages.length, 24);
+  await store.clearConversation('lin', readTimeline(target.messages));
+  target.metadata.pocketPhone.todos[0].sourceBatch = { key: '[49]' };
+  const noCall = { complete() { assert.fail('a todo from the replaced floor must not be included'); } };
+  assert.equal(await createBackflowService({ target, store, modelClient: noCall }).prepare('regenerate'), '');
+});
+
+test('disabled, empty, malformed and over-budget references do not silently inject unfiltered SMS', async () => {
+  const { target, store, batch } = setup();
+  const noCall = { complete() { assert.fail('no model call without enabled material'); } };
+  const service = createBackflowService({ target, store, modelClient: noCall });
   assert.equal(await service.prepare(), '');
-  assert.equal(h.modelRequests.length, 1, '没有当前消息不请求摘要');
+  await store.appendMessage('lin', { id: 'm1', role: 'user', text: '约好明天见。'.repeat(700), batch });
+  await store.setInjectionEnabled(false);
+  assert.equal(await service.prepare(), '');
+  await store.setInjectionEnabled(true);
+  for (const reply of ['{}', '{"summary":12}', JSON.stringify({ summary: '字'.repeat(101) })]) {
+    await assert.rejects(createBackflowService({ target, store, modelClient: { complete() { return reply; } } }).prepare(), /参考|带入|字/);
+  }
+  const requests = [];
+  assert.equal(await createBackflowService({ target, store, modelClient: client(requests, '') }).prepare(), '');
+});
+
+test('real manual changes while preparing discard the old reference', async () => {
+  const { target, store, batch } = setup();
+  await store.appendMessage('lin', { id: 'm1', role: 'user', text: '明天见。'.repeat(1000), batch });
+  const service = createBackflowService({ target, store, modelClient: { async complete() { await store.deleteMessage('lin', 'm1'); return '{"summary":"明天见。"}'; } } });
+  await assert.rejects(service.prepare(), /删除/);
+});
+
+
+test('short confirmed todos and quoted SMS are supplied as references without a second model call', async () => {
+  const { target, store, batch } = setup();
+  const group = await store.saveGroup('', { name: '读书群', memberIds: ['lin', 'zhou'], userIsMember: true });
+  await store.appendMessages(group.id, [
+    { id: 'original', role: 'assistant', speakerId: 'lin', text: '周三把书带来。', batch: { key: 'earlier' } },
+    { id: 'reply', role: 'user', speakerId: '@user', text: '这件事收到。', replyToId: 'original', batch },
+  ]);
+  target.metadata.pocketPhone.todos = [{ id: 'open', title: '周三还书', status: 'open', startAt: '2026-10-21 18:00', endAt: '', participantIds: ['@user', 'lin'], knownToIds: ['@user', 'lin'], sourceConversationId: group.id, sourceMessageIds: ['original'], sourceBatch: batch }];
+  const service = createBackflowService({ target, store, modelClient: { complete() { assert.fail('no extra call for short todo and SMS references'); } } });
+  const result = await service.prepare();
+  for (const value of ['引用林舟：周三把书带来。', '这件事收到。', '周三还书', '2026-10-21', '知情人：我、林舟', '未勾选']) assert.ok(result.includes(value), value);
 });

@@ -1,4 +1,5 @@
 import { findSticker } from './stickers.js';
+import { replyContext } from './replies.js';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
 const states = { pending: '待收款', accepted: '已收下', returned: '已退回' };
@@ -29,11 +30,13 @@ export function normalizeContent(item) {
   return plain ? { text: plain, ...(translation ? { translation } : {}) } : null;
 }
 
-export function contextMessage(message) {
+export function contextMessage(message, thread) {
+  const replyTo = replyContext(message, thread);
   return { ...(message.speakerId ? { speakerId: message.speakerId } : { role: message.role }), text: messageText(message),
     ...(message.type === 'sticker' ? { type: 'sticker', stickerId: message.stickerId } : {}),
     ...(message.translation ? { translation: message.translation } : {}),
     ...(message.type === 'transfer' ? { transferId: message.id, recipientId: message.transfer.recipientId, status: message.transfer.status } : {}),
+    ...(replyTo ? { replyTo } : {}),
   };
 }
 

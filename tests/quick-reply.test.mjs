@@ -9,6 +9,7 @@ function fixture() {
     getSetByName: name => sets.get(name),
     createSet: async name => { const set = { name, qrList: [], save: async () => {} }; sets.set(name, set); return set; },
     createQuickReply: (name, label, value) => sets.get(name).qrList.push({ label, ...value }),
+    updateQuickReply: (name, label, value) => Object.assign(sets.get(name).qrList.find(qr => qr.label === label), value),
     deleteQuickReply: (name, label) => { const set = sets.get(name); set.qrList = set.qrList.filter(qr => qr.label !== label); },
     addGlobalSet: name => active.add(name), removeGlobalSet: name => active.delete(name), deleteSet: async name => sets.delete(name),
   };
@@ -79,4 +80,26 @@ test('turning off an old launcher removes it while an unrelated old-label button
   userSet.qrList.push({ label: '两三事', message: '/echo 保留' });
   await syncQuickReply(api, true);
   assert.deepEqual(userSet.qrList.map(qr => qr.message), ['/echo 保留', '/tmt-open']);
+});
+
+test('a disabled card hides only its launcher while retaining the QR set and other user buttons', async () => {
+  const { api, sets, active } = fixture();
+  await syncQuickReply(api, true);
+  const set = sets.get('两三事'), launcher = set.qrList.find(qr => qr.label === '手机');
+  set.qrList.push({ label: '用户按钮', message: '/echo 保留', isHidden: false });
+  await syncQuickReply(api, true, { visible: false });
+  assert.equal(launcher.isHidden, true);
+  assert.equal(sets.get('两三事'), set, 'hiding does not delete and recreate the shared QR set');
+  assert.equal(set.qrList.find(qr => qr.label === '用户按钮').isHidden, false);
+  assert.equal(active.has('两三事'), true);
+  await syncQuickReply(api, true, { visible: true });
+  assert.equal(launcher.isHidden, false);
+  assert.equal(set.qrList.find(qr => qr.label === '手机'), launcher);
+  assert.equal(api.settings.isEnabled, false);
+});
+
+test('a QR preference enabled on a disabled card creates a hidden launcher', async () => {
+  const { api, sets } = fixture();
+  await syncQuickReply(api, true, { visible: false });
+  assert.equal(sets.get('两三事').qrList[0].isHidden, true);
 });

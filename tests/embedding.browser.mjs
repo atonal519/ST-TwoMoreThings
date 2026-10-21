@@ -27,7 +27,8 @@ try {
     await page.route('**/api/backends/chat-completions/generate', async route => {
       const request = route.request().postDataJSON();
       await page.evaluate(body => { previewHarness.requests.push({ body }); }, request);
-      return route.fulfill({ json: { choices: [{ message: { content: request.messages[0].content.includes('手机聊天压') ? '{"summary":"用户和林舟确认了行程安排。"}' : '{"messages":[{"text":"收到，晚点见。"}]}' } }] } });
+      const input = JSON.parse(request.messages[1].content);
+      return route.fulfill({ json: { choices: [{ message: { content: Array.isArray(input.conversations) && input.maxCharacters === 100 ? '{"summary":"用户和林舟确认了行程安排。"}' : '{"messages":[{"text":"收到，晚点见。"}]}' } }] } });
     });
     await page.route('**/__font/*.woff2', route => { const name = basename(new URL(route.request().url()).pathname), local = '/tmp/mobile-plugin-reference-research/preview-fonts/' + name; return route.fulfill({ path: existsSync(local) ? local : '/tmp/myriad-home-design-20261016/' + name, contentType: 'font/woff2' }); });
     await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${kind}`);

@@ -5,10 +5,11 @@ import { displayName } from '../profiles.js';
 import { renderBackgroundPicker } from './backgrounds.js';
 import { VERSION } from '../version.js';
 
-export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control }) {
+export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode }) {
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
   const current = sources.find(source => refKey(source.ref) === refKey(selected));
   const manual = ui.manual || !sources.length, preferences = entries.read();
+  const instanceLabel = mode === 'embedded' ? '随卡版' : '插件版';
   const drawer = (key, title, content) => `<section class="settings-drawer">
     <button type="button" class="settings-drawer-toggle" data-drawer="${key}" aria-expanded="${ui.drawers[key]}">
       <span>${title}</span>${icon('next')}
@@ -75,6 +76,7 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
       <span></span>
     </span>
   </label>
+  <small class="field-label">短材料由主楼一起判断；超过3000字才额外生成摘要。</small>
   <label class="compact-switch-row" for="image-provider">
     <span>生图设置</span>
     <select id="image-provider" class="image-provider-select" aria-label="生图设置" ${busy.has('image-provider') ? 'disabled' : ''}>
@@ -94,6 +96,7 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
         <span></span>
       </span>
     </label>
+    ${control.isEnabled() ? '' : `<p class="setting-note">${instanceLabel}已在当前角色卡停用，重新开启后可使用其他页面。</p>`}
     <section class="settings-section">
       <button type="button" class="my-profile" data-action="edit-user" aria-label="编辑我的资料" ${control.isEnabled() ? '' : 'disabled'}>
         ${avatar(state.userProfile || { name: ui.defaultUser })}
@@ -107,5 +110,5 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
     ${drawer('connection', '连接设置', connection)}
     ${drawer('appearance', '外观设置', appearanceContent)}
     ${drawer('content', '内容设置', content)}
-    <small class="app-version">两三事 ${VERSION}</small>`;
+    <small class="app-version"><span>两三事 ${VERSION}</span> · <span>${instanceLabel}</span></small>`;
 }

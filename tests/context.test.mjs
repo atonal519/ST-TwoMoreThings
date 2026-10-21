@@ -121,3 +121,62 @@ test('forum context excludes private SMS and QQJ author-side background', async 
   assert.ok(!JSON.stringify(forum).includes('作者侧秘密'));
 });
 
+
+test('confirmed todos carry actual knowledge and subsequent story progress, not private facts to every related person', async () => {
+  const h = createHarness({ messages: [
+    { is_user: false, mes: '上午约好还书。<!-- SDC-end | date=2026-10-18 | time=10:00 -->' },
+    { is_user: true, mes: '我把书交还给他。' },
+    { is_user: false, mes: '林舟收好归还的书。<!-- SDC-end | date=2026-10-18 | time=12:00 -->' },
+    { is_user: false, mes: '晚些时候聊起别的事。<!-- SDC-end | date=2026-10-18 | time=18:00 -->' },
+  ], metadata: { pocketPhone: {
+    contacts: [{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }], conversations: {}, groups: [{ id: 'g', name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true }],
+    todos: [{ id: 't1', status: 'open', title: '替周予还书', startAt: '2026-10-18 12:00', endAt: '', participantIds: ['@user', 'zhou'], knownToIds: ['@user', 'lin'], sourceConversationId: 'lin', sourceMessageIds: ['m1'], sourceBatch: { key: '[0,"2026-10-18","10:00"]' } }],
+  } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target }), before = structuredClone(target.metadata);
+  const reader = createContextReader({ target, store, qqjBridgeProvider: () => null });
+  const lin = await reader.readForContact('lin');
+  assert.equal(lin.todos[0].title, '替周予还书');
+  assert.ok(JSON.stringify(lin.storyProgress).includes('收好归还的书'), 'not just the most recent floor');
+  assert.equal(lin.storyProgress.complete, true);
+  assert.equal((await reader.readForContact('zhou')).todos.length, 0, 'being related to an event does not mean knowing a private arrangement');
+  const group = await reader.readForGroup('g');
+  assert.equal(group.todos[0].id, 't1');
+  assert.deepEqual(group.todos[0].knownToIds, ['@user', 'lin']);
+  const authors = store.read().contacts.map(person => ({ ...person, kind: 'contact' }));
+  const social = await reader.readForSocial(authors, { includePrivateMessages: true });
+  assert.equal(social.authors[0].todos.length, 1);
+  assert.equal(social.authors[1].todos.length, 0);
+  const publicOnly = await reader.readForSocial(authors);
+  assert.ok(!JSON.stringify(publicOnly).includes('替周予还书'));
+  assert.deepEqual(target.metadata, before);
+  assert.equal(h.modelRequests.length, 0);
+});
+
+test('group continuation scopes recent private threads to the members who actually participated', async () => {
+  const h = createHarness({ messages: [{ is_user: false, mes: '约定之后事情已经办完。' }], metadata: { pocketPhone: {
+    contacts: [{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }, { id: 'other', name: '旁人' }],
+    groups: [{ id: 'g', name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true }], conversations: {
+      lin: [{ id: 'l', role: 'assistant', text: '我明天把书带给你。', batch: { key: '[-1]' } }],
+      zhou: [{ id: 'z', role: 'user', text: '只同周予说过的话。', batch: { key: '[-1]' } }],
+      other: [{ id: 'o', role: 'assistant', text: '群外人物私信不提供。' }],
+    },
+  } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  const context = await createContextReader({ target, store, qqjBridgeProvider: () => null }).readForGroup('g');
+  assert.deepEqual(context.privateHistories.map(thread => thread.knownToIds), [['@user', 'lin'], ['@user', 'zhou']]);
+  assert.equal(context.privateHistories[0].messages[0].text, '我明天把书带给你。');
+  assert.ok(!JSON.stringify(context).includes('群外人物私信不提供'));
+  assert.ok(JSON.stringify(context.storyProgress).includes('事情已经办完'));
+  assert.equal(h.modelRequests.length, 0);
+});
+
+test('partially deleted todo sources are reported as incomplete without deleting the retained todo', async () => {
+  const h = createHarness({ metadata: { pocketPhone: {
+    contacts: [{ id: 'lin', name: '林舟' }], groups: [], conversations: { lin: [{ id: 'remaining', text: '后一句' }] },
+    todos: [{ id: 't', title: '约定', status: 'open', participantIds: ['@user', 'lin'], knownToIds: ['@user', 'lin'], sourceConversationId: 'lin', sourceMessageIds: ['deleted', 'remaining'] }],
+  } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  const context = await createContextReader({ target, store, qqjBridgeProvider: () => null }).readForContact('lin');
+  assert.equal(context.todos[0].source.missing, true);
+  assert.equal(store.read().todos.length, 1);
+});

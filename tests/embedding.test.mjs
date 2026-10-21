@@ -57,6 +57,7 @@ test('export produces a portable helper script with authored profiles and groups
   await store.saveGroup('', { name: '朋友', memberIds: [person.id], userIsMember: true, avatar: 'http://localhost/user/avatars/a.png' });
   await store.setWallpaper('day', '/user/wallpaper.png');
   await store.appendMessage(person.id, { role: 'user', id: 'private', text: '不应导出的短信' });
+  h.context.chatMetadata.pocketPhone.todos = [{ id: 'private-todo', status: 'open', title: '不应导出的私人待办', participantIds: ['@user', person.id] }];
   h.context.extensionSettings.pocketPhone = { apiKey: 'do-not-export', apiSourceRef: { kind: 'shared-preset', presetId: 'secret-reference' } };
   const reads = [];
   const authoring = createAuthoringService({ store, host: h.host, readEntries: () => ({ fabShow: false, qrShow: true }), fetchImage: async url => { reads.push(url); return new Response(new Uint8Array([1, 2, 3]), { headers: { 'Content-Type': 'image/png' } }); } });
@@ -74,6 +75,8 @@ test('export produces a portable helper script with authored profiles and groups
   assert.equal(reads.length, 2, 'the same local image is read only once per export');
   const serialized = JSON.stringify(script);
   assert.equal(serialized.includes('不应导出的短信'), false);
+  assert.equal(serialized.includes('不应导出的私人待办'), false);
+  assert.equal('todos' in preset, false);
   assert.equal(serialized.includes('do-not-export'), false);
   assert.equal(serialized.includes('secret-reference'), false);
   assert.equal('source' in preset.contacts[0], false);

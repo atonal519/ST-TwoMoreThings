@@ -1,5 +1,5 @@
 import { asset, avatar, escape, renderEmojiText } from './shared.js';
-import { unreadConversations } from '../notifications.js';
+import { lockNotifications } from '../notifications.js';
 import { displayName } from '../profiles.js';
 import { wallpaperPreset } from '../backgrounds.js';
 import { renderLockMeta } from './status.js';
@@ -33,10 +33,10 @@ export function renderHome(state, { weather } = {}) {
   </div>`;
   return `${artwork}
   <div class="lock-notifications" aria-label="未读消息">
-    ${unreadConversations(state).map(item => `<button type="button" class="lock-notification"
-      data-${item.isGroup ? 'group' : 'contact'}="${escape(item.id)}">
+    ${lockNotifications(state).map(item => `<button type="button" class="lock-notification"
+      ${item.isSocial ? `data-action="open-social-reply" data-social-post="${escape(item.id)}"` : `data-${item.isGroup ? 'group' : 'contact'}="${escape(item.id)}"`}>
       ${avatar(item, true)}
-      <span class="notification-copy"><strong>${escape(displayName(item))}</strong><span>${renderEmojiText(item.preview)}</span></span>
+      <span class="notification-copy"><strong>${escape(displayName(item))}${item.isSocial ? ' 回复了你' : ''}</strong><span>${renderEmojiText(item.preview)}</span></span>
       <small>${item.count}</small>
     </button>`).join('')}
   </div>`;

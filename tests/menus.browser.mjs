@@ -19,6 +19,7 @@ try {
   await page.locator('.bubble').first().click();
   await page.getByRole('textbox', { name: '短信内容' }).click();
   assert.equal(await page.getByRole('button', { name: '删除这条短信', exact: true }).count(), 0);
+  assert.equal(await page.locator('.message-actions').count(), 0, '点击输入框收起整个消息菜单');
   assert.equal(await page.evaluate(() => previewHarness.requests.length + previewHarness.metadataSaves), 0);
   console.log('Outside-click dismissal preserves typing and does not request or save.');
 } finally { await browser.close(); }

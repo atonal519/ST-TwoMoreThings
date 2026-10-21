@@ -28,17 +28,17 @@ try {
       const before = JSON.stringify(h.metadata), saves = h.metadataSaves, calls = h.requests.length;
       const prompts = [];
       h.context.setExtensionPrompt = (...args) => { h.prompt = args[1]; prompts.push(args); };
-      const emit = type => h.context.eventSource.emit('before-main', type, {}, false);
-      await emit('normal');
+      const emit = (type, text) => { h.summary = { summary: text }; return h.context.eventSource.emit('before-main', type, {}, false); };
+      await emit('normal', '当前楼之后的短信。');
       const normal = h.prompt;
       // 真正宿主在此事件之后才移除重生成的旧楼。
-      await emit('regenerate');
+      await emit('regenerate', '六点在书店见。');
       const regenerated = h.prompt;
       h.mainMessages.at(-1).mes = '';
-      await emit('swipe');
+      await emit('swipe', '六点在书店见。');
       const swiped = h.prompt;
       h.mainMessages.pop();
-      await emit('regenerate');
+      await emit('regenerate', '六点在书店见。');
       return { normal, regenerated, swiped, removed: h.prompt,
         slots: prompts.filter(args => args[1]).map(args => args.slice(2)),
         unchanged: before === JSON.stringify(h.metadata), saves: h.metadataSaves - saves, calls: h.requests.length - calls };
@@ -52,9 +52,9 @@ try {
     assert.ok(result.slots.every(args => args[0] === 1 && args[1] === 0), 'references still use in-chat depth zero');
     assert.equal(result.unchanged, true);
     assert.equal(result.saves, 0);
-    assert.equal(result.calls, 0);
+    assert.equal(result.calls, 0, 'short references use the existing main-generation request');
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log('Native/Luker generation entry: normal, regenerate before/after removal, blank swipe; depth 0, no SMS writes or model calls. Simulated hosts only.');
+  console.log('Native/Luker generation entry: normal, regenerate before/after removal and blank swipe use the correct SMS batch, depth 0, and no extra model calls or SMS writes. Simulated hosts only.');
 } finally { await browser.close(); }

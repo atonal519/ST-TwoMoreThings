@@ -14,7 +14,7 @@ function renderPost(post, state, busy, ui) {
         ? `<img data-phone-image="${escape(post.image.path)}" src="${escape(imageSource(post.image.path))}" alt="${escape(post.image.description)}" loading="lazy" draggable="false">`
         : `<span class="social-photo-placeholder">${icon('image')}<span>${escape(post.image.description)}</span><small>${generating ? '生成中…' : '点击生成图片'}</small></span>`}
     </button>` : '';
-  const comments = (post.comments || []).map(comment => `<p class="social-comment"><strong>${escape(comment.name)}</strong>${renderBilingual(comment.text, comment.translation)}</p>`).join('');
+  const comments = (post.comments || []).map(comment => `<p class="social-comment" ${comment.replyToId && comment.read === false ? 'data-unread-reply' : ''}><strong>${escape(comment.name)}</strong>${renderBilingual(comment.text, comment.translation)}</p>`).join('');
   const commentOpen = ui.socialCommentOpen.has(post.id);
   const draft = ui.socialDrafts.get(post.id) || '';
   const commentBusy = busy.has(`social-comment:${post.id}`);
@@ -35,9 +35,10 @@ function renderPost(post, state, busy, ui) {
       <button type="button" class="social-like" data-action="social-like" data-social-post="${escape(post.id)}" aria-pressed="${userLiked}" aria-label="${userLiked ? '取消点赞' : '点赞'}" ${busy.has(`social-like:${post.id}`) ? 'disabled' : ''}>${icon('heart')}${likes} 赞</button><span>${icon('repost')}${post.reposts || 0} 转发</span><button type="button" class="social-comment-toggle" data-action="social-comment-toggle" data-social-post="${escape(post.id)}" aria-expanded="${commentOpen}">${icon('comment')}${post.commentsCount || 0} 评论</button>
     </div>
     ${comments ? `<div class="social-comments">${comments}</div>` : ''}
+    ${commentBusy ? '<small class="social-reply-pending" role="status">等待回应…</small>' : ''}
     ${commentOpen ? `<form class="social-comment-form" data-social-comment-form="${escape(post.id)}">
       <textarea name="comment" rows="1" placeholder="写下你的留言" aria-label="给这条动态留言">${escape(draft)}</textarea>
-      <button type="submit" class="social-comment-send" ${commentBusy ? 'disabled' : ''}>${commentBusy ? '发送中…' : '发送'}</button>
+      <button type="submit" class="social-comment-send" ${commentBusy ? 'disabled' : ''}>${commentBusy ? '等待回应' : '发送'}</button>
     </form>` : ''}
     ${date ? `<time class="social-time">${escape(date)}</time>` : ''}
   </article>`;

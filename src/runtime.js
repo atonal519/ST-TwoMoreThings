@@ -29,7 +29,10 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
   const appearance = createAppearanceSettings({ host, documentRef });
   const makeStore = (target, options = {}) => createPhoneStore({ target, initialState, removeImages: files.remove, ...options });
   let phone, targetId, activeRequests = 0;
-  const entries = createPhoneEntries({ host, documentRef, open, defaults: preset?.entries, initialTheme: initialState?.theme, toggle: () => phone?.isOpen ? phone.close() : open() });
+  const entries = createPhoneEntries({ host, documentRef, open, defaults: preset?.entries,
+    isEnabled: () => createPhoneControl({ host, target: host.captureChat() }).isEnabled(),
+    toggle: () => phone?.isOpen && phone.isFrontmost ? phone.close() : open() });
+  const unsubscribeEntries = host.onChatChanged?.(entries.refreshVisibility);
   const onBusyChange = value => { activeRequests += value ? 1 : -1; entries.fab.setBusy(activeRequests > 0); };
   const unsubscribe = host.onBeforeMainGeneration(async (type, _params, dryRun) => {
     if (dryRun || ['quiet', 'impersonate'].includes(type)) return;
@@ -40,7 +43,7 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
     const store = makeStore(target);
     const modelClient = createModelClient({ host, sourceProvider: createApiSettings({ host }), onBusyChange });
     try { host.setPrompt(await createBackflowService({ target, store, modelClient, isEnabled: control.isEnabled }).prepare(type)); }
-    catch (error) { host.reportError(`手机摘要未生成，本次正文未带入手机消息。${error.message || '请检查手机生成连接后重试。'}`); }
+    catch (error) { host.reportError(`手机参考准备失败，本次正文未带入手机消息。${error.message || '请检查手机生成连接后重试。'}`); }
   });
   const unsubscribeTime = host.onStoryChanged(() => phone?.refreshTime());
   function open() {
@@ -50,7 +53,7 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
     targetId = target.id;
     const control = createPhoneControl({ host, target });
     let currentPhone;
-    const store = makeStore(target, { assertEnabled: control.assertEnabled, isReading: id => currentPhone?.isReading(id) });
+    const store = makeStore(target, { assertEnabled: control.assertEnabled, isReading: id => currentPhone?.isReading(id), onIncomingMessage: id => currentPhone?.notifyMessage(id) });
     const apiSettings = createApiSettings({ host, onBusyChange });
     const client = createModelClient({ host, sourceProvider: apiSettings, onBusyChange });
     const modelClient = { async complete(request) { control.assertEnabled(); const answer = await client.complete(request); control.assertEnabled(); return answer; } };
@@ -61,7 +64,7 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
       groups: createGroupService({ target, store, contextReader, modelClient }),
       directory: createDirectoryService({ store, contextReader, modelClient }),
       forum: createForumService({ store, contextReader, modelClient }), apiSettings, calendar,
-      social: createSocialService({ store, contextReader, modelClient }),
+      social: createSocialService({ store, contextReader, modelClient, defaultUser: target.user, isReadingPost: id => currentPhone?.isReadingSocial(id) }),
       wallpaper: createWallpaperService({ host, store }), entries, appearance, authoring: createAuthoringService({ host, store, readEntries: entries.read }), mode: host.mode,
       control, imageProviders, images: createPhoneImageService({ store, modelClient, files, providers: imageProviders, assertEnabled: control.assertEnabled, onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
       onContextChange: () => host.setPrompt(''),
@@ -69,5 +72,5 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
     });
     phone = currentPhone;
   }
-  return { open, dispose() { phone?.dispose(); unsubscribe(); unsubscribeTime(); entries.dispose(); host.setPrompt(''); } };
+  return { open, dispose() { phone?.dispose(); unsubscribe(); unsubscribeTime(); unsubscribeEntries?.(); entries.dispose(); host.setPrompt(''); } };
 }

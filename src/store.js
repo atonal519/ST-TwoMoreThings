@@ -2,10 +2,69 @@ import { cleanProfile } from './profiles.js';
 import { messageText } from './content.js';
 import { cleanBackground } from './backgrounds.js';
 import { contentImagePaths, imagePath } from './image-files.js';
+import { readTodos, todoSourceMessageIds } from './todos.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
+const text = value => typeof value === 'string' ? value.trim() : '';
+const time = value => text(value) === '未定' ? '' : text(value);
+const todoPeople = (state, conversationId) => {
+  const group = state.groups?.find(item => item.id === conversationId);
+  if (group) return [...new Set([...(group.userIsMember ? ['@user'] : []), ...(group.memberIds || [])])];
+  return state.contacts?.some(item => item.id === conversationId) ? ['@user', conversationId] : [];
+};
+const cleanTodoCandidates = (state, conversations = state.conversations) => {
+  const todos = readTodos(state).filter(todo => {
+    if (todo.status !== 'candidate') return true;
+    const messages = conversations?.[todo.sourceConversationId] || [];
+    const ids = new Set(messages.map(message => message.id));
+    const sourceIds = todoSourceMessageIds(todo);
+    return sourceIds.length > 0 && sourceIds.every(id => ids.has(id));
+  });
+  return todos.length === readTodos(state).length ? state : { ...state, todos };
+};
+const editableTodo = (state, todo, patch = {}) => {
+  const next = { ...todo };
+  if ('title' in patch) {
+    next.title = text(patch.title);
+    if (!next.title) throw new Error('待办事项不能为空。');
+  }
+  if ('startAt' in patch || 'startTime' in patch) next.startAt = time(patch.startAt ?? patch.startTime);
+  if ('endAt' in patch || 'endTime' in patch) next.endAt = time(patch.endAt ?? patch.endTime);
+  if ('participantIds' in patch) {
+    const ids = [...new Set((Array.isArray(patch.participantIds) ? patch.participantIds : []).map(text).filter(Boolean))];
+    const allowed = new Set(['@user', ...(state.contacts || []).map(person => person.id), ...(todo.participantIds || [])]);
+    if (!ids.length || ids.some(id => !allowed.has(id))) throw new Error('相关人必须来自该会话或已有待办记录。');
+    next.participantIds = ids;
+  }
+  return next;
+};
+const materializeTodoCandidates = (state, conversationId, messages, rows) => {
+  const actual = Array.isArray(messages) ? messages : [];
+  const actualIds = new Set(actual.filter(message => message?.role === 'assistant').map(message => message.id));
+  const knownToIds = todoPeople(state, conversationId);
+  return (Array.isArray(rows) ? rows : []).flatMap(row => {
+    const suppliedIds = todoSourceMessageIds(row);
+    const suppliedMessages = suppliedIds.map(id => actual.find(message => message?.id === id));
+    if (!suppliedIds.length || suppliedIds.some(id => !actualIds.has(id)) || suppliedMessages.some(message => message?.role !== 'assistant')) return [];
+    const sourceMessageIds = [...new Set(suppliedIds)];
+    const title = text(row?.title ?? row?.name);
+    const people = [...new Set((Array.isArray(row?.participantIds) ? row.participantIds : []).map(text).filter(Boolean))];
+    if (!title || !sourceMessageIds.length || !people.length || people.some(id => !knownToIds.includes(id))) return [];
+    const batch = actual.find(message => sourceMessageIds.includes(message?.id) && message?.batch)?.batch;
+    return [{ id: text(row.id) || `todo:${globalThis.crypto.randomUUID()}`, status: 'candidate', title,
+      startAt: time(row.startAt), endAt: time(row.endAt), participantIds: people,
+      sourceConversationId: conversationId, sourceMessageIds, knownToIds: [...knownToIds],
+      ...(batch ? { sourceBatch: structuredClone(batch) } : {}) }];
+  });
+};
+const appendTodoCandidates = (state, conversationId, messages, rows) => {
+  const candidates = materializeTodoCandidates(state, conversationId, messages, rows);
+  if (!candidates.length) return state;
+  const existing = new Set(readTodos(state).map(todo => todo.id));
+  return { ...state, todos: [...readTodos(state), ...candidates.filter(todo => !existing.has(todo.id))] };
+};
 
-export function createPhoneStore({ target, assertEnabled = () => {}, isReading = () => false, initialState, removeImages = async () => {} }) {
+export function createPhoneStore({ target, assertEnabled = () => {}, isReading = () => false, onIncomingMessage = () => {}, initialState, removeImages = async () => {} }) {
   const empty = initialState || emptyState();
   const read = () => target.metadata.pocketPhone || empty;
   // Serialize normal phone saves so sending while a reply arrives keeps both changes.
@@ -39,33 +98,39 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   const store = {
     read,
     updateSocial(change, { cleanImages = false, incomingMessages = [] } = {}) {
+      const incomingContacts = new Set();
       return update(state => {
         assertEnabled();
         const social = state.social || { posts: [], npcs: [], feedIds: [] };
         const next = change(social, state);
         const conversations = { ...state.conversations };
         let messagesChanged = false;
+        let nextState = { ...state, social: next };
         const validContacts = new Set((state.contacts || []).map(person => person.id));
         for (const entry of Array.isArray(incomingMessages) ? incomingMessages : []) {
           if (!validContacts.has(entry?.contactId) || !Array.isArray(entry.messages) || !entry.messages.length) continue;
           const existing = conversations[entry.contactId] || [];
-          conversations[entry.contactId] = [...existing, ...entry.messages.map(message => message.role === 'assistant' ? { ...message, read: Boolean(isReading(entry.contactId)) } : message)];
+          const savedMessages = entry.messages.map(message => message.role === 'assistant' ? { ...message, read: Boolean(isReading(entry.contactId)) } : message);
+          conversations[entry.contactId] = [...existing, ...savedMessages];
+          if (savedMessages.some(message => message.role === 'assistant')) incomingContacts.add(entry.contactId);
+          nextState = appendTodoCandidates(nextState, entry.contactId, savedMessages, entry.todoCandidates);
           messagesChanged = true;
         }
         if (next === social && !messagesChanged) return state;
-        return { ...state, social: next, ...(messagesChanged ? { conversations } : {}) };
-      }, cleanImages);
+        return { ...nextState, ...(messagesChanged ? { conversations } : {}) };
+      }, cleanImages).then(state => { for (const id of incomingContacts) onIncomingMessage(id); return state; });
     },
     appendMessage(id, message) { return store.appendMessages(id, [message]); },
-    appendMessages(id, messages) {
+    appendMessages(id, messages, { todoCandidates = [] } = {}) {
       return update(state => {
         assertEnabled();
         if (!state.contacts.some(person => person.id === id) && !state.groups?.some(group => group.id === id)) throw new Error('这个会话已删除，无法保存新消息。');
         const group = state.groups?.find(item => item.id === id);
         if (group && messages.some(message => message.role === 'assistant' && !group.memberIds.includes(message.speakerId))) throw new Error('群成员已经移出，无法保存这次回复，请重新点继续。');
         if (group && messages.some(message => message.type === 'transfer' && !(group.memberIds.includes(message.transfer.recipientId) || message.transfer.recipientId === '@user' && group.userIsMember))) throw new Error('收款人已不在群中，无法保存这条转账。');
-        return { ...state, conversations: { ...state.conversations, [id]: [...(state.conversations[id] || []), ...messages.map(message => message.role === 'assistant' ? { ...message, read: Boolean(isReading(id)) } : message)] } };
-      });
+        const savedMessages = messages.map(message => message.role === 'assistant' ? { ...message, read: Boolean(isReading(id)) } : message);
+        return appendTodoCandidates({ ...state, conversations: { ...state.conversations, [id]: [...(state.conversations[id] || []), ...savedMessages] } }, id, savedMessages, todoCandidates);
+      }).then(state => { if (messages.some(message => message.role === 'assistant')) onIncomingMessage(id); return state; });
     },
     markRead(id) {
       return update(state => {
@@ -115,10 +180,10 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       });
     },
     deleteMessage(id, messageId) {
-      return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.id !== messageId) } }), true);
+      return update(state => cleanTodoCandidates({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.id !== messageId) } }), true);
     },
     clearConversation(id, anchor) {
-      return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.batch?.key !== anchor.key) } }), true);
+      return update(state => cleanTodoCandidates({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.batch?.key !== anchor.key) } }), true);
     },
     async saveContact(id, draft) {
       const profile = { ...cleanProfile(draft, true), ...('background' in draft ? { background: cleanBackground(draft.background, true) } : {}) };
@@ -151,14 +216,14 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
           feedIds: state.social.feedIds.filter(key => !state.social.posts.some(post => post.id === key && post.authorId === id)),
           ...(state.social.expandedAuthors ? { expandedAuthors: state.social.expandedAuthors.filter(key => key !== id) } : {}),
         };
-        return { ...state, contacts: state.contacts.filter(person => person.id !== id), groups, conversations, ...(social ? { social } : {}) };
+        return cleanTodoCandidates({ ...state, contacts: state.contacts.filter(person => person.id !== id), groups, conversations, ...(social ? { social } : {}) }, conversations);
       }, true);
     },
     deleteGroup(id) {
       return update(state => {
         const conversations = { ...state.conversations };
         delete conversations[id];
-        return { ...state, groups: (state.groups || []).filter(group => group.id !== id), conversations };
+        return cleanTodoCandidates({ ...state, groups: (state.groups || []).filter(group => group.id !== id), conversations }, conversations);
       }, true);
     },
     async mergeDirectory({ contacts, groups }) {
@@ -225,6 +290,43 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       });
     },
     setInjectionEnabled(enabled) { return update(state => ({ ...state, injectEnabled: Boolean(enabled) })); },
+    confirmTodo(id, patch = {}) {
+      return update(state => {
+        assertEnabled();
+        const current = readTodos(state).find(todo => todo.id === id);
+        if (!current) throw new Error('这个待办已不存在，请返回待办列表。');
+        if (current.status !== 'candidate') return state;
+        const next = { ...editableTodo(state, current, patch), status: 'open' };
+        return { ...state, todos: readTodos(state).map(todo => todo.id === id ? next : todo) };
+      });
+    },
+    saveTodo(id, patch = {}) {
+      return update(state => {
+        assertEnabled();
+        const current = readTodos(state).find(todo => todo.id === id);
+        if (!current) throw new Error('这个待办已不存在，请返回待办列表。');
+        const next = editableTodo(state, current, patch);
+        return next === current ? state : { ...state, todos: readTodos(state).map(todo => todo.id === id ? next : todo) };
+      });
+    },
+    setTodoDone(id, done) {
+      return update(state => {
+        assertEnabled();
+        const current = readTodos(state).find(todo => todo.id === id);
+        if (!current) throw new Error('这个待办已不存在，请返回待办列表。');
+        if (current.status === 'candidate') throw new Error('候选待办需要先加入待办。');
+        const status = done === true ? 'done' : 'open';
+        if (current.status === status) return state;
+        return { ...state, todos: readTodos(state).map(todo => todo.id === id ? { ...todo, status } : todo) };
+      });
+    },
+    deleteTodo(id) {
+      return update(state => {
+        assertEnabled();
+        if (!readTodos(state).some(todo => todo.id === id)) throw new Error('这个待办已不存在，请返回待办列表。');
+        return { ...state, todos: readTodos(state).filter(todo => todo.id !== id) };
+      });
+    },
   };
   return store;
 }

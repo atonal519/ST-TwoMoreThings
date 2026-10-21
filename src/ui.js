@@ -24,12 +24,17 @@ import { renderSocial, renderSocialProfile } from './ui/social.js';
 import { imagePath } from './image-files.js';
 import { findBlobEmoji } from './emojis.js';
 import { readContactAvatars } from './contact-avatars.js';
+import { displayName } from './profiles.js';
+import { renderTodos } from './ui/todos.js';
+import { renderPhoneNotice } from './ui/notifications.js';
+import { readSocialPosts } from './social.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
   { id: 'messages', label: '短信', view: 'inbox' },
   { id: 'forum', label: '论坛', view: 'forum' },
   { id: 'calendar', label: '日历', view: 'calendar' },
+  { id: 'todos', label: '待办', view: 'todos' },
   { id: 'settings', label: '设置', view: 'settings' },
   { id: 'social', label: 'ainstgram', view: 'social' },
 ];
@@ -48,6 +53,7 @@ const pages = {
   'user-profile': renderProfile,
   authoring: renderAuthoring,
   calendar: renderCalendar,
+  todos: renderTodos,
   social: renderSocial,
   'social-profile': renderSocialProfile,
 };
@@ -86,18 +92,64 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     groupEditId: '', groupDraft: {}, deletion: null,
     groupMembersOpen: false,
     socialAuthorId: '', socialPastOpen: false, socialLimit: 30, socialScroll: 0,
-    socialCommentOpen: new Set(), socialDrafts: new Map(),
+    socialCommentOpen: new Set(), socialDrafts: new Map(), notice: null,
     drawers: { connection: true, appearance: false, content: false },
     manual: false, apiDraft: {}, models: [], modelSearch: '', modelsOpen: false,
     attachment: '', attachmentDraft: {}, stickerPack: 'emoji', photo: null,
     calendarOffset: 0, calendarDay: null,
+    todoEditing: new Set(), todoDrafts: new Map(),
+    replyToId: '',
   };
   const busy = new Set();
   if (!control.isEnabled()) ui.view = 'settings';
   const clock = createPhoneClock({ root, element, readTime });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
-  let particles = null, avatarCropper = null, lockImageNode = null, lockImageSrc = '';
+  let particles = null, avatarCropper = null, lockImageNode = null, lockImageSrc = '', noticeTimer;
+
+  function dismissPhoneNotice() {
+    doc.defaultView.clearTimeout(noticeTimer);
+    ui.notice = null;
+    root.querySelector('.phone-top-notice')?.remove();
+  }
+  function pushPhoneNotice(notice) {
+    if (element.hidden || !element.isConnected || !control.isEnabled()) return;
+    dismissPhoneNotice();
+    ui.notice = notice;
+    noticeTimer = doc.defaultView.setTimeout(dismissPhoneNotice, 6000);
+  }
+  function visibleInPage(node, page) {
+    if (!node || !page) return false;
+    const box = node.getBoundingClientRect(), frame = page.getBoundingClientRect();
+    return box.bottom > frame.top && box.top < frame.bottom;
+  }
+  function isReadingSocial(postId) {
+    if (element.hidden || !element.isConnected || !['social', 'social-profile'].includes(ui.view)) return false;
+    const post = root.querySelector(`.social-post[data-social-post="${CSS.escape(postId)}"]`);
+    return visibleInPage(post?.querySelector('.social-comment:last-child') || post?.querySelector('.social-stats'), root.querySelector('.phone-main'));
+  }
+  function readVisibleSocialReplies(event) {
+    if (event && !event.target.matches?.('.view-social, .view-social-profile')) return;
+    if (element.hidden || !['social', 'social-profile'].includes(ui.view)) return;
+    const main = root.querySelector('.phone-main');
+    const ids = [...new Set([...root.querySelectorAll('.social-comment[data-unread-reply]')]
+      .filter(node => visibleInPage(node, main)).map(node => node.closest('.social-post').dataset.socialPost))];
+    if (!ids.length) return;
+    void social.markRepliesRead(ids).then(() => {
+      for (const id of ids) root.querySelectorAll(`.social-post[data-social-post="${CSS.escape(id)}"] [data-unread-reply]`).forEach(node => node.removeAttribute('data-unread-reply'));
+      if (ui.notice?.kind === 'social-reply' && ids.includes(ui.notice.id)) dismissPhoneNotice();
+    }).catch(() => { ui.feedback = { error: true, text: '回复的已读状态未能保存，请检查酒馆连接。' }; render(); });
+  }
+  function notifyCompletion(key) {
+    let notice;
+    if (key === 'forum' && ui.view !== 'forum') notice = { kind: 'forum' };
+    if (key === 'social' && ui.view !== 'social') notice = { kind: 'social-feed' };
+    if (key.startsWith('social-author:')) {
+      const id = key.slice('social-author:'.length);
+      if (ui.view !== 'social-profile' || ui.socialAuthorId !== id) notice = { kind: 'social-author', id };
+    }
+    if (notice) pushPhoneNotice(notice);
+  }
 
   function syncParticles() {
     const chatStage = root.querySelector('.chat-stage');
@@ -141,7 +193,6 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (ui.batch?.key !== batch.key) { ui.historyOpen = false; ui.visibleHistory = 60; }
     ui.batch = batch;
     element.dataset.theme = state.theme === 'night' ? 'night' : 'day';
-    entries.setTheme(state.theme);
     const page = pages[ui.view];
     const weather = ui.view === 'home' ? readWeather() : null;
     surface.classList.toggle('is-stacked-lock', ui.view === 'home' && state.lockStyle === 'stacked');
@@ -150,12 +201,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       ? calendar.month(ui.calendarOffset)
       : ui.view === 'desktop' ? calendar.month(0) : null;
     surface.innerHTML = renderShell({
-      content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, apps, calendar: calendarMonth, weather }),
+      content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, todos: store }),
       view: ui.view, enabled, weather,
       feedback: ui.feedback, photo: ui.photo,
       conflict: ui.conflict, mode, conflictBusy: busy.has('conflict'),
       lockStyle: state.lockStyle,
     });
+    if (!ui.conflict && enabled) surface.insertAdjacentHTML('beforeend', renderPhoneNotice(state, ui.notice));
     const nextLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
     if (lockImageNode && nextLockImage && lockImageSrc === nextLockImage.getAttribute('src')) {
       lockImageNode.alt = nextLockImage.alt;
@@ -195,7 +247,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     busy.add(key);
     ui.feedback = null;
     render({ bottom: key.startsWith('continue:') });
-    try { const result = await task(); after?.(result); }
+    try { const result = await task(); notifyCompletion(key); after?.(result); }
     catch (error) { ui.feedback = { error: true, text: error?.message || '操作未完成，请重试。' }; }
     finally {
       if (!element.hidden && inChat() && control.isEnabled()) {
@@ -240,6 +292,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   function close() {
     avatarCropper?.close();
     dismissMenus();
+    dismissPhoneNotice();
     windowControls.stop();
     chatScroll.stop();
     element.hidden = true;
@@ -248,9 +301,17 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     particles = null;
     onClose?.();
   }
+  function isFrontmost() {
+    if (element.hidden) return false;
+    for (let next = element.nextElementSibling; next; next = next.nextElementSibling) {
+      if (next.matches('.pocket-phone:not([hidden])')) return false;
+    }
+    return true;
+  }
   function showPage(view, { bottom = false } = {}) {
     if (ui.view === 'social' && view !== 'social') ui.socialScroll = root.querySelector('.view-social')?.scrollTop || 0;
     dismissMenus();
+    if (view !== 'group-chat') ui.replyToId = '';
     ui.view = view;
     ui.feedback = null;
     ui.confirmClear = false;
@@ -259,6 +320,27 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     render({ bottom });
     recoverVisibleImages();
     if (view === 'social') root.querySelector('.view-social').scrollTop = ui.socialScroll;
+    readVisibleSocialReplies();
+  }
+  function openConversation(id, isGroup = false) {
+    if (isGroup) { ui.groupId = id; ui.view = 'group-chat'; }
+    else { ui.contactId = id; ui.view = 'chat'; }
+    ui.chatMenu = false; ui.inboxMenu = false; ui.confirmClear = false; ui.selectedMessage = ''; ui.visibleMessages = 60; ui.historyOpen = false; ui.visibleHistory = 60; ui.feedback = null;
+    ui.attachment = ''; ui.attachmentDraft = {};
+    render({ bottom: true });
+    recoverVisibleImages();
+    void store.markRead(id).catch(() => { ui.feedback = { error: true, text: '消息的已读状态保存失败，请检查酒馆连接。' }; render(); });
+  }
+  function openSocialReply(postId) {
+    const state = store.read(), post = state.social?.posts.find(item => item.id === postId);
+    if (!post) return;
+    ui.socialAuthorId = post.authorId;
+    ui.socialLimit = Math.max(ui.socialLimit, readSocialPosts(state, { authorId: post.authorId }).findIndex(item => item.id === postId) + 1);
+    showPage('social-profile');
+    const article = root.querySelector(`.social-post[data-social-post="${CSS.escape(postId)}"]`), main = root.querySelector('.view-social-profile');
+    const anchor = article?.querySelector('.social-comments') || article;
+    if (anchor && main) main.scrollTop += anchor.getBoundingClientRect().top - main.getBoundingClientRect().top - 8;
+    readVisibleSocialReplies();
   }
   // 返回先收起当前聊天的清空确认，再按页面父级走，不另存应用历史栈。
   function goBack() {
@@ -320,10 +402,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
     if (ui.modelsOpen && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.model-picker'))) closeModels();
     if (!ui.chatMenu && !ui.inboxMenu && !ui.selectedMessage) return;
-    if (event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.chat-options, .inbox-options, .bubble, .message-delete'))) return;
+    if (event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.chat-options, .inbox-options, .bubble, .message-actions'))) return;
     ui.chatMenu = false; ui.inboxMenu = false; ui.selectedMessage = '';
     // 仅移除弹出操作，保留输入节点和焦点，让下一次点击直接开始打字。
-    root.querySelectorAll('.chat-menu, .message-delete').forEach(node => node.remove());
+    root.querySelectorAll('.chat-menu, .message-actions').forEach(node => node.remove());
     root.querySelectorAll('.is-selected').forEach(node => node.classList.remove('is-selected'));
     root.querySelectorAll('.bubble[aria-expanded="true"]').forEach(node => node.setAttribute('aria-expanded', 'false'));
   }
@@ -361,6 +443,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (event.key === 'Escape') {
       event.stopPropagation();
       if (ui.photo) { ui.photo = null; render(); }
+      else if (ui.notice) dismissPhoneNotice();
       else close();
     } else if (event.target.matches('input, textarea, select') || event.target.isContentEditable) {
       // Shadow 外只能看到宿主节点的焦点，须在根内阻止编辑键触发酒馆快捷键。
@@ -372,7 +455,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       const button = event.target.closest('button');
       if (!button || button.disabled) return;
       if (button.dataset.action === 'conflict-continue') { ui.conflict = false; ui.feedback = null; render(); }
-      if (button.dataset.action === 'conflict-disable') void perform('conflict', () => control.setEnabled(false), () => { ui.conflict = false; ui.view = 'settings'; onContextChange(); });
+      if (button.dataset.action === 'conflict-disable') void perform('conflict', () => control.setEnabled(false), () => { ui.conflict = false; ui.view = 'settings'; entries.refreshVisibility?.(); onContextChange(); });
       return;
     }
     if (event.target.matches('.photo-viewer')) { ui.photo = null; render(); return; }
@@ -384,6 +467,37 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       draft.background = button.dataset.chatBackground; render(); return;
     }
     if (button.dataset.calendarDay) { ui.calendarDay = Number(button.dataset.calendarDay); render(); return; }
+    if (button.dataset.mentionId && ui.view === 'group-chat') {
+      const person = store.read().contacts?.find(item => item.id === button.dataset.mentionId), draft = root.querySelector('#sms-draft');
+      if (person && draft && !draft.disabled) {
+        const mention = `@${displayName(person)} `;
+        const start = draft.selectionStart ?? draft.value.length, end = draft.selectionEnd ?? start;
+        draft.setRangeText(mention, start, end, 'end');
+        draft.focus({ preventScroll: true }); input({ target: draft });
+      }
+      return;
+    }
+    const todoContainer = button.closest('[data-todo-candidate], [data-todo-row]');
+    if (todoContainer && button.dataset.action?.startsWith('todo-')) {
+      const todoId = todoContainer.dataset.todoCandidate || todoContainer.dataset.todoRow;
+      if (button.dataset.action === 'todo-edit') {
+        if (ui.todoEditing.has(todoId)) ui.todoEditing.delete(todoId); else ui.todoEditing.add(todoId);
+        render(); return;
+      }
+      if (button.dataset.action === 'todo-accept') {
+        void perform(`todo:${todoId}`, () => store.confirmTodo(todoId, ui.todoDrafts.get(todoId) || {}), () => { ui.todoEditing.delete(todoId); ui.todoDrafts.delete(todoId); onContextChange(); });
+        return;
+      }
+      if (button.dataset.action === 'todo-done') {
+        const todo = store.read().todos?.find(item => item.id === todoId);
+        if (todo) void perform(`todo:${todoId}`, () => store.setTodoDone(todoId, todo.status !== 'done'), onContextChange);
+        return;
+      }
+      if (button.dataset.action === 'todo-delete') {
+        void perform(`todo:${todoId}`, () => store.deleteTodo(todoId), () => { ui.todoEditing.delete(todoId); ui.todoDrafts.delete(todoId); onContextChange(); });
+        return;
+      }
+    }
     if (button.dataset.inlineEmoji) {
       const emoji = findBlobEmoji(button.dataset.inlineEmoji), draft = root.querySelector('#sms-draft');
       if (emoji && draft && !draft.disabled) {
@@ -395,7 +509,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (button.dataset.stickerPack) { ui.stickerPack = button.dataset.stickerPack; render(); return; }
     if (button.dataset.sticker) {
       const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
-      void perform(`send:${id}`, () => service.sendCard(id, { type: 'sticker', stickerId: button.dataset.sticker }), () => { ui.attachment = ''; onContextChange(); }); return;
+      void perform(`send:${id}`, () => service.sendCard(id, { type: 'sticker', stickerId: button.dataset.sticker }, ui.view === 'group-chat' ? { replyToId: ui.replyToId } : undefined), () => { ui.attachment = ''; ui.replyToId = ''; onContextChange(); }); return;
     }
     if (button.dataset.transferId) {
       const id = conversationId(), batch = ui.batch;
@@ -408,18 +522,24 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       return;
     }
     if (button.dataset.contact || button.dataset.group) {
-      if (button.dataset.group) { ui.groupId = button.dataset.group; ui.view = 'group-chat'; }
-      else { ui.contactId = button.dataset.contact; ui.view = 'chat'; }
-      ui.chatMenu = false; ui.inboxMenu = false; ui.confirmClear = false; ui.selectedMessage = ''; ui.visibleMessages = 60; ui.historyOpen = false; ui.visibleHistory = 60; ui.feedback = null;
-      ui.attachment = ''; ui.attachmentDraft = {};
-      render({ bottom: true });
-      recoverVisibleImages();
-      void store.markRead(conversationId()).catch(() => { ui.feedback = { error: true, text: '消息的已读状态保存失败，请检查酒馆连接。' }; render(); }); return;
+      openConversation(button.dataset.group || button.dataset.contact, Boolean(button.dataset.group)); return;
     }
     if (button.dataset.message) { ui.chatMenu = false; ui.selectedMessage = ui.selectedMessage === button.dataset.message ? '' : button.dataset.message; render(); return; }
     if (button.dataset.post) { ui.postId = button.dataset.post; ui.view = 'post'; ui.feedback = null; render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
+      case 'dismiss-phone-notice': dismissPhoneNotice(); break;
+      case 'open-phone-notice': {
+        const notice = ui.notice;
+        dismissPhoneNotice();
+        if (notice?.kind === 'message') openConversation(notice.id, store.read().groups?.some(group => group.id === notice.id));
+        else if (notice?.kind === 'social-reply') openSocialReply(notice.id);
+        else if (notice?.kind === 'social-author') { ui.socialAuthorId = notice.id; showPage('social-profile'); }
+        else if (notice?.kind === 'social-feed') showPage('social');
+        else if (notice?.kind === 'forum') showPage('forum');
+        break;
+      }
+      case 'open-social-reply': dismissPhoneNotice(); openSocialReply(button.dataset.socialPost); break;
       case 'unlock': showPage('desktop'); break;
       case 'system-home': showPage('desktop'); break;
       case 'system-back': goBack(); break;
@@ -548,6 +668,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         const messageId = ui.selectedMessage;
         void perform(`delete:${id}`, () => store.deleteMessage(id, messageId), () => { ui.selectedMessage = ''; onContextChange(); }); break;
       }
+      case 'reply-message': {
+        if (ui.view !== 'group-chat') break;
+        ui.replyToId = ui.selectedMessage; ui.selectedMessage = ''; render(); root.querySelector('#sms-draft')?.focus({ preventScroll: true }); break;
+      }
+      case 'cancel-reply': ui.replyToId = ''; render(); root.querySelector('#sms-draft')?.focus({ preventScroll: true }); break;
       case 'earlier': ui.visibleMessages += 60; render(); break;
       case 'history': ui.historyOpen = !ui.historyOpen; ui.selectedMessage = ''; render(); break;
       case 'earlier-history': ui.visibleHistory += 60; render(); break;
@@ -555,7 +680,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'close': close(); break;
       case 'send': {
         const text = (ui.drafts.get(id) || '').trim();
-        if (text) void perform(`send:${id}`, () => service.send(id, text), () => { if ((ui.drafts.get(id) || '').trim() === text) ui.drafts.set(id, ''); onContextChange(); });
+        if (text) void perform(`send:${id}`, () => ui.view === 'group-chat' ? service.send(id, text, { replyToId: ui.replyToId }) : service.send(id, text), () => { if ((ui.drafts.get(id) || '').trim() === text) ui.drafts.set(id, ''); ui.replyToId = ''; onContextChange(); });
         break;
       }
       case 'continue': void perform(`continue:${id}`, () => service.continueChat(id), onContextChange); break;
@@ -585,6 +710,14 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       ui.drafts.set(conversationId(), event.target.value);
       resizeDraft();
     }
+    const todoForm = event.target.closest('.todo-form');
+    if (todoForm && event.target.name) {
+      const id = todoForm.dataset.todoForm, source = store.read().todos?.find(item => item.id === id) || {};
+      const draft = { ...(ui.todoDrafts.get(id) || source) };
+      if (event.target.name === 'participantIds') draft.participantIds = [...event.target.selectedOptions].map(option => option.value);
+      else draft[event.target.name] = event.target.value;
+      ui.todoDrafts.set(id, draft);
+    }
     const socialComment = event.target.closest('.social-comment-form');
     if (socialComment && event.target.name === 'comment') ui.socialDrafts.set(socialComment.dataset.socialCommentForm, event.target.value);
     if (event.target.closest('.api-form') && event.target.name) ui.apiDraft[event.target.name] = event.target.value;
@@ -604,11 +737,18 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
   }
   function change(event) {
+    const todoForm = event.target.closest('.todo-form');
+    if (todoForm && event.target.name) {
+      const id = todoForm.dataset.todoForm, source = store.read().todos?.find(item => item.id === id) || {};
+      const draft = { ...(ui.todoDrafts.get(id) || source) };
+      draft[event.target.name] = event.target.multiple ? [...event.target.selectedOptions].map(option => option.value) : event.target.value;
+      ui.todoDrafts.set(id, draft);
+    }
     if (event.target.id === 'image-provider') void perform('image-provider', () => imageProviders.select(event.target.value));
     if (event.target.id === 'export-source') { ui.exportLocal = event.target.value === 'local'; render(); }
     if (event.target.id === 'phone-enabled') {
       const enabled = event.target.checked;
-      void perform('enabled', () => control.setEnabled(enabled), () => { ui.view = 'settings'; onContextChange(); });
+      void perform('enabled', () => control.setEnabled(enabled), () => { ui.view = 'settings'; entries.refreshVisibility?.(); onContextChange(); });
     }
     if (event.target.closest('.attachment-form') && event.target.name) ui.attachmentDraft[event.target.name] = event.target.value;
     if (event.target.closest('.group-form') && event.target.name === 'member') {
@@ -656,10 +796,20 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   }
   function submit(event) {
     event.preventDefault();
+    if (event.target.matches('.todo-form')) {
+      const id = event.target.dataset.todoForm, source = store.read().todos?.find(item => item.id === id);
+      if (!source) return;
+      const draft = ui.todoDrafts.get(id) || source;
+      void perform(`todo:${id}`, async () => {
+        if (source.status === 'candidate') await store.confirmTodo(id, draft);
+        else await store.saveTodo(id, draft);
+      }, () => { ui.todoEditing.delete(id); ui.todoDrafts.delete(id); onContextChange(); });
+      return;
+    }
     if (event.target.matches('.attachment-form')) {
       const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages, type = ui.attachment;
       const draft = { type, [type]: { ...ui.attachmentDraft } };
-      void perform(`send:${id}`, () => service.sendCard(id, draft), () => { ui.attachment = ''; ui.attachmentDraft = {}; onContextChange(); });
+      void perform(`send:${id}`, () => ui.view === 'group-chat' ? service.sendCard(id, draft, { replyToId: ui.replyToId }) : service.sendCard(id, draft), () => { ui.attachment = ''; ui.attachmentDraft = {}; ui.replyToId = ''; onContextChange(); });
     }
     if (event.target.matches('.composer')) {
       const send = root.querySelector('[data-action="send"]');
@@ -669,8 +819,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       const postId = event.target.dataset.socialCommentForm;
       const text = (ui.socialDrafts.get(postId) || '').trim();
       if (!text) return;
-      void perform(`social-comment:${postId}`, () => social.comment(postId, text), () => {
+      let postedId;
+      void perform(`social-comment:${postId}`, () => social.comment(postId, text, { onPosted: comment => {
+        postedId = comment.id;
         if ((ui.socialDrafts.get(postId) || '').trim() === text) ui.socialDrafts.delete(postId);
+        render();
+      } }), result => {
+        if (!isReadingSocial(postId) && result.comments?.some(comment => comment.replyToId === postedId && comment.read === false)) pushPhoneNotice({ kind: 'social-reply', id: postId });
         onContextChange();
       });
     }
@@ -705,11 +860,15 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   root.addEventListener('submit', submit);
   root.addEventListener('toggle', rememberMembersFold, true);
   root.addEventListener('error', imageError, true);
+  root.addEventListener('scroll', readVisibleSocialReplies, true);
   doc.addEventListener('pointerdown', dismissMenus, true);
   render();
   return {
     get isOpen() { return !element.hidden; },
+    get isFrontmost() { return isFrontmost(); },
     isReading(id) { return element.isConnected && !element.hidden && inChat() && conversationId() === id; },
+    isReadingSocial,
+    notifyMessage(id) { if (!(inChat() && conversationId() === id)) pushPhoneNotice({ kind: 'message', id }); },
     close,
     open() {
       ui.conflict = control.hasConflict?.(doc) === true;
@@ -720,6 +879,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         ui.attachment = '';
       }
       element.hidden = false;
+      // 两份手机共享层级；打开已有窗口时按同层 DOM 顺序置前，不改另一份状态。
+      if (!isFrontmost()) mount.append(element);
       render();
       recoverVisibleImages();
       windowControls.refresh();
@@ -735,6 +896,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
     },
     dispose() {
+      dismissPhoneNotice();
       avatarCropper?.close();
       unsubscribeAppearance();
       clock.stop();
@@ -752,6 +914,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       root.removeEventListener('submit', submit);
       root.removeEventListener('toggle', rememberMembersFold, true);
       root.removeEventListener('error', imageError, true);
+      root.removeEventListener('scroll', readVisibleSocialReplies, true);
       element.remove(); fontStyle.remove();
     },
   };

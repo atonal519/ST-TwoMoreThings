@@ -54,6 +54,12 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       ctx.eventSource.on(name, callback);
       return () => ctx.eventSource.removeListener(name, callback);
     },
+    onChatChanged(callback) {
+      const ctx = context(), name = ctx.eventTypes?.CHAT_CHANGED;
+      if (!name || !ctx.eventSource) return () => {};
+      ctx.eventSource.on(name, callback);
+      return () => ctx.eventSource.removeListener(name, callback);
+    },
     async readWorldInfo(target, { scanText } = {}) {
       // 核心可从CDN加载，宿主模块仍必须从当前酒馆页面的地址读取。
       const bindings = worldInfoBindings || await import(new URL('/scripts/world-info.js', globalThis.location.href).href).then(world => ({

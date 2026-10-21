@@ -36,10 +36,10 @@ try {
   const before=await row.boundingBox();
   await row.locator('.bubble').click();
   const remove=page.getByRole('button', { name:'删除这条短信',exact:true });
-  check(`${width}: 删除应为气泡右侧独立小图标，不占新行`, await remove.evaluate(button => {
-   const row=button.closest('.message-row'), bubble=row.querySelector('.bubble').getBoundingClientRect(), b=button.getBoundingClientRect(), style=getComputedStyle(button), feed=row.closest('.message-feed').getBoundingClientRect();
-   const inside=row.classList.contains('is-mine') ? b.right<=bubble.left : b.x>=bubble.right;
-   return button.querySelectorAll('svg').length===1 && b.width<=30 && b.height<=30 && inside && b.right<=feed.right && b.left>=feed.left && Math.abs(b.y+b.height/2-(bubble.y+bubble.height/2))<1 && style.borderTopWidth==='0px';
+  check(`${width}: 删除在气泡内侧小菜单，图标与短标签清楚可见`, await remove.evaluate(button => {
+   const row=button.closest('.message-row'), bubble=row.querySelector('.bubble').getBoundingClientRect(), menu=button.closest('.message-actions').getBoundingClientRect(), svg=button.querySelector('svg').getBoundingClientRect(), feed=row.closest('.message-feed').getBoundingClientRect();
+   const inside=row.classList.contains('is-mine') ? menu.right<=bubble.left : menu.x>=bubble.right;
+   return button.textContent.trim()==='删除' && svg.width===14 && inside && menu.right<=feed.right && menu.left>=feed.left && Math.abs(menu.y+menu.height/2-(bubble.y+bubble.height/2))<1;
   }));
   check(`${width}: 点击短消息不应插入一块按钮并增高消息`, Math.abs((await row.boundingBox()).height-before.height)<1);
   await page.getByRole('button', { name:'聊天选项',exact:true }).click();
@@ -57,5 +57,5 @@ try {
   await page.close();
  }
  assert.deepEqual(failures, []);
- console.log('Title/action alignment, compact inline trash controls, menu exclusivity and mobile bounds passed. UI only; no generation or persistence changes.');
+ console.log('Title/action alignment, compact adjacent message menu, menu exclusivity and mobile bounds passed. UI only; no generation or persistence changes.');
 } finally { await browser.close(); }

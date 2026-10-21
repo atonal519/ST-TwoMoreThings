@@ -11,29 +11,32 @@ const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwr
 const h = createHarness(), store = createPhoneStore({ target: h.host.captureChat() });
 const { script } = await createAuthoringService({ store, host: h.host }).exportScript();
 const revisions = ['a'.repeat(40), 'b'.repeat(40)], prefix = '/gh/atonal519/ST-TwoMoreThings@';
+const bundledRevision = '079f7f84e763382758267aed25ecfc66ad923b45';
 const browser = await chromium.launch({ executablePath: '/tmp/st-tools-browsers/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell', args: ['--no-sandbox'], env: { ...process.env, LD_LIBRARY_PATH: '/tmp/st-tools-browser-libs/root/usr/lib/x86_64-linux-gnu' } });
 try {
   for (const kind of ['native', 'luker']) {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     page.setDefaultTimeout(6000);
-    let current = 0, failed = false, checks = 0;
+    let current = 0, failure = '', checks = 0;
     const requested = [], errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.route('https://api.github.com/repos/atonal519/ST-TwoMoreThings/git/ref/heads/main', route => {
+    await page.route('https://api.github.com/repos/atonal519/ST-TwoMoreThings/git/ref/heads/main', async route => {
       checks++;
       assert.equal(route.request().postData(), null, 'update checks send no archive or settings');
       assert.equal(route.request().headers()['authorization'], undefined);
       assert.equal(route.request().headers()['x-csrf-token'], undefined);
-      return route.fulfill({ status: failed ? 503 : 200, json: failed ? {} : { object: { type: 'commit', sha: revisions[current] } }, headers: { 'Access-Control-Allow-Origin': '*' } });
+      if (failure === 'network') return route.abort('failed');
+      if (failure === 'timeout') { await new Promise(resolve => setTimeout(resolve, 9000)); return route.abort().catch(() => {}); }
+      return route.fulfill({ status: failure === 'rate-limit' ? 403 : 200, json: failure === 'rate-limit' ? { message: 'API rate limit exceeded' } : failure === 'invalid' ? { object: { type: 'tag', sha: 'unknown' } } : { object: { type: 'commit', sha: revisions[current] } }, headers: { 'Access-Control-Allow-Origin': '*' } });
     });
     await page.route('https://cdn.jsdelivr.net/**', route => {
       const pathname = new URL(route.request().url()).pathname;
       assert.ok(pathname.startsWith(prefix), pathname);
       const [revision, ...parts] = pathname.slice(prefix.length).split('/'), file = parts.join('/');
-      assert.ok(['main', ...revisions].includes(revision));
+      assert.ok(['main', bundledRevision, ...revisions].includes(revision));
       requested.push({ revision, file });
       const headers = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=604800' };
-      if (file === 'src/version.js') return route.fulfill({ contentType: 'text/javascript', body: `export const VERSION = '${revision === 'main' ? '0.1.0' : revision === revisions[0] ? '0.3.1' : '0.3.2'}';`, headers });
+      if (file === 'src/version.js') return route.fulfill({ contentType: 'text/javascript', body: `export const VERSION = '${revision === 'main' ? '0.1.0' : revision === bundledRevision ? '0.3.4' : revision === revisions[0] ? '0.3.1' : '0.3.2'}';`, headers });
       const types = { '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.ttf': 'font/ttf' };
       return route.fulfill({ body: readFileSync(resolve(import.meta.dirname, '..', file)), contentType: types[extname(file)] || 'text/plain', headers });
     });
@@ -42,7 +45,7 @@ try {
     const before = await page.evaluate(async kind => {
       previewHarness.app.dispose();
       globalThis[kind === 'native' ? 'SillyTavern' : 'Luker'] = { getContext: () => previewHarness.context };
-      globalThis.toastr = { error: message => (previewHarness.loadErrors ||= []).push(message) };
+      globalThis.toastr = { error: message => (previewHarness.loadErrors ||= []).push(message), warning: message => (previewHarness.loadWarnings ||= []).push(message) };
       previewHarness.metadata.pocketPhone.userProfile = { name: '读者自己的名字' };
       previewHarness.metadata.pocketPhone.wallpapers = { day: '/assets/stickers/sepia-0.png' };
       await import('https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js');
@@ -76,13 +79,26 @@ try {
       assert.equal(await page.evaluate(() => previewHarness.metadataSaves), before.saves);
       await unload(); requested.length = 0;
     }
-    failed = true;
-    await load();
-    await page.waitForFunction(() => previewHarness.loadErrors?.length === 1);
-    assert.equal(requested.length, 0, 'failed update lookup does not silently load the stale branch');
-    assert.equal(await page.locator('#pocket-phone-card-host').count(), 0);
+    for (failure of ['rate-limit', 'network', 'invalid', 'timeout']) {
+      await page.evaluate(() => { previewHarness.loadErrors = []; previewHarness.loadWarnings = []; });
+      const checksBefore = checks;
+      await load();
+      await page.getByRole('button', { name: '打开两三事 · 随卡', exact: true }).waitFor({ timeout: 8000 });
+      assert.equal(checks, checksBefore + 1, 'failed lookups are not retried');
+      await page.waitForFunction(() => previewHarness.loadWarnings.length === 1);
+      assert.deepEqual(await page.evaluate(() => previewHarness.loadErrors), [], 'unavailable updates do not prevent startup');
+      assert.ok(requested.every(item => item.revision === bundledRevision), 'uses the stable published revision rather than a cached mutable branch');
+      await page.getByRole('button', { name: '打开两三事 · 随卡', exact: true }).click();
+      const embedded = page.locator('#pocket-phone-card-host');
+      await openApp(embedded, '设置');
+      await embedded.getByText('两三事 0.3.4', { exact: true }).waitFor();
+      assert.equal(await page.evaluate(() => JSON.stringify(previewHarness.metadata)), before.archive);
+      assert.equal(await page.evaluate(() => JSON.stringify(previewHarness.settings)), before.settings);
+      assert.equal(await page.evaluate(() => previewHarness.metadataSaves), before.saves);
+      await unload(); requested.length = 0;
+    }
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log('Native/Luker: cached old branch, two published revisions in one page, complete pinned module graphs, visible runtime versions, unchanged reader data, and explicit update failure passed. Mock network only.');
+  console.log('Native/Luker: fresh pinned revisions, rate-limit/network/invalid/timeout fallback to the bundled release, one lookup per start, visible warnings and versions, and unchanged reader data passed. Mock network only.');
 } finally { await browser.close(); }

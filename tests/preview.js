@@ -22,6 +22,13 @@ const state = {
   forum: { posts: createPosts(false) },
 };
 const previewQuery = new URLSearchParams(location.search);
+if (previewQuery.get('todos') === '1') {
+  state.todos = [{ id: 'todo-preview', status: 'candidate', title: '在旧书店见面', startAt: '大陆历1686年10月5日 18:00', endAt: '', participantIds: ['@user', 'lin'], sourceConversationId: 'lin', sourceMessageIds: ['m4'] }];
+}
+if (previewQuery.get('group') === '1') {
+  state.groups = [{ id: 'preview-friends', name: '书店碰头小组', memberIds: ['lin', 'zhou'], userIsMember: true }];
+  state.conversations['preview-friends'] = [];
+}
 if (previewQuery.get('notifications') === '1') {
   state.theme = previewQuery.get('theme') === 'night' ? 'night' : 'day';
   state.groups = [{ id: 'preview-friends', name: '书店碰头小组', memberIds: ['lin', 'zhou'], userIsMember: true }];
@@ -66,9 +73,9 @@ const ctx = {
   SlashCommandParser: { commands: {}, addCommandObject(command) { this.commands[command.name] = command; } },
   chatId: 'preview', characterId: 0, characters: [{ name: '林舟', description: '说话简短，性格细心温和。', scenario: '一座安静的城市。' }], name1: '我',
   chat: h.mainMessages, chatMetadata: h.metadata, extensionSettings: settings,
-  saveMetadata: async () => { if (h.saveWait) await h.saveWait; h.metadataSaves++; }, saveSettingsDebounced: () => { h.settingsSaves++; }, getRequestHeaders: () => ({ 'Content-Type': 'application/json' }),
+  saveMetadata: async () => { if (h.saveWait) await h.saveWait; if (h.failSave) { h.failSave = false; throw new Error('preview save failed'); } h.metadataSaves++; }, saveSettingsDebounced: () => { h.settingsSaves++; }, getRequestHeaders: () => ({ 'Content-Type': 'application/json' }),
   setExtensionPrompt: (id, text) => { h.prompt = text; },
-  eventTypes: { GENERATION_AFTER_COMMANDS: 'before-main', GENERATION_ENDED: 'main-ended', MESSAGE_UPDATED: 'main-edited', MESSAGE_SWIPED: 'main-swiped' },
+  eventTypes: { GENERATION_AFTER_COMMANDS: 'before-main', GENERATION_ENDED: 'main-ended', MESSAGE_UPDATED: 'main-edited', MESSAGE_SWIPED: 'main-swiped', CHAT_CHANGED: 'chat-changed' },
   eventSource: { on(name, fn) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(fn); }, removeListener: (name, fn) => listeners.get(name)?.delete(fn), emit: (name, ...args) => emit(name, ...args) },
 };
 if (new URLSearchParams(location.search).get('host') === 'luker') {
@@ -96,7 +103,8 @@ const host = createHostAdapter({ contextProvider: () => ctx,
     if (h.replyWait) await h.replyWait;
     const system = body.messages[0].content;
     const input = JSON.parse(body.messages[1]?.content || '{}');
-    const result = system.includes('手机聊天压') ? { summary: '用户与林舟约好晚点在书店见面。' }
+    const isSummary = Array.isArray(input.conversations) && input.maxCharacters === 100;
+    const result = isSummary ? { summary: '用户与林舟约好晚点在书店见面。' }
       : system.includes('手机ainstgram') ? {
         npcs: input.authors.filter(person => person.kind === 'npc' && !person.name).map((person, index) => ({ id: person.id, name: `街角店主${index + 1}`, description: '经营街边小店，喜欢记录普通日常。' })),
         posts: input.authors.flatMap((person, index) => Array.from({ length: input.task === 'author' ? 2 : 1 }, (_, entry) => ({ authorId: person.id,
@@ -114,7 +122,7 @@ const host = createHostAdapter({ contextProvider: () => ctx,
       : system.includes('外部公众视角的论坛') ? { posts: createPosts(true) }
       : system.includes('整理已有') ? { contacts: [{ name: '林舟', personality: '温和、细心', expression: '短句，语气平和。' }] }
       : { messages: [{ text: '好，那我在书店门口等你。' }] };
-    return Response.json({ choices: [{ message: { content: JSON.stringify(system.includes('手机聊天压') ? h.summary || result : h.reply || result) } }] });
+    return Response.json({ choices: [{ message: { content: JSON.stringify(isSummary ? (h.summary ?? result) : (h.reply ?? result)) } }] });
   },
 });
 const qrSets = new Map(), qrActive = new Set();
@@ -123,6 +131,7 @@ globalThis.quickReplyApi = {
   getSetByName: name => qrSets.get(name),
   createSet: async name => { const set = { name, qrList: [], save: async () => {} }; qrSets.set(name, set); return set; },
   createQuickReply: (name, label, value) => qrSets.get(name).qrList.push({ label, ...value }),
+  updateQuickReply: (name, label, value) => Object.assign(qrSets.get(name).qrList.find(qr => qr.label === label), value),
   deleteQuickReply: (name, label) => { const set = qrSets.get(name); set.qrList = set.qrList.filter(qr => qr.label !== label); },
   addGlobalSet: name => qrActive.add(name), removeGlobalSet: name => qrActive.delete(name), deleteSet: async name => qrSets.delete(name),
 };

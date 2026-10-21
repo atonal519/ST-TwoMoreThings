@@ -1,8 +1,11 @@
 import { parseJsonObject } from './api.js';
-import { PUBLIC_LANGUAGE_RULE } from './prompts.js';
+import { PUBLIC_LANGUAGE_RULE, TODO_SUGGESTIONS_PROMPT } from './prompts.js';
 import { hasPublicationDate, publicationLabel, publicationValue, sortSocialPosts } from './social-time.js';
 import { normalizeContent } from './content.js';
 import { record } from './messages.js';
+import { parseTodoCandidates } from './todos.js';
+
+const PRIVATE_TODOS_PROMPT = `${TODO_SUGGESTIONS_PROMPT}\n动态和评论不提取私人待办；只有proactiveMessages里的短信可提建议，每项内放自己的todoSuggestions，索引对应该项messages。对应authors里的todoPeople/todos仅供该作者私信使用；storyProgress仅供核对后续进展，不公开，也不代表其他作者知道。`;
 
 const SOCIAL_PROMPT = `为手机ainstgram生成公开可见的日常动态。只使用authors给定的作者id，不能以姓名代替id。尊重各人的性格、线上表达、实际知情与剧情时间；related只属于对应作者，不把私人记忆变成所有人都知道的事。不写未来重要事件，不新增重大经历或关系。existingPosts是已保存的本人动态，避免重复。
 task=feed时每位作者一条，共约5条；kind=npc且姓名为空的是待补作者，根据世界书合理虚构名字和一句短描述，在npcs返回相同id，不改变已有作者。task=author时只给指定作者补2–3条，不新增作者。
@@ -113,15 +116,17 @@ function parseIncomingMessages(answer, context, state, allowedIds) {
     const contactId = text(entry?.contactId ?? entry?.authorId);
     if (!contactId || !allowedIds.has(contactId) || !known.has(contactId)) return [];
     const source = Array.isArray(entry.messages) ? entry.messages : [entry];
-    const messages = source.flatMap(item => {
+    const indexedMessages = source.map(item => {
       const content = normalizeContent(item);
-      return content && !content.type ? [{ ...record('assistant', content.text, context.clock, content.translation, context.batch), ...content }] : [];
+      return content && !content.type ? { ...record('assistant', content.text, context.clock, content.translation, context.batch), ...content } : null;
     });
-    return messages.length ? [{ contactId, messages }] : [];
+    const messages = indexedMessages.filter(Boolean);
+    const todoCandidates = parseTodoCandidates(entry.todoSuggestions ?? entry.todos, { conversationId: contactId, messages: indexedMessages, participantIds: ['@user', contactId] });
+    return messages.length ? [{ contactId, messages, todoCandidates }] : [];
   });
 }
 
-export function createSocialService({ store, contextReader, modelClient, random = Math.random }) {
+export function createSocialService({ store, contextReader, modelClient, random = Math.random, defaultUser = '我', isReadingPost = () => false }) {
   return {
     getAuthor: id => {
       const author = getSocialAuthor(store.read(), id);
@@ -134,7 +139,7 @@ export function createSocialService({ store, contextReader, modelClient, random 
       while (authors.length < 5) authors.push({ id: `npc:${globalThis.crypto.randomUUID()}`, kind: 'npc', name: '', description: '' });
       const context = await contextReader.readForSocial(authors, { includePrivateMessages: true });
       const selected = new Set(authors.map(person => person.id)), existingPosts = latestByAuthor(readSocialPosts(store.read()), selected).map(briefPost);
-      const answer = parseJsonObject(await modelClient.complete({ system: SOCIAL_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, task: 'feed', existingPosts }) }], maxTokens: 3500 }));
+      const answer = parseJsonObject(await modelClient.complete({ system: `${SOCIAL_PROMPT}\n${PRIVATE_TODOS_PROMPT}`, messages: [{ role: 'user', content: JSON.stringify({ ...context, task: 'feed', existingPosts }) }], maxTokens: 3500 }));
       const slots = new Set(authors.filter(author => author.kind === 'npc').map(author => author.id));
       const npcs = new Map();
       for (const item of Array.isArray(answer.npcs) ? answer.npcs : []) {
@@ -189,7 +194,14 @@ export function createSocialService({ store, contextReader, modelClient, random 
       });
       return { ...structuredClone(saved), likes: count(saved.likes) + Number(saved.userLiked) };
     },
-    async comment(postId, userText) {
+    async markRepliesRead(postId) {
+      const ids = new Set(Array.isArray(postId) ? postId : [postId]);
+      return store.updateSocial(social => {
+        if (!social.posts.some(post => ids.has(post.id) && post.comments?.some(comment => comment.read === false))) return social;
+        return { ...social, posts: social.posts.map(item => ids.has(item.id) ? { ...item, comments: (item.comments || []).map(comment => comment.read === false ? { ...comment, read: true } : comment) } : item) };
+      });
+    },
+    async comment(postId, userText, { onPosted = () => {} } = {}) {
       const state = store.read(), post = state.social?.posts?.find(item => item.id === postId);
       const content = text(userText);
       if (!post) throw new Error('这条动态已不存在，请返回动态列表。');
@@ -198,24 +210,36 @@ export function createSocialService({ store, contextReader, modelClient, random 
       if (!author) throw new Error('这条动态的作者已不存在，请返回动态列表。');
       const commenters = (post.comments || []).map(item => item.authorId).filter(Boolean).map(id => getSocialAuthor(state, id)).filter(Boolean);
       const authors = [...new Map([author, ...commenters].map(item => [item.id, item])).values()];
-      const context = await contextReader.readForSocial(authors, { includePrivateMessages: true });
-      const answer = parseJsonObject(await modelClient.complete({ system: COMMENT_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, task: 'comment', post: { authorId: post.authorId, text: post.text, translation: post.translation, publishedAt: post.publishedAt || '', ...(post.image?.description ? { image: { description: post.image.description } } : {}), comments: post.comments || [] }, userComment: { name: context.userProfile?.nickname || context.userProfile?.name || context.user, text: content }, existingCommenters: authors.map(item => ({ id: item.id, name: item.name, nickname: item.nickname || '' })) }) }], maxTokens: 1800 }));
+      const userName = text(state.userProfile?.nickname || state.userProfile?.name || defaultUser) || '我';
+      const userComment = { id: globalThis.crypto.randomUUID(), role: 'user', name: userName, text: content, createdAt: new Date().toISOString() };
+      await store.updateSocial(social => {
+        const currentPost = social.posts.find(item => item.id === postId);
+        if (!currentPost) throw new Error('这条动态已不存在，请返回动态列表。');
+        const saved = { ...currentPost, comments: [...(currentPost.comments || []), userComment], commentsCount: Math.max(count(currentPost.commentsCount), (currentPost.comments || []).length) + 1 };
+        return { ...social, posts: social.posts.map(item => item.id === postId ? saved : item) };
+      });
+      onPosted(structuredClone(userComment));
+      let context, answer;
+      try {
+        context = await contextReader.readForSocial(authors, { includePrivateMessages: true });
+        answer = parseJsonObject(await modelClient.complete({ system: `${COMMENT_PROMPT}\n${PRIVATE_TODOS_PROMPT}`, messages: [{ role: 'user', content: JSON.stringify({ ...context, task: 'comment', post: { authorId: post.authorId, text: post.text, translation: post.translation, publishedAt: post.publishedAt || '', ...(post.image?.description ? { image: { description: post.image.description } } : {}), comments: (post.comments || []).map(({ name, text, translation, authorId, role }) => ({ name, text, ...(translation ? { translation } : {}), ...(authorId ? { authorId } : {}), ...(role ? { role } : {}) })) }, userComment: { name: userName, text: content }, existingCommenters: authors.map(item => ({ id: item.id, name: item.name, nickname: item.nickname || '' })) }) }], maxTokens: 1800 }));
+      } catch (error) { throw new Error(`评论已发布，但回复生成失败。${error.message || '请检查手机的生成连接。'}`); }
       const userNames = new Set([context.userProfile?.name, context.userProfile?.nickname, context.user].map(text).filter(Boolean));
       const replies = parseCommentReplies(answer, authors, userNames);
-      const userName = text(context.userProfile?.nickname || context.userProfile?.name || context.user) || '我';
-      const userComment = { role: 'user', name: userName, text: content };
       const allowedIds = new Set(authors.filter(item => item.kind === 'contact').map(item => item.id));
       const incomingMessages = parseIncomingMessages(answer, context, state, allowedIds);
       let saved;
-      await store.updateSocial((social, current) => {
+      try { await store.updateSocial((social, current) => {
         const currentPost = social.posts.find(item => item.id === postId);
         if (!currentPost) throw new Error('这条动态已不存在，请返回动态列表。');
         const activeIds = new Set([...(current.contacts || []), ...(current.social?.npcs || [])].map(item => item.id));
-        const validReplies = replies.filter(reply => !reply.authorId || activeIds.has(reply.authorId));
-        const appended = [userComment, ...validReplies];
-        saved = { ...currentPost, comments: [...(currentPost.comments || []), ...appended], commentsCount: Math.max(count(currentPost.commentsCount), (currentPost.comments || []).length) + appended.length };
+        const read = Boolean(isReadingPost(postId)), createdAt = new Date().toISOString();
+        const validReplies = replies.filter(reply => !reply.authorId || activeIds.has(reply.authorId)).map(reply => ({ ...reply, id: globalThis.crypto.randomUUID(), replyToId: userComment.id, createdAt, read }));
+        saved = validReplies.length ? { ...currentPost, comments: [...(currentPost.comments || []), ...validReplies], commentsCount: Math.max(count(currentPost.commentsCount), (currentPost.comments || []).length) + validReplies.length } : currentPost;
+        if (saved === currentPost) return social;
         return { ...social, posts: social.posts.map(item => item.id === postId ? saved : item) };
-      }, { incomingMessages });
+      }, { incomingMessages }); }
+      catch (error) { throw new Error(`评论已发布，但回复未能保存。${error.message || '请检查酒馆连接。'}`); }
       return structuredClone(saved);
     },
   };
