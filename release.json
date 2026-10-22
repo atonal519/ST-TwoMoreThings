@@ -1,4 +1,5 @@
 {
-  "version": "0.3.6",
-  "sha": "56a6614198bd177f967a9406f7b6f425f9a810af"
+  "version": "0.3.7",
+  "sha": "8b0d30c41511ee342a647f791290455fa29b4bd0",
+  "update_notice": "docs/updates-0.3.7.md"
 }
