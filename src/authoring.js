@@ -20,7 +20,8 @@ export function readCardPreset(character) {
 
 export function stateFromPreset(preset) {
   if (preset?.schemaVersion !== 1) throw new Error('卡内手机配置版本不支持，请让作者更新随卡包。');
-  const contacts = (preset.contacts || []).map(person => ({ ...profile(person), background: cleanBackground(person.background, true), id: string(person.id), source: { kind: 'card' }, edited: true, manualFields: ['name', 'nickname', 'avatar', 'expression', 'language'] }));
+  // 新包保留头像的人工归属；未记归属的旧包继续保护原头像。
+  const contacts = (preset.contacts || []).map(person => ({ ...profile(person), background: cleanBackground(person.background, true), id: string(person.id), source: { kind: 'card' }, edited: true, manualFields: ['name', 'nickname', 'expression', 'language', ...(!Array.isArray(person.manualFields) || person.manualFields.includes('avatar') ? ['avatar'] : [])] }));
   const ids = new Set(contacts.map(person => person.id));
   if (ids.size !== contacts.length || contacts.some(person => !person.id || !person.name?.trim())) throw new Error('卡内手机的联系人缺少姓名或编号重复，请让作者重新导出。');
   const groups = (preset.groups || []).map(group => ({ id: string(group.id), name: string(group.name), avatar: string(group.avatar), background: cleanBackground(group.background, true), memberIds: [...new Set(group.memberIds || [])], userIsMember: group.userIsMember !== false }));
@@ -91,7 +92,7 @@ export function createAuthoringService({ store, host, readEntries = () => host.r
         return images.get(source);
       };
       const ids = new Map(state.contacts.map((person, index) => [person.id, `card:contact-${index + 1}`]));
-      const contacts = await Promise.all(state.contacts.map(async person => ({ ...profile(person), id: ids.get(person.id), avatar: await portable(person.avatar), background: await portable(person.background) })));
+      const contacts = await Promise.all(state.contacts.map(async person => ({ ...profile(person), id: ids.get(person.id), avatar: await portable(person.avatar), background: await portable(person.background), manualFields: (person.manualFields || (person.edited ? ['avatar'] : [])).includes('avatar') ? ['avatar'] : [] })));
       const groups = await Promise.all((state.groups || []).map(async (group, index) => ({ id: `card:group-${index + 1}`, name: group.name, avatar: await portable(group.avatar), background: await portable(group.background), memberIds: group.memberIds.map(id => ids.get(id)), userIsMember: group.userIsMember })));
       const userProfile = state.userProfile ? { ...profile(state.userProfile), avatar: await portable(state.userProfile.avatar) } : undefined;
       const preferences = readEntries();

@@ -10,13 +10,13 @@ export function createFab({ onClick, documentRef = globalThis.document, windowRe
   const host = documentRef.createElement('div'); host.id = id; host.attachShadow({ mode: 'open' });
   const root = host.shadowRoot;
   root.innerHTML = `<style>
-    :host{all:initial;isolation:isolate;text-shadow:none;--tmt-fab-primary:var(--SmartThemeQuoteColor,#397584);--tmt-fab-ink:var(--SmartThemeBodyColor,#222a29);--tmt-fab-surface:var(--SmartThemeBlurTintColor,#f3f1e8);--tmt-fab-border:var(--SmartThemeBorderColor,color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface)));--tmt-fab-glow:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));position:fixed;right:106px;top:calc(100dvh - 80px - 44px);z-index:2000000;touch-action:none}
+    :host{all:initial;isolation:isolate;text-shadow:none;--tmt-fab-primary:var(--SmartThemeQuoteColor,#397584);--tmt-fab-ink:var(--SmartThemeBodyColor,#222a29);--tmt-fab-surface:var(--SmartThemeBlurTintColor,#f3f1e8);--tmt-fab-border:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));--tmt-fab-glow:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));position:fixed;right:106px;top:calc(100dvh - 80px - 44px);z-index:2000000;touch-action:none}
     :host([hidden]){display:none!important}
-    button{width:36px;height:36px;border:1.5px solid var(--tmt-fab-border);border-radius:50%;background:var(--tmt-fab-surface);color:var(--tmt-fab-ink);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);touch-action:none;display:grid;place-items:center;padding:0;opacity:1;transition:transform .15s,box-shadow .15s,color .15s,background .15s}
-    button:hover{transform:scale(1.1);box-shadow:0 6px 20px rgba(0,0,0,.5)}
+    button{width:36px;height:36px;border:1.5px solid var(--tmt-fab-border);border-radius:50%;background:transparent;color:var(--tmt-fab-ink);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);touch-action:none;display:grid;place-items:center;padding:0;opacity:.45;transition:transform .15s,box-shadow .15s,color .15s,background .15s,opacity .2s}
+    button:hover{opacity:1;transform:scale(1.1);box-shadow:0 6px 20px rgba(0,0,0,.5)}
     button:active{transform:scale(.95)}
-    button.busy{color:var(--tmt-fab-primary);animation:tmt-fab-breathe 1.4s ease-in-out infinite}
-    button:focus-visible{outline:2px solid var(--tmt-fab-ink);outline-offset:3px}
+    button.busy{opacity:1;color:var(--tmt-fab-primary);animation:tmt-fab-breathe 1.4s ease-in-out infinite}
+    button:focus-visible{opacity:1;outline:2px solid var(--tmt-fab-ink);outline-offset:3px}
     svg{width:20px;height:20px;display:block}
     @keyframes tmt-fab-breathe{0%,100%{box-shadow:0 0 4px var(--tmt-fab-glow),0 0 12px var(--tmt-fab-glow)}50%{box-shadow:0 0 10px var(--tmt-fab-glow),0 0 28px var(--tmt-fab-glow),0 0 50px var(--tmt-fab-glow)}}
     @media(max-width:640px){:host{right:104px;top:calc(100dvh - 100px - 44px)}}

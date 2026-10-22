@@ -4,8 +4,7 @@ export function createPluginUpdatesView({ updates, dialog, documentRef = globalT
   const status = element('button', 'pp-update-status'); status.type = 'button';
   controls.append(status);
   const feedback = element('p', 'settings-result error'); feedback.setAttribute('role', 'status');
-  const noticeRow = element('div', 'settings-document-row'); const noticeButton = element('button', 'secondary-action', '查看公告'); noticeButton.type = 'button';
-  noticeRow.append(element('span', '', '更新公告'), noticeButton);
+  const noticeButton = element('button', 'pp-update-notice-button', '查看公告'); noticeButton.type = 'button';
   const sync = state => {
     status.textContent = ({ unchecked: '检查更新', checking: '检查中', available: '可更新', stable: '稳定版本', updating: '更新中', error: '检查失败' })[state.status];
     status.dataset.state = state.status; const busy = ['checking', 'updating'].includes(state.status); status.disabled = busy;
@@ -26,5 +25,5 @@ export function createPluginUpdatesView({ updates, dialog, documentRef = globalT
   };
   status.addEventListener('click', () => updates.getState().status === 'available' ? openNotice(true) : updates.check());
   noticeButton.addEventListener('click', () => openNotice(false));
-  return Object.freeze({ controls, feedback, noticeRow, dispose: unsubscribe });
+  return Object.freeze({ controls, feedback, noticeButton, dispose: unsubscribe });
 }

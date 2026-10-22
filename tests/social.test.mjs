@@ -66,6 +66,7 @@ test('feed chooses five friends, replaces the previous batch and its profile his
 
 test('four friends are supplemented by one stable NPC without inserting it in contacts', async () => {
   const { h, store, service } = await setup(4);
+  const before = h.metadataSaves;
   await service.refresh();
   const state = store.read(), npc = state.social.npcs[0];
   assert.equal(state.contacts.length, 4);
@@ -76,6 +77,13 @@ test('four friends are supplemented by one stable NPC without inserting it in co
   assert.equal(state.social.posts.filter(post => post.authorId === npc.id).length, 1);
   assert.equal(state.social.posts.find(post => post.authorId === npc.id).image, undefined);
   assert.equal(getSocialAuthor(state, npc.id).kind, 'npc');
+  assert.match(npc.avatar, /^data:image\/svg\+xml;/, 'new NPC portraits are generated locally in the original feed save');
+  assert.equal(h.metadataSaves, before + 1);
+  assert.equal(service.getAuthor(npc.id).avatar, npc.avatar);
+  const saves = h.metadataSaves;
+  await store.fillMissingAvatars();
+  assert.equal(store.read().social.npcs[0].avatar, npc.avatar, 'opening retains the saved NPC portrait');
+  assert.equal(h.metadataSaves, saves);
   assert.equal(service.getAuthor('friend-0').nickname, '昵称0');
   assert.equal(h.modelRequests.length, 1);
 });

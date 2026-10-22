@@ -2,7 +2,7 @@ export const displayName = person => person?.nickname || person?.name || '我';
 
 export function avatarSource(value) {
   const source = String(value || '').trim();
-  return /^(?:https?:\/\/|data:image\/(?:png|jpeg|webp|gif|avif);base64,)/i.test(source) ? source : '';
+  return /^(?:https?:\/\/|data:image\/(?:png|jpeg|webp|gif|avif);base64,|data:image\/svg\+xml(?:;charset=utf-8)?(?:;base64)?,)/i.test(source) ? source : '';
 }
 
 export function cleanProfile(draft, contact = false) {

@@ -215,7 +215,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (updatesView && ui.view === 'settings') {
       root.querySelector('[data-update-controls]')?.append(updatesView.controls);
       root.querySelector('[data-update-feedback]')?.append(updatesView.feedback);
-      root.querySelector('[data-update-notice]')?.append(updatesView.noticeRow);
+      root.querySelector('[data-update-notice]')?.append(updatesView.noticeButton);
     }
     dialog.attach();
     if (!ui.conflict && enabled) surface.insertAdjacentHTML('beforeend', renderPhoneNotice(state, ui.notice));
@@ -285,6 +285,17 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       else surface.insertAdjacentHTML('beforeend', renderFeedback(ui.feedback));
       return null;
     }
+  }
+  const defaultAvatarError = '默认头像未能保存，请检查酒馆连接后重新打开手机。';
+  function fillDefaultAvatars() {
+    if (!control.isEnabled()) return;
+    if (ui.feedback?.text === defaultAvatarError) { ui.feedback = null; surface.querySelector('.feedback')?.remove(); }
+    void store.fillMissingAvatars().catch(() => {
+      ui.feedback = { error: true, text: defaultAvatarError };
+      const feedback = surface.querySelector('.feedback');
+      if (feedback) feedback.outerHTML = renderFeedback(ui.feedback);
+      else surface.insertAdjacentHTML('beforeend', renderFeedback(ui.feedback));
+    });
   }
   function recoverVisibleImages() {
     // 只在打开页面时核对本页图片，捕捉图库删除后仍被浏览器缓存的旧图。
@@ -759,7 +770,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (event.target.id === 'export-source') { ui.exportLocal = event.target.value === 'local'; render(); }
     if (event.target.id === 'phone-enabled') {
       const enabled = event.target.checked;
-      void perform('enabled', () => control.setEnabled(enabled), () => { ui.view = 'settings'; entries.refreshVisibility?.(); onContextChange(); });
+      void perform('enabled', () => control.setEnabled(enabled), () => { ui.view = 'settings'; entries.refreshVisibility?.(); onContextChange(); if (enabled) fillDefaultAvatars(); });
     }
     if (event.target.closest('.attachment-form') && event.target.name) ui.attachmentDraft[event.target.name] = event.target.value;
     if (event.target.closest('.group-form') && event.target.name === 'member') {
@@ -874,6 +885,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   root.addEventListener('scroll', readVisibleSocialReplies, true);
   doc.addEventListener('pointerdown', dismissMenus, true);
   render();
+  fillDefaultAvatars();
   void updates?.ensureChecked();
   return {
     get isOpen() { return !element.hidden; },
@@ -894,6 +906,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       // 两份手机共享层级；打开已有窗口时按同层 DOM 顺序置前，不改另一份状态。
       if (!isFrontmost()) mount.append(element);
       render();
+      fillDefaultAvatars();
       recoverVisibleImages();
       windowControls.refresh();
     },

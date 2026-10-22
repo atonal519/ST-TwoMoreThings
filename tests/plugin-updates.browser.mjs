@@ -40,8 +40,9 @@ try {
     await page.goto(`http://127.0.0.1:8917/scripts/extensions/third-party/My%20Phone/tests/preview.html?host=${kind}&entry=extension`);
     await page.evaluate(() => { globalThis.toastr = { success: text => (previewHarness.notices ||= []).push(text), error: text => (previewHarness.errors ||= []).push(text) }; });
     await page.getByRole('button', { name: '打开两三事', exact: true }).click();
+    await page.waitForFunction(() => previewHarness.metadataSaves === 1);
     const phone = page.locator('#pocket-phone-host'); await openApp(phone, '设置');
-    await phone.locator('.app-version').getByText('两三事 0.3.7', { exact: true }).waitFor();
+    await phone.locator('.app-version').getByText('两三事 0.3.8', { exact: true }).waitFor();
     await phone.getByRole('button', { name: '可更新', exact: true }).waitFor();
     assert.equal(posts.length, 1);
     if (kind === 'native' && installation === 'local' && process.env.POCKET_UPDATE_SCREENSHOTS !== '0') {
@@ -90,13 +91,12 @@ try {
     assert.equal(posts.length, 3);
     for (const request of posts) assert.deepEqual(request.body, { extensionName: 'My Phone', global: installation === 'global' });
     assert.deepEqual(await page.evaluate(() => previewHarness.notices), ['两三事已更新，请刷新酒馆后使用']);
-    await phone.getByRole('button', { name: '内容设置', exact: true }).click();
-    await phone.getByRole('button', { name: '查看公告', exact: true }).click();
+    await phone.locator('.app-version').getByRole('button', { name: '查看公告', exact: true }).click();
     const installedNotice = phone.getByRole('dialog', { name: '已安装版本公告' });
-    await installedNotice.getByRole('heading', { name: '两三事 0.3.7', exact: true }).waitFor();
-    assert.equal(await installedNotice.getByRole('listitem').count(), 3);
+    await installedNotice.getByRole('heading', { name: '两三事 0.3.8', exact: true }).waitFor();
+    assert.equal(await installedNotice.getByRole('listitem').count(), 7);
     await installedNotice.getByRole('button', { name: '关闭', exact: true }).click();
-    assert.equal(await page.evaluate(() => previewHarness.metadataSaves), 0);
+    assert.equal(await page.evaluate(() => previewHarness.metadataSaves), 1, 'only the initial missing-contact portraits are saved');
     assert.deepEqual(errors, []); await page.close();
   }
   for (const kind of ['native', 'luker']) for (const custom of [false, true]) for (const failImport of [false, true]) {
@@ -170,8 +170,7 @@ try {
         await openApp(phone, '短信');
         await phone.getByRole('button', { name: /作者联系人/ }).waitFor();
         await openApp(phone, '设置');
-        await phone.getByRole('button', { name: '内容设置', exact: true }).click();
-        await phone.getByRole('button', { name: '查看公告', exact: true }).click();
+        await phone.locator('.app-version').getByRole('button', { name: '查看公告', exact: true }).click();
         await phone.getByRole('dialog', { name: '已安装版本公告' }).getByRole('heading', { name: '随卡新版公告' }).waitFor();
         await phone.getByRole('button', { name: '关闭', exact: true }).click();
       }

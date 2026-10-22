@@ -87,7 +87,7 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
   <div class="compact-switch-row settings-export-row">
     <span>导出酒馆助手脚本</span>
     <button type="button" class="switch-button" data-action="authoring" aria-label="导出酒馆助手脚本" ${control.isEnabled() ? '' : 'disabled'}>导出</button>
-  </div>${updates ? '<div data-update-notice></div>' : ''}`;
+  </div>`;
   return `${pageHeading('设置')}
     <div class="master-switch-row">
     <label class="compact-switch-row master-switch">
@@ -114,5 +114,5 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
     ${drawer('connection', '连接设置', connection)}
     ${drawer('appearance', '外观设置', appearanceContent)}
     ${drawer('content', '内容设置', content)}
-    <small class="app-version"><span>两三事 ${VERSION}</span> · <span>${instanceLabel}</span></small>`;
+    <small class="app-version"><span class="app-version-label"><span>两三事 ${VERSION}</span> · <span>${instanceLabel}</span></span>${updates ? '<span data-update-notice></span>' : ''}</small>`;
 }

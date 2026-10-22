@@ -1,10 +1,21 @@
 import { cleanProfile } from './profiles.js';
+import { createCameoAvatar } from './cameo-avatar.js';
 import { messageText } from './content.js';
 import { cleanBackground } from './backgrounds.js';
 import { contentImagePaths, imagePath } from './image-files.js';
 import { readTodos, todoSourceMessageIds } from './todos.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
+const fillDefaultAvatars = people => {
+  let filled = people;
+  for (let index = 0; index < people.length; index++) {
+    const person = people[index];
+    if (person.avatar || person.manualFields?.includes('avatar') || person.edited && !person.manualFields) continue;
+    if (filled === people) filled = [...people];
+    filled[index] = { ...person, avatar: createCameoAvatar() };
+  }
+  return filled;
+};
 const text = value => typeof value === 'string' ? value.trim() : '';
 const time = value => text(value) === '未定' ? '' : text(value);
 const todoPeople = (state, conversationId) => {
@@ -97,6 +108,15 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   }
   const store = {
     read,
+    fillMissingAvatars() {
+      return update(state => {
+        assertEnabled();
+        const contacts = fillDefaultAvatars(state.contacts), npcs = state.social?.npcs;
+        const filledNpcs = npcs && fillDefaultAvatars(npcs);
+        if (contacts === state.contacts && filledNpcs === npcs) return state;
+        return { ...state, contacts, ...(filledNpcs !== npcs ? { social: { ...state.social, npcs: filledNpcs } } : {}) };
+      });
+    },
     updateSocial(change, { cleanImages = false, incomingMessages = [] } = {}) {
       const incomingContacts = new Set();
       return update(state => {
@@ -195,6 +215,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         const manualFields = new Set(current?.manualFields || (current?.edited ? ['name', 'nickname', 'avatar', 'expression', 'language'] : []));
         for (const [key, value] of Object.entries(profile)) if (value !== (current?.[key] || '')) manualFields.add(key);
         const contact = { ...current, ...profile, id: contactId, edited: true, manualFields: [...manualFields], source: current?.source || { kind: 'manual' } };
+        if (!current && !contact.avatar) contact.avatar = createCameoAvatar();
         return { ...state, contacts: current ? state.contacts.map(item => item.id === contactId ? contact : item) : [...state.contacts, contact] };
       });
       return read().contacts.find(item => item.id === contactId);
@@ -231,7 +252,10 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       await update(state => {
         assertEnabled();
         const people = new Map(state.contacts.map(person => [person.id, person]));
-        for (const person of contacts) if (!people.has(person.id)) { people.set(person.id, person); added.contacts.push(person); }
+        for (const person of contacts) if (!people.has(person.id)) {
+          const contact = person.avatar ? person : { ...person, avatar: createCameoAvatar() };
+          people.set(contact.id, contact); added.contacts.push(contact);
+        }
         const mergedGroups = [...(state.groups || [])];
         for (const draft of groups) {
           const ids = Array.isArray(draft?.memberIds) ? [...new Set(draft.memberIds)] : [];
@@ -283,6 +307,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
           const current = contacts.get(item.id);
           if (current?.edited && !Array.isArray(current.manualFields)) continue;
           const merged = { ...current, ...item };
+          if (!current && !merged.avatar) merged.avatar = createCameoAvatar();
           for (const field of current?.manualFields || []) merged[field] = current[field];
           contacts.set(item.id, merged);
         }

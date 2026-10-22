@@ -37,7 +37,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
   const imageProviders = createImageProviders({ host });
   const appearance = createAppearanceSettings({ host, documentRef });
   const makeStore = (target, options = {}) => createPhoneStore({ target, initialState, removeImages: files.remove, ...options });
-  let phone, targetId, activeRequests = 0;
+  let phone, phoneTarget, activeRequests = 0;
   const entries = createPhoneEntries({ host, documentRef, open, defaults: preset?.entries,
     isEnabled: () => createPhoneControl({ host, target: host.captureChat() }).isEnabled(),
     toggle: () => phone?.isOpen && phone.isFrontmost ? phone.close() : open() });
@@ -57,9 +57,10 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
   const unsubscribeTime = host.onStoryChanged(() => phone?.refreshTime());
   function open() {
     const target = host.captureChat();
-    if (phone && targetId === target.id) { phone.open(); return; }
+    // 宿主首次加载聊天会替换 metadata 根；重开时让窗口绑定实际载入的档案。
+    if (phone && phoneTarget.id === target.id && phoneTarget.metadata === target.metadata) { phone.open(); return; }
     phone?.dispose();
-    targetId = target.id;
+    phoneTarget = target;
     const control = createPhoneControl({ host, target });
     let currentPhone;
     const store = makeStore(target, { assertEnabled: control.assertEnabled, isReading: id => currentPhone?.isReading(id), onIncomingMessage: id => currentPhone?.notifyMessage(id) });

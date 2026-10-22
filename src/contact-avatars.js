@@ -1,9 +1,10 @@
 import { avatarSource } from './profiles.js';
+import { isCameoAvatar } from './cameo-avatar.js';
 
 // 千千结仍拥有头像；这里只为当前画面补充，不把图片复制进手机档案或作者包。
 export function readContactAvatars(contacts, bridge) {
   if (!bridge?.getPeopleAvatars) return contacts;
-  const candidates = contacts.filter(person => !person.avatar && !person.manualFields?.includes('avatar') && !(person.edited && !person.manualFields));
+  const candidates = contacts.filter(person => (!person.avatar || isCameoAvatar(person.avatar)) && !person.manualFields?.includes('avatar') && !(person.edited && !person.manualFields));
   if (!candidates.length) return contacts;
   const entityIds = new Map(candidates.filter(person => person.source?.kind === 'qqj' && person.source.entityId)
     .map(person => [person.id, person.source.entityId]));

@@ -25,6 +25,7 @@ try {
     await page.route('**/user/images/pocket-phone/preview.webp', async route => route.fulfill({ body: Buffer.from(await page.evaluate(() => previewHarness.lastUpload.image), 'base64'), contentType: 'image/webp' }));
     await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${host}&clock=story`);
     await page.locator('.phone-shell').waitFor();
+    await page.waitForFunction(() => previewHarness.metadataSaves === 1);
     const fonts = readFileSync('/tmp/mobile-plugin-reference-research/preview-fonts.css', 'utf8').replaceAll('Nowar Rounded TW Wc', 'PocketPreviewCJK');
     await page.evaluate(css => {
       const face = document.createElement('style'); face.textContent = css; document.head.append(face);
@@ -38,7 +39,7 @@ try {
     await openApp(page, 'ainstgram');
     await page.getByRole('heading', { name: '暂无动态', exact: true }).waitFor();
     assert.equal(await page.evaluate(() => previewHarness.requests.length), 0, '打开动态不自动调用模型');
-    assert.equal(await page.evaluate(() => previewHarness.metadataSaves), 0, '打开空动态不改存档');
+    assert.equal(await page.evaluate(() => previewHarness.metadataSaves), 1, '打开空动态只保留首开联系人补图，不额外改存档');
     await page.getByRole('button', { name: '主页', exact: true }).click();
     await openApp(page, 'ainstgram');
     assert.equal(await page.evaluate(() => previewHarness.requests.length), 0, '重复打开空动态仍等待手动刷新');
@@ -57,21 +58,21 @@ try {
     const like = page.locator('.social-like').first();
     const likeId = await like.getAttribute('data-social-post');
     const baseLikes = await page.evaluate(id => previewHarness.metadata.pocketPhone.social.posts.find(post => post.id === id).likes, likeId);
-    assert.equal(await like.locator('svg').evaluate(svg => getComputedStyle(svg).fill), 'none', '未点赞心形保持空心');
+    assert.equal(await like.locator('svg > path').evaluate(path => getComputedStyle(path).fill), 'none', '未点赞心形保持空心');
     await like.click();
     await page.waitForFunction(id => previewHarness.metadata.pocketPhone.social.posts.find(post => post.id === id).userLiked === true, likeId);
     assert.equal(await like.getAttribute('aria-pressed'), 'true');
     assert.equal((await like.textContent()).trim(), `${baseLikes + 1} 赞`);
-    assert.equal(await like.locator('svg').evaluate(svg => getComputedStyle(svg).fill), 'rgb(214, 69, 69)', '点赞心形使用红色填充');
-    assert.equal(await like.locator('svg').evaluate(svg => getComputedStyle(svg).fill === getComputedStyle(svg).color), true, '点赞心形填充跟随红色图标色');
+    assert.equal(await like.locator('svg > path').evaluate(path => getComputedStyle(path).fill), 'rgb(214, 69, 69)', '点赞心形使用红色填充');
+    assert.equal(await like.locator('svg > path').evaluate(path => getComputedStyle(path).fill === getComputedStyle(path).color), true, '点赞心形填充跟随红色图标色');
     assert.equal(await like.evaluate(button => getComputedStyle(button).color === getComputedStyle(button.querySelector('svg')).color), false, '点赞数字保持原文字色');
     await page.locator('#pocket-phone-host').evaluate(host => { host.dataset.theme = 'night'; });
-    assert.equal(await like.locator('svg').evaluate(svg => getComputedStyle(svg).fill), 'rgb(255, 118, 108)', '夜间也显示红心');
+    assert.equal(await like.locator('svg > path').evaluate(path => getComputedStyle(path).fill), 'rgb(255, 118, 108)', '夜间也显示红心');
     await page.locator('#pocket-phone-host').evaluate(host => { host.dataset.theme = 'day'; });
     await like.click();
     await page.waitForFunction(id => previewHarness.metadata.pocketPhone.social.posts.find(post => post.id === id).userLiked === false, likeId);
     assert.equal(await like.getAttribute('aria-pressed'), 'false');
-    assert.equal(await like.locator('svg').evaluate(svg => getComputedStyle(svg).fill), 'none', '取消点赞恢复空心');
+    assert.equal(await like.locator('svg > path').evaluate(path => getComputedStyle(path).fill), 'none', '取消点赞恢复空心');
     assert.equal((await like.textContent()).trim(), `${baseLikes} 赞`);
     assert.equal(await page.evaluate(() => previewHarness.requests.length), 1, '点赞和取消不调用模型');
     await page.locator('.social-comment-toggle').first().click();

@@ -32,7 +32,7 @@ function renderPost(post, state, busy, ui) {
     ${photo}
     ${post.text ? `<p class="social-caption">${renderBilingual(post.text, post.translation)}</p>` : ''}
     <div class="social-stats" aria-label="动态统计">
-      <button type="button" class="social-like" data-action="social-like" data-social-post="${escape(post.id)}" aria-pressed="${userLiked}" aria-label="${userLiked ? '取消点赞' : '点赞'}" ${busy.has(`social-like:${post.id}`) ? 'disabled' : ''}>${icon('heart')}${likes} 赞</button><span>${icon('repost')}${post.reposts || 0} 转发</span><button type="button" class="social-comment-toggle" data-action="social-comment-toggle" data-social-post="${escape(post.id)}" aria-expanded="${commentOpen}">${icon('comment')}${post.commentsCount || 0} 评论</button>
+      <button type="button" class="social-like" data-action="social-like" data-social-post="${escape(post.id)}" aria-pressed="${userLiked}" aria-label="${userLiked ? '取消点赞' : '点赞'}" ${busy.has(`social-like:${post.id}`) ? 'disabled' : ''}>${icon(userLiked ? 'heart-active' : 'heart')}${likes} 赞</button><span>${icon('repost')}${post.reposts || 0} 转发</span><button type="button" class="social-comment-toggle" data-action="social-comment-toggle" data-social-post="${escape(post.id)}" aria-expanded="${commentOpen}">${icon('comment')}${post.commentsCount || 0} 评论</button>
     </div>
     ${comments ? `<div class="social-comments">${comments}</div>` : ''}
     ${commentBusy ? '<small class="social-reply-pending" role="status">等待回应…</small>' : ''}

@@ -1,4 +1,5 @@
 import { parseJsonObject } from './api.js';
+import { createCameoAvatar } from './cameo-avatar.js';
 import { LANGUAGE_RULE, TODO_SUGGESTIONS_PROMPT } from './prompts.js';
 import { hasPublicationDate, publicationLabel, publicationValue, sortSocialPosts } from './social-time.js';
 import { normalizeContent } from './content.js';
@@ -160,7 +161,7 @@ export function createSocialService({ store, contextReader, modelClient, random 
         }));
         if (!saved.length) throw new Error('动态作者已不存在，请重新刷新。');
         const published = new Set(saved.flatMap(post => [post.authorId, ...post.comments.map(comment => comment.authorId)]));
-        return { posts: saved, feedIds: saved.map(post => post.id), npcs: [...npcs.values()].filter(person => published.has(person.id)) };
+        return { posts: saved, feedIds: saved.map(post => post.id), npcs: [...npcs.values()].filter(person => published.has(person.id)).map(person => ({ ...person, avatar: createCameoAvatar() })) };
       }, { cleanImages: true, incomingMessages });
       return saved;
     },
