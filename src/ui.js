@@ -28,6 +28,8 @@ import { displayName } from './profiles.js';
 import { renderTodos } from './ui/todos.js';
 import { renderPhoneNotice } from './ui/notifications.js';
 import { readSocialPosts } from './social.js';
+import { createPluginUpdatesView } from './ui/plugin-updates-view.js';
+import { createPhoneDialog } from './ui/dialog.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
@@ -58,7 +60,7 @@ const pages = {
   'social-profile': renderSocialProfile,
 };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, social, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, social, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onContextChange = () => {} }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
@@ -81,6 +83,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   mount.append(element);
   const windowControls = createPhoneWindow(surface);
   const chatScroll = createChatScroll(root);
+  const dialog = createPhoneDialog({ mount: surface, documentRef: doc });
+  const updatesView = updates && createPluginUpdatesView({ updates, dialog, documentRef: doc, renderMarkdown: renderUpdateMarkdown, notifyUser: notifyUpdate,
+    ...(mode === 'embedded' ? { successText: '两三事已更新，可继续使用。' } : {}) });
   // 这里只持有未保存的页面状态；联系人和消息始终从 store 读取。
   const ui = {
     view: 'home', feedback: null, defaultUser, conflict: control.hasConflict?.(doc) === true,
@@ -201,12 +206,18 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       ? calendar.month(ui.calendarOffset)
       : ui.view === 'desktop' ? calendar.month(0) : null;
     surface.innerHTML = renderShell({
-      content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, todos: store }),
+      content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, todos: store, updates }),
       view: ui.view, enabled, weather,
       feedback: ui.feedback, photo: ui.photo,
       conflict: ui.conflict, mode, conflictBusy: busy.has('conflict'),
       lockStyle: state.lockStyle,
     });
+    if (updatesView && ui.view === 'settings') {
+      root.querySelector('[data-update-controls]')?.append(updatesView.controls);
+      root.querySelector('[data-update-feedback]')?.append(updatesView.feedback);
+      root.querySelector('[data-update-notice]')?.append(updatesView.noticeRow);
+    }
+    dialog.attach();
     if (!ui.conflict && enabled) surface.insertAdjacentHTML('beforeend', renderPhoneNotice(state, ui.notice));
     const nextLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
     if (lockImageNode && nextLockImage && lockImageSrc === nextLockImage.getAttribute('src')) {
@@ -863,6 +874,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   root.addEventListener('scroll', readVisibleSocialReplies, true);
   doc.addEventListener('pointerdown', dismissMenus, true);
   render();
+  void updates?.ensureChecked();
   return {
     get isOpen() { return !element.hidden; },
     get isFrontmost() { return isFrontmost(); },
@@ -896,6 +908,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
     },
     dispose() {
+      dialog.dispose(); updatesView?.dispose();
       dismissPhoneNotice();
       avatarCropper?.close();
       unsubscribeAppearance();

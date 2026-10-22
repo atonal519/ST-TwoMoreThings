@@ -5,7 +5,7 @@ import { displayName } from '../profiles.js';
 import { renderBackgroundPicker } from './backgrounds.js';
 import { VERSION } from '../version.js';
 
-export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode }) {
+export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, updates }) {
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
   const current = sources.find(source => refKey(source.ref) === refKey(selected));
   const manual = ui.manual || !sources.length, preferences = entries.read();
@@ -87,8 +87,9 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
   <div class="compact-switch-row settings-export-row">
     <span>导出酒馆助手脚本</span>
     <button type="button" class="switch-button" data-action="authoring" aria-label="导出酒馆助手脚本" ${control.isEnabled() ? '' : 'disabled'}>导出</button>
-  </div>`;
+  </div>${updates ? '<div data-update-notice></div>' : ''}`;
   return `${pageHeading('设置')}
+    <div class="master-switch-row">
     <label class="compact-switch-row master-switch">
       <span>启用两三事</span>
       <span class="switch">
@@ -96,6 +97,9 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
         <span></span>
       </span>
     </label>
+    ${updates ? '<div data-update-controls></div>' : ''}
+    </div>
+    ${updates ? '<div data-update-feedback></div>' : ''}
     ${control.isEnabled() ? '' : `<p class="setting-note">${instanceLabel}已在当前角色卡停用，重新开启后可使用其他页面。</p>`}
     <section class="settings-section">
       <button type="button" class="my-profile" data-action="edit-user" aria-label="编辑我的资料" ${control.isEnabled() ? '' : 'disabled'}>

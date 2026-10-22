@@ -1,9 +1,8 @@
 import { cleanBackground } from './backgrounds.js';
+import { readRelease, releaseUrlForCore, STABLE_CORE_URL } from './release.js';
 
 export const REMOTE_CORE_URL = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js';
 export const LOCAL_CORE_URL = new URL('../embed.js', import.meta.url).href;
-// 保留已发布且整套依赖可用的固定提交，版本查询不可用时仍能启动。
-const STABLE_CORE_URL = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@079f7f84e763382758267aed25ecfc66ad923b45/embed.js';
 
 const string = value => typeof value === 'string' ? value : '';
 const profile = person => Object.fromEntries(['name', 'nickname', 'avatar', 'expression', 'language', 'personality', 'tone', 'background'].filter(key => typeof person?.[key] === 'string').map(key => [key, person[key]]));
@@ -34,26 +33,23 @@ export function stateFromPreset(preset) {
 }
 
 // 此函数会写入随卡脚本，必须自包含；只更新核心地址，不发送或改写作者配置与读者档案。
-async function loadEmbedded(nodeId, coreUrl, stableCoreUrl) {
+async function loadEmbedded(nodeId, coreUrl, stableCoreUrl, releaseUrl, readRelease) {
   const node = document.getElementById(nodeId);
   try {
     let updateUnavailable = false;
+    let release;
     if (stableCoreUrl) {
-      const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 5000);
       try {
-        const response = await fetch('https://api.github.com/repos/atonal519/ST-TwoMoreThings/git/ref/heads/main', { cache: 'no-store', credentials: 'omit', signal: controller.signal });
-        if (!response.ok) throw new Error();
-        const { object } = await response.json();
-        if (object?.type !== 'commit' || typeof object.sha !== 'string' || !/^[a-f0-9]{40}$/i.test(object.sha)) throw new Error();
+        release = await readRelease({ url: releaseUrl });
         // 固定整套相对依赖的提交地址，避免 main 的长期缓存或混用新旧模块。
-        coreUrl = coreUrl.replace('@main/', `@${object.sha}/`);
+        coreUrl = coreUrl.replace('@main/', `@${release.sha}/`);
       } catch {
         coreUrl = stableCoreUrl;
         updateUnavailable = true;
-      } finally { clearTimeout(timeout); }
+      }
     }
     const { mountEmbedded } = await import(coreUrl).catch(() => { throw new Error('卡内手机核心加载失败，请检查网络后重新加载脚本。'); });
-    const app = mountEmbedded({ preset: node.preset });
+    const app = mountEmbedded({ preset: node.preset, release, updateError: updateUnavailable ? '未能检查手机更新，请稍后手动检查。' : '' });
     node.owner.addEventListener('pagehide', () => app.dispose(), { once: true });
     if (updateUnavailable) globalThis.toastr?.warning('未能检查手机更新，已加载稳定发布版本。稍后重新加载脚本可再次检查更新。');
   } catch (error) {
@@ -70,7 +66,7 @@ node.type = 'module';
 node.id = 'tmt-card-loader-' + crypto.randomUUID();
 node.owner = window;
 node.preset = getVariables({ type: 'script' }).twoMoreThings;
-node.textContent = '(' + ${JSON.stringify(loadEmbedded.toString())} + ')(' + JSON.stringify(node.id) + ',' + JSON.stringify(coreUrl) + ',' + JSON.stringify(stableCoreUrl) + ')';
+node.textContent = '(' + ${JSON.stringify(loadEmbedded.toString())} + ')(' + JSON.stringify(node.id) + ',' + JSON.stringify(coreUrl) + ',' + JSON.stringify(stableCoreUrl) + ',' + ${JSON.stringify(JSON.stringify(releaseUrlForCore(coreUrl)))} + ',(' + ${JSON.stringify(readRelease.toString())} + '))';
 window.parent.document.head.append(node);`;
 }
 

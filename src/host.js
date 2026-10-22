@@ -4,6 +4,11 @@ import { readCardPreset } from './authoring.js';
 
 const PROMPT_ID = 'pocket-phone-context';
 
+export async function renderUpdateMarkdown(text) {
+  const { showdown, DOMPurify } = await import(new URL('/lib.js', globalThis.location.href).href);
+  return DOMPurify.sanitize(new showdown.Converter().makeHtml(text), { FORBID_TAGS: ['img', 'iframe', 'object', 'embed', 'style', 'form'], FORBID_ATTR: ['style'] });
+}
+
 export function createHostAdapter({ contextProvider = () => (globalThis.SillyTavern || globalThis.Luker)?.getContext(), fetchImpl = (...args) => globalThis.fetch(...args), worldInfoBindings, mode = 'standalone' } = {}) {
   const embedded = mode === 'embedded', promptId = embedded ? `${PROMPT_ID}-card` : PROMPT_ID, openCommand = embedded ? 'tmt-card-open' : OPEN_COMMAND;
   const context = () => {
@@ -37,6 +42,8 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       return target;
     },
     readSettings: () => context().extensionSettings,
+    getRequestHeaders: () => context().getRequestHeaders(),
+    async readExtensionTypes() { return (await import(new URL('/scripts/extensions.js', globalThis.location.href).href)).extensionTypes; },
     getEventSource: () => context().eventSource,
     saveSettings: () => context().saveSettingsDebounced(),
     readQuickReplies: () => globalThis.quickReplyApi,

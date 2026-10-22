@@ -12,9 +12,9 @@ try {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     const unexpected = [], revision = 'a'.repeat(40);
     let updateChecks = 0;
-    await page.route('https://api.github.com/repos/atonal519/ST-TwoMoreThings/git/ref/heads/main', route => {
+    await page.route('https://raw.githubusercontent.com/atonal519/ST-TwoMoreThings/main/release.json', route => {
       updateChecks++;
-      return route.fulfill({ json: { object: { type: 'commit', sha: revision } }, headers: { 'Access-Control-Allow-Origin': '*' } });
+      return route.fulfill({ json: { version: '0.3.6', sha: revision }, headers: { 'Access-Control-Allow-Origin': '*' } });
     });
     await page.route('https://cdn.jsdelivr.net/**', route => {
       const prefix = `/gh/atonal519/ST-TwoMoreThings@${revision}/`, pathname = new URL(route.request().url()).pathname;
@@ -83,7 +83,7 @@ try {
     await page.getByRole('button', { name: '打开两三事 · 随卡', exact: true }).waitFor();
     await page.waitForFunction(() => quickReplyApi.getSetByName('两三事 · 随卡')?.qrList.some(qr => qr.label === '手机'), undefined, { timeout: 3000 });
     assert.equal(await page.evaluate(() => quickReplyApi.getSetByName('两三事 · 随卡').qrList.length), 1, '启动后加载的随卡版也替换旧QR，不等待已结束的启动事件');
-    assert.equal(updateChecks, kind === 'native' ? 0 : 1, '本机测试不访问云端，正式加载器只检查一次最新提交');
+    assert.equal(updateChecks, kind === 'native' ? 0 : 1, '本机测试不访问云端，正式加载器只查询一次发布清单');
     assert.equal(await page.evaluate(() => document.getElementById('helper-script').contentDocument.querySelector('.pocket-phone')), null, 'phone mounts in the host realm');
     await page.getByRole('button', { name: '打开两三事 · 随卡', exact: true }).click();
     const embedded = page.locator('#pocket-phone-card-host');

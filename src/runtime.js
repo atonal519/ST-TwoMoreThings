@@ -1,5 +1,5 @@
 import { getSharedBodyWrappers } from './shared-body-wrappers.js';
-import { createHostAdapter } from './host.js';
+import { createHostAdapter, renderUpdateMarkdown } from './host.js';
 import { createPhoneStore } from './store.js';
 import { createApiSettings, createModelClient } from './api.js';
 import { createContextReader, createBackflowService } from './context.js';
@@ -21,9 +21,16 @@ import { createSocialService } from './social.js';
 import { createImageFiles } from './image-files.js';
 import { createImageProviders } from './image-providers.js';
 import { createAppearanceSettings } from './appearance.js';
+import { createPluginUpdates } from './plugin-updates.js';
+import { createEmbeddedUpdates } from './embedded-updates.js';
+import { UPDATE_NOTICE_PATH } from './release.js';
+import { VERSION } from './version.js';
 export { createPhoneControl, createPhoneImageService };
 
-export function initialize({ host = createHostAdapter(), documentRef = document, qqjBridgeProvider, preset } = {}) {
+export function initialize({ mode = 'standalone', host = createHostAdapter({ mode }), documentRef = document, qqjBridgeProvider, preset, coreUrl, release, updateError, replaceCore } = {}) {
+  const updates = host.mode === 'embedded'
+    ? createEmbeddedUpdates({ coreUrl, version: VERSION, release, updateError, replaceCore })
+    : createPluginUpdates({ moduleUrl: import.meta.url, extensionTypes: () => host.readExtensionTypes(), headers: () => host.getRequestHeaders(), noticePath: UPDATE_NOTICE_PATH });
   const wrapperSettingsProvider = () => ({ ...getSharedBodyWrappers(host.readSettings()) });
   const initialState = preset ? stateFromPreset(preset) : undefined;
   const files = createImageFiles({ host });
@@ -68,11 +75,16 @@ export function initialize({ host = createHostAdapter(), documentRef = document,
       forum: createForumService({ store, contextReader, modelClient }), apiSettings, calendar,
       social: createSocialService({ store, contextReader, modelClient, defaultUser: target.user, isReadingPost: id => currentPhone?.isReadingSocial(id) }),
       wallpaper: createWallpaperService({ host, store }), entries, appearance, authoring: createAuthoringService({ host, store, readEntries: entries.read }), mode: host.mode,
+      updates, renderUpdateMarkdown, notifyUpdate: notification => {
+        if (notification.kind === 'error') host.reportError(notification.text);
+        else if (globalThis.toastr?.success) globalThis.toastr.success(notification.text);
+        else globalThis.alert?.(notification.text);
+      },
       control, imageProviders, images: createPhoneImageService({ store, modelClient, files, providers: imageProviders, assertEnabled: control.assertEnabled, onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
       onContextChange: () => host.setPrompt(''),
       onClose: () => entries.focus(),
     });
     phone = currentPhone;
   }
-  return { open, dispose() { phone?.dispose(); unsubscribe(); unsubscribeTime(); unsubscribeEntries?.(); entries.dispose(); host.setPrompt(''); } };
+  return { open, dispose(options) { phone?.dispose(); unsubscribe(); unsubscribeTime(); unsubscribeEntries?.(); entries.dispose(options); host.setPrompt(''); } };
 }

@@ -46,6 +46,6 @@ export function createPhoneEntries({ host, documentRef, open, toggle, defaults =
       if (enabled && qrApi?.settings?.isEnabled === false) return { notice: 'QR入口已保存，开启酒馆的快速回复功能后显示。' };
     },
     focus() { launcher.focus({ preventScroll: true }); },
-    dispose() { unregisterCommand?.(); unsubscribeReady(); fab.destroy(); fab.host.remove(); launcher.removeEventListener('click', launch); launcher.removeEventListener('keydown', keyOpen); launcher.remove(); if (embedded && read().qrShow) void syncQuickReply(host.readQuickReplies(), false, qr).catch(() => host.reportError('随卡快捷按钮移除失败，请在快速回复的“两三事 · 随卡”组中删除“手机”按钮。')); },
+    dispose({ preserveQuickReply = false } = {}) { unregisterCommand?.(); unsubscribeReady(); fab.destroy(); fab.host.remove(); launcher.removeEventListener('click', launch); launcher.removeEventListener('keydown', keyOpen); launcher.remove(); if (embedded && !preserveQuickReply && read().qrShow) void syncQuickReply(host.readQuickReplies(), false, qr).catch(() => host.reportError('随卡快捷按钮移除失败，请在快速回复的“两三事 · 随卡”组中删除“手机”按钮。')); },
   };
 }
