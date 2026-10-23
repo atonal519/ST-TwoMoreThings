@@ -25,6 +25,7 @@ import { createPluginUpdates } from './plugin-updates.js';
 import { createEmbeddedUpdates } from './embedded-updates.js';
 import { UPDATE_NOTICE_PATH } from './release.js';
 import { VERSION } from './version.js';
+import { createMemorySources } from './memory-sources.js';
 export { createPhoneControl, createPhoneImageService };
 
 export function initialize({ mode = 'standalone', host = createHostAdapter({ mode }), documentRef = document, qqjBridgeProvider, preset, coreUrl, release, updateError, replaceCore } = {}) {
@@ -68,7 +69,8 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
     const client = createModelClient({ host, sourceProvider: apiSettings, onBusyChange });
     const modelClient = { async complete(request) { control.assertEnabled(); const answer = await client.complete(request); control.assertEnabled(); return answer; } };
     const calendar = createCalendarReader();
-    const contextReader = createContextReader({ target, store, qqjBridgeProvider, calendar, wrapperSettingsProvider });
+    const memorySources = createMemorySources({ target, qqjBridgeProvider, settingsProvider: host.readSettings });
+    const contextReader = createContextReader({ target, store, qqjBridgeProvider, calendar, wrapperSettingsProvider, memorySources });
     currentPhone = mountPhone({ mount: documentRef.documentElement, store, qqjBridgeProvider, defaultUser: target.user, readTime: () => readPhoneTime(target.messages), readTimeline: () => readTimeline(target.messages),
       messages: createMessageService({ target, store, contextReader, modelClient }),
       groups: createGroupService({ target, store, contextReader, modelClient }),

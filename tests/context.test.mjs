@@ -158,7 +158,7 @@ test('forum context excludes private SMS and QQJ author-side background', async 
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   await store.upsertContacts([{ id: 'lin', name: '林舟', source: { kind: 'qqj', entityId: 'q1' } }]);
   await store.appendMessage('lin', { text: '私聊密码', role: 'user' });
-  const bridge = { readContext: () => ({ status: 'ready', routerText: '作者侧秘密', actors: [{ entityId: 'q1', memoryText: '林舟的相关记忆' }] }) };
+  const bridge = { getStatus: () => ({ status: 'ready' }), readContext: () => ({ status: 'ready', routerText: '作者侧秘密', actors: [{ entityId: 'q1', memoryText: '林舟的相关记忆' }] }) };
   const reader = createContextReader({ target, store, qqjBridgeProvider: () => bridge });
   assert.equal((await reader.readForContact('lin')).related, '林舟的相关记忆');
   const forum = await reader.readForForum();

@@ -42,7 +42,7 @@ try {
     await page.getByRole('button', { name: '打开两三事', exact: true }).click();
     await page.waitForFunction(() => previewHarness.metadataSaves === 1);
     const phone = page.locator('#pocket-phone-host'); await openApp(phone, '设置');
-    await phone.locator('.app-version').getByText('两三事 0.3.8', { exact: true }).waitFor();
+    await phone.locator('.app-version').getByText('两三事 0.3.9', { exact: true }).waitFor();
     await phone.getByRole('button', { name: '可更新', exact: true }).waitFor();
     assert.equal(posts.length, 1);
     if (kind === 'native' && installation === 'local' && process.env.POCKET_UPDATE_SCREENSHOTS !== '0') {
@@ -93,8 +93,8 @@ try {
     assert.deepEqual(await page.evaluate(() => previewHarness.notices), ['两三事已更新，请刷新酒馆后使用']);
     await phone.locator('.app-version').getByRole('button', { name: '查看公告', exact: true }).click();
     const installedNotice = phone.getByRole('dialog', { name: '已安装版本公告' });
-    await installedNotice.getByRole('heading', { name: '两三事 0.3.8', exact: true }).waitFor();
-    assert.equal(await installedNotice.getByRole('listitem').count(), 7);
+    await installedNotice.getByRole('heading', { name: '两三事 0.3.9', exact: true }).waitFor();
+    assert.equal(await installedNotice.getByRole('listitem').count(), 3);
     await installedNotice.getByRole('button', { name: '关闭', exact: true }).click();
     assert.equal(await page.evaluate(() => previewHarness.metadataSaves), 1, 'only the initial missing-contact portraits are saved');
     assert.deepEqual(errors, []); await page.close();

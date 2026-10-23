@@ -11,6 +11,7 @@ import { getSocialAuthor, readSocialFeed } from './social.js';
 import { publicationLabel } from './social-time.js';
 import { readTodos } from './todos.js';
 import { replyContext } from './replies.js';
+import { createMemorySources } from './memory-sources.js';
 
 function recentStory(messages, beforeIndex = messages.length, wrappers = {}) {
   const floor = latestAiFloor(messages, beforeIndex)?.message;
@@ -104,7 +105,7 @@ function actorIds(people, bridge, snapshot) {
   return ids;
 }
 
-export function createContextReader({ target, store, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), wrapperSettingsProvider = () => ({}) }) {
+export function createContextReader({ target, store, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), wrapperSettingsProvider = () => ({}), memorySources = createMemorySources({ target, qqjBridgeProvider }) }) {
   const base = () => {
     const person = store.read().userProfile, batch = readTimeline(target.messages);
     return { character: cardText(target.character), user: person?.name || target.user,
@@ -112,6 +113,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       clock: batch.clock, batch, story: recentStory(target.messages, target.messages.length, wrapperSettingsProvider()) };
   };
   return {
+    assertMemorySources() { memorySources.select(); },
     async readForContact(id) {
       const state = store.read(), contact = state.contacts.find(x => x.id === id);
       if (!contact) throw new Error('这个联系人已不存在，请返回短信重新选择。');
@@ -122,14 +124,15 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       const social = publicSocialContext(state);
       const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'));
       let related = '';
-      const bridge = qqjBridgeProvider?.();
+      const source = memorySources.select(), bridge = source.bridge;
+      const storyMemory = memorySources.readStoryMemory(source, 4000);
       const entityId = actorIds([contact], bridge).get(id);
       if (entityId && bridge?.readContext) {
         const query = [contact.name, ...current.story.map(item => item.text), history.at(-1)?.text || ''].join('\n').slice(-8000);
         const context = await bridge.readContext({ query, entityIds: [entityId], maxCharacters: 4000 });
         if (context?.status === 'ready') related = (context.actors || []).filter(x => x.entityId === entityId).map(x => [x.stateText, x.memoryText].filter(Boolean).join('\n')).join('\n').slice(0, 4000);
       }
-      return { ...current, todoPeople: [{ id: '@user', name: current.user }, { id, name: contact.name }], todos: todos.map(todo => todoReference(todo, state, current.user)), ...(todos.length || previousMessages.length ? { storyProgress: storyProgress(target.messages, [...previousMessages.map(message => message.sourceBatch), ...todos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, previousMessages, history: history.map(message => contextMessage(message, state.conversations[id] || [])), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
+      return { ...current, ...(storyMemory ? { storyMemory } : {}), todoPeople: [{ id: '@user', name: current.user }, { id, name: contact.name }], todos: todos.map(todo => todoReference(todo, state, current.user)), ...(todos.length || previousMessages.length ? { storyProgress: storyProgress(target.messages, [...previousMessages.map(message => message.sourceBatch), ...todos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: contact.personality, expression: contact.expression, language: contact.language || '' }, previousMessages, history: history.map(message => contextMessage(message, state.conversations[id] || [])), related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
     },
     async readForForum() {
       const current = base();
@@ -138,7 +141,8 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         worldbook: await target.readWorldInfo({ scanText: current.story.map(item => item.text).join('\n') }) };
     },
     async readForSocial(authors, { includePrivateMessages = false } = {}) {
-      const current = base(), bridge = qqjBridgeProvider?.(), state = store.read();
+      const current = base(), source = memorySources.select(), bridge = source.bridge, state = store.read();
+      const storyMemory = memorySources.readStoryMemory(source, 6000);
       const contacts = authors.filter(person => person.kind !== 'npc');
       const ids = actorIds(contacts, bridge), entityIds = [...new Set(ids.values())];
       const scanText = [...current.story.map(item => item.text), ...authors.map(person => person.name || '')].join('\n');
@@ -149,7 +153,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       }
       const privateHistories = new Map(includePrivateMessages ? contacts.map(person => [person.id, recentPhoneHistory(state, person.id)]) : []);
       const privateTodos = includePrivateMessages ? relevantTodos(state, contacts.map(person => person.id)) : [];
-      return { ...current, ...(includePrivateMessages && (privateTodos.length || [...privateHistories.values()].some(history => history.length)) ? { storyProgress: storyProgress(target.messages, [...[...privateHistories.values()].flatMap(history => history.map(message => message.sourceBatch)), ...privateTodos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), authors: authors.map(person => {
+      return { ...current, ...(storyMemory ? { storyMemory } : {}), ...(includePrivateMessages && (privateTodos.length || [...privateHistories.values()].some(history => history.length)) ? { storyProgress: storyProgress(target.messages, [...[...privateHistories.values()].flatMap(history => history.map(message => message.sourceBatch)), ...privateTodos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), authors: authors.map(person => {
         const todos = includePrivateMessages && person.kind !== 'npc' ? relevantTodos(state, [person.id]) : [];
         return { id: person.id, kind: person.kind,
         name: person.name, nickname: person.nickname || '', description: person.description || '',
@@ -180,7 +184,8 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         if (!person) throw new Error('有群成员不在联系人中，请编辑群聊重新选择。');
         return { id: person.id, name: person.name, nickname: person.nickname || '', personality: person.personality || '', expression: person.expression || '', language: person.language || '', source: person.source };
       });
-      const bridge = qqjBridgeProvider?.(), ids = actorIds(members, bridge), entityIds = [...new Set(ids.values())];
+      const source = memorySources.select(), bridge = source.bridge, ids = actorIds(members, bridge), entityIds = [...new Set(ids.values())];
+      const storyMemory = memorySources.readStoryMemory(source, 6000);
       let actors = [];
       if (entityIds.length && bridge?.readContext) {
         const query = [group.name, ...current.story.map(item => item.text), history.at(-1)?.text || ''].join('\n').slice(-8000);
@@ -200,7 +205,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         return messages.length ? [{ contactId: person.id, knownToIds: ['@user', person.id], messages }] : [];
       });
       const evidence = [...previousMessages, ...privateHistories.flatMap(thread => thread.messages)].map(message => message.sourceBatch);
-      return { ...current, todoPeople: roster.map(({ id, name }) => ({ id, name })), todos: todos.map(todo => todoReference(todo, state, current.user)), privateHistories, ...(todos.length || evidence.length ? { storyProgress: storyProgress(target.messages, [...evidence, ...todos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, previousMessages, history: history.map(message => contextMessage(message, state.conversations[id] || [])), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
+      return { ...current, ...(storyMemory ? { storyMemory } : {}), todoPeople: roster.map(({ id, name }) => ({ id, name })), todos: todos.map(todo => todoReference(todo, state, current.user)), privateHistories, ...(todos.length || evidence.length ? { storyProgress: storyProgress(target.messages, [...evidence, ...todos.map(todo => todo.sourceBatch)], target.messages.length, wrapperSettingsProvider()) } : {}), ...(social.length ? { social } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster }, previousMessages, history: history.map(message => contextMessage(message, state.conversations[id] || [])), worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText), ...social.map(post => post.text)].join('\n') }) };
     },
 
   };

@@ -128,6 +128,7 @@ test('authored contacts recall the reader’s own uniquely named QQJ actor witho
   const store = createPhoneStore({ target, initialState: stateFromPreset({ schemaVersion: 1, contacts: [{ id: 'card:one', name: '林舟' }], groups: [] }) });
   const queries = []; let items = [{ displayName: '林舟', entityId: 'reader-owned-actor', profile: { personality: '温和' } }];
   const reader = createContextReader({ target, store, qqjBridgeProvider: () => ({
+    getStatus: () => ({ status: 'ready' }),
     getPeopleSnapshot: () => ({ status: 'ready', people: { items } }),
     readContext: async request => { queries.push(request); return { status: 'ready', actors: [{ entityId: 'reader-owned-actor', memoryText: '用户与林舟去过书店。' }] }; },
   }) });

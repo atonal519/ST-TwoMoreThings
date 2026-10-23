@@ -30,6 +30,7 @@ import { renderPhoneNotice } from './ui/notifications.js';
 import { readSocialPosts } from './social.js';
 import { createPluginUpdatesView } from './ui/plugin-updates-view.js';
 import { createPhoneDialog } from './ui/dialog.js';
+import { MEMORY_CONFLICT_CODE } from './memory-sources.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
@@ -259,7 +260,12 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.feedback = null;
     render({ bottom: key.startsWith('continue:') });
     try { const result = await task(); notifyCompletion(key); after?.(result); }
-    catch (error) { ui.feedback = { error: true, text: error?.message || '操作未完成，请重试。' }; }
+    catch (error) {
+      if (error?.code === MEMORY_CONFLICT_CODE) {
+        const content = doc.createElement('p'); content.textContent = error.message;
+        void dialog.custom({ title: '记忆插件冲突', content, confirmText: '知道了', submit: () => true });
+      } else ui.feedback = { error: true, text: error?.message || '操作未完成，请重试。' };
+    }
     finally {
       if (!element.hidden && inChat() && control.isEnabled()) {
         try { await store.markRead(conversationId()); }

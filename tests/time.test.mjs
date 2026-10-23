@@ -29,3 +29,21 @@ test('normalizes a full-width or twelve-hour clock and falls back for an unreada
   for (const time of ['25:10', '22:77', '深夜', '未知']) assert.equal(readPhoneTime([floor('QQJ', time)], now).source, 'real');
   assert.equal(readPhoneTime([], now).time, '09:37');
 });
+
+test('reads official BBS endpoints including attributes, case and internal whitespace', () => {
+  const messages = [{ is_user: false, mes: '<BBS_START data-source="story">\n2031/4/8 09:10\n</BBS_START>正文<bbs_end> 2031/4/8 09:30 </bbs_end>' }];
+  assert.deepEqual(readPhoneTime(messages, now), { source: 'story', date: '2031/4/8', weekday: '', time: '09:30' });
+  messages[0].mes = '<bbs_start>大陆历1686年10月4日  下午８：０５</bbs_start>正文';
+  assert.deepEqual(readPhoneTime(messages, now), { source: 'story', date: '大陆历1686年10月4日', weekday: '', time: '20:05' });
+});
+
+test('mixed timestamp sources use the last end in the latest AI floor, or its last start', () => {
+  const messages = [{ is_user: false, mes: `${floor('QQJ').mes}<bbs_end>2031/4/8 09:30</bbs_end><!-- SDC-start | date=后来 | time=10:00 -->` }];
+  assert.equal(readPhoneTime(messages, now).time, '09:30');
+  messages[0].mes += '<!-- myknots-end | date=之后 | weekday=周三 | time=11:00 -->';
+  assert.deepEqual(readPhoneTime(messages, now), { source: 'story', date: '之后', weekday: '周三', time: '11:00' });
+  messages[0].mes = '<!-- QQJ-start | date=之前 | time=08:00 --><bbs_start>2031/4/8 09:10</bbs_start>';
+  assert.equal(readPhoneTime(messages, now).time, '09:10');
+  messages.push({ is_user: false, mes: '<bbs_end>2031/4/8 25:10</bbs_end>' });
+  assert.equal(readPhoneTime(messages, now).source, 'real');
+});

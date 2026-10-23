@@ -32,7 +32,7 @@ try {
       if (mode === 'embedded') {
         h.settings.pocketPhone = { disabledCards: { 'chat:preview': true } };
         const { mountEmbedded } = await import('/embed.js');
-        h.loadedApp = mountEmbedded({ release: { version: '0.3.8', sha: 'a'.repeat(40) } });
+        h.loadedApp = mountEmbedded({ release: { version: '0.3.9', sha: 'a'.repeat(40) } });
       }
     }, mode);
     const phone = page.locator(mode === 'embedded' ? '#pocket-phone-card-host' : '#pocket-phone-host');

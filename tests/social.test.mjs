@@ -281,7 +281,7 @@ test('a genuinely deleted friend is not restored as an author or named comment w
 
 test('social context scopes selected friends private SMS for proactive replies and excludes unrelated memory', async () => {
   const calls = [];
-  const bridge = { readContext: async request => {
+  const bridge = { getStatus: () => ({ status: 'ready' }), readContext: async request => {
     calls.push(request);
     return { status: 'ready', actors: [
       ...request.entityIds.map(entityId => ({ entityId, stateText: `${entityId}的状态`, memoryText: `${entityId}的记忆` })),

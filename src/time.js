@@ -1,4 +1,4 @@
-const stamp = /<!--\s*(?:QQJ|SDC|myknots)-(start|end)\b([\s\S]*?)-->/giu;
+const stamp = /<!--\s*(?:QQJ|SDC|myknots)-(start|end)\b([\s\S]*?)-->|<bbs_(start|end)\b[^>]*>([\s\S]*?)<\/bbs_\3\s*>/giu;
 const known = value => /^(?:未知|未明确|未明|不详|unknown)$/iu.test(value || '') ? '' : value || '';
 const field = (raw, name) => new RegExp(`(?:^|[|｜])\\s*${name}\\s*[=＝:]\\s*([^|｜]+)`, 'iu').exec(raw)?.[1]?.trim() || '';
 const pad = value => String(value).padStart(2, '0');
@@ -13,6 +13,12 @@ function clockTime(raw) {
   return `${pad(hour)}:${pad(minute)}`;
 }
 
+function stampFields(tag) {
+  if (tag[1]) return { kind: tag[1].toLowerCase(), date: known(field(tag[2], 'date')), weekday: known(field(tag[2], 'weekday')), time: clockTime(field(tag[2], 'time')) };
+  const match = /^([\s\S]*?)\s+((?:(?:上午|下午|中午|凌晨|清晨|早晨|早上|晚上|夜间|AM|PM)\s*)?[\d０-９]{1,2}\s*[:：]\s*[\d０-９]{2}(?:\s*[:：]\s*[\d０-９]{2})?(?:\s*(?:AM|PM))?)$/iu.exec(tag[4].trim());
+  return { kind: tag[3].toLowerCase(), date: known(match?.[1]?.trim()), weekday: '', time: match ? clockTime(match[2]) : null };
+}
+
 export function latestAiFloor(messages, beforeIndex = messages.length) {
   for (let i = beforeIndex - 1; i >= 0; i--) {
     const message = messages[i];
@@ -25,10 +31,9 @@ export function latestAiFloor(messages, beforeIndex = messages.length) {
 export function readPhoneTime(messages, now = new Date()) {
   // 结束戳代表最新AI楼结束时的剧情时间，不拿更旧楼层补当前时间。
   const body = latestAiFloor(messages)?.message.mes || '';
-  const tags = [...body.matchAll(stamp)];
-  const current = tags.filter(tag => tag[1].toLowerCase() === 'end').at(-1) || tags.at(-1);
-  const time = current && clockTime(field(current[2], 'time'));
-  if (time) return { source: 'story', date: known(field(current[2], 'date')), weekday: known(field(current[2], 'weekday')), time };
+  const tags = [...body.matchAll(stamp)].map(stampFields);
+  const current = tags.filter(tag => tag.kind === 'end').at(-1) || tags.at(-1);
+  if (current?.time) return { source: 'story', date: current.date, weekday: current.weekday, time: current.time };
   return {
     source: 'real', date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
     weekday: now.toLocaleDateString('zh-CN', { weekday: 'long' }),
