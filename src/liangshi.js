@@ -1,9 +1,11 @@
+import { finishGeneratedText, hasStyleReference } from './generated-text.js';
 import { clipProjection } from './context-budget.js';
 import { parseJsonObject } from './api.js';
 import { createCameoAvatar } from './cameo-avatar.js';
 import { displayName } from './profiles.js';
-import { isUserIdentity } from './identities.js';
-import { LIANGSHI_PROMPT, LIANGSHI_MORE_PROMPT, LIANGSHI_HOT_PROMPT, LIANGSHI_TOPIC_PROMPT, LIANGSHI_FOLLOWING_PROMPT, LIANGSHI_DRAFT_PROMPT } from './prompts.js';
+import { generatedImage } from './content.js';
+import { isUserIdentity, identitySource, assertIdentitySnapshot } from './identities.js';
+import { LIANGSHI_PROMPT, LIANGSHI_MORE_PROMPT, LIANGSHI_HOT_PROMPT, LIANGSHI_TOPIC_PROMPT, LIANGSHI_FOLLOWING_PROMPT, LIANGSHI_DRAFT_PROMPT, LIANGSHI_REPLY_PROMPT } from './prompts.js';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
 const rows = value => Array.isArray(value) ? value : value && typeof value === 'object' ? [value] : [];
@@ -12,7 +14,35 @@ const uid = () => globalThis.crypto.randomUUID();
 const handle = value => text(value).replace(/^@/, '').toLowerCase();
 const empty = () => ({ accounts: [], posts: [], topics: [] });
 const publicAccount = ({ id, name, handle, kind, description, expression, language, contactId }) => ({ id, name, handle, kind, description, expression, language, contactId });
-const publicPost = ({ userLiked, ...post }) => ({ ...post, ...liangshiStatistics(post), ...(post.image ? { image: { description: post.image.description } } : {}) });
+const hasAccountStyleReference = (author, context, accounts = []) => hasStyleReference(accounts.find(account => account.id === author?.id)) || hasStyleReference(context.knownContacts?.find(person => person.id === author?.contactId));
+function assertPrivateAuthors(state, context) {
+  const authors = (context.knownContacts || []).filter(author => author.phoneContext?.length);
+  if (!authors.length) return;
+  assertIdentitySnapshot(state, context[identitySource]);
+  if (authors.some(author => !state.contacts.some(person => person.id === author.id))) throw new Error('作者资料已变化，本次微博未保存。');
+}
+const publicPost = ({ userLiked, replyBatch, ...post }) => ({ ...post, ...liangshiStatistics(post), ...(post.image ? { image: { description: post.image.description } } : {}) });
+const publicComment = ({ id, authorId, text, translation, replyToId, replyToAuthorId, quoteId, publishedAt, image }) => ({ id, authorId, text, ...(image?.description ? { image: { description: image.description } } : {}), ...(translation ? { translation } : {}), ...(replyToId ? { replyToId, replyToAuthorId } : {}), ...(quoteId ? { quoteId } : {}), ...(publishedAt ? { publishedAt } : {}) });
+export const liangshiInteractions = (post, collection = 'comments') => (post[collection] || []).map((row, index) => ({ ...row, id: row.id || `liangshi:${post.id}:${collection}:${index}` }));
+export const liangshiReplyState = post => ({ pending: (post?.comments || []).filter(row => row.userAuthored === true && !row.replyHandled), last: post?.replyBatch });
+const ownPost = (data, post) => post?.userAuthored === true && data.accounts.some(account => account.id === post.authorId && account.ownerId === '@user');
+const postMaterial = post => post ? { id: post.id, authorId: post.authorId, text: post.text, translation: post.translation, image: post.image ? { description: post.image.description } : undefined, publishedAt: post.publishedAt, editedAt: post.editedAt, quoteId: post.quoteId } : undefined;
+
+function replyMaterial(data, post, selected, excluded, ownName) {
+  const byId = new Map(post.comments.map(row => [row.id, row])), parents = new Map();
+  for (const reply of selected) {
+    const visited = new Set([reply.id]); let id = reply.replyToId;
+    while (id && !visited.has(id)) {
+      visited.add(id); const parent = byId.get(id);
+      if (!parent || excluded.has(id)) break;
+      parents.set(id, publicComment(parent)); id = parent.replyToId;
+    }
+  }
+  const original = data.posts.find(row => row.id === post.quoteId), replies = selected.map(publicComment), parentRows = [...parents.values()];
+  const ids = new Set([post.authorId, original?.authorId, ...[...replies, ...parentRows].flatMap(row => [row.authorId, row.replyToAuthorId])]);
+  const accounts = data.accounts.filter(account => ids.has(account.id)).map(account => publicAccount(account.ownerId === '@user' ? { ...account, name: ownName } : account));
+  return { post: postMaterial(post), ...(original ? { original: postMaterial(original) } : {}), accounts, currentAccount: accounts.find(account => account.id === post.authorId), replies, parents: parentRows };
+}
 export const getLiangshiContact = (state, account) => account?.handle ? state.contacts?.find(person => person.id === account.contactId && !isUserIdentity(state, person.id)) : undefined;
 const promotions = [
   ['千千结', '千千结整理人物与剧情记忆，让长故事中的经历和关系有迹可循。'],
@@ -74,7 +104,7 @@ function retainOwned(data) {
   const owned = withOwnership(data);
   const retained = referencedPostIds(owned, [...owned.feedIds, ...owned.followingFeedIds, ...owned.userPostIds, ...owned.topics.flatMap(topic => topic.postIds)]);
   const posts = owned.posts.filter(post => retained.has(post.id));
-  const authors = new Set(posts.flatMap(post => [post.authorId, ...(post.comments || []).map(row => row.authorId), ...(post.reposts || []).map(row => row.authorId)]));
+  const authors = new Set(posts.flatMap(post => [post.authorId, ...(post.comments || []).flatMap(row => [row.authorId, row.replyToAuthorId]), ...(post.reposts || []).map(row => row.authorId)]));
   return { ...owned, posts, accounts: owned.accounts.filter(account => account.ownerId === '@user' || authors.has(account.id)) };
 }
 
@@ -82,9 +112,9 @@ function parseHot(answer) {
   const topics = rows(Array.isArray(answer) ? answer : answer.topics ?? answer.hotTopics ?? answer.items).flatMap(row => {
     const name = typeof row === 'string' ? text(row) : text(row?.name ?? row?.title ?? row?.topic);
     if (!name) return [];
-    const nameTranslation = text(row.nameTranslation ?? row.titleTranslation), descriptionTranslation = text(row.descriptionTranslation ?? row.summaryTranslation);
+    const nameTranslation = text(row.nameTranslation ?? row.titleTranslation), descriptionTranslation = finishGeneratedText(text(row.descriptionTranslation ?? row.summaryTranslation));
     const heat = typeof row.heat === 'number' && Number.isFinite(row.heat) ? row.heat : text(row.heat);
-    return [{ id: uid(), name, description: text(row.description ?? row.summary ?? row.content), ...(nameTranslation ? { nameTranslation } : {}), ...(descriptionTranslation ? { descriptionTranslation } : {}), ...(heat !== '' ? { heat } : {}), postIds: [] }];
+    return [{ id: uid(), name, description: finishGeneratedText(text(row.description ?? row.summary ?? row.content)), ...(nameTranslation ? { nameTranslation } : {}), ...(descriptionTranslation ? { descriptionTranslation } : {}), ...(heat !== '' ? { heat } : {}), postIds: [] }];
   });
   return [...new Map(topics.map(topic => [topic.name, topic])).values()];
 }
@@ -133,34 +163,36 @@ function accountCatalog(source, previous = [], retain = false, { allowed: contac
   return { accounts, resolve };
 }
 
-function interactions(source, catalog, quoteId) {
+function interactions(source, catalog, quoteId, preserve = () => false, clock) {
   return rows(source).flatMap(row => {
-    const body = text(row?.text ?? row?.content ?? row?.message), author = catalog.resolve(row);
-    if (!body || !author) return [];
-    const translation = text(row.translation ?? row.translatedText);
-    return [{ id: uid(), authorId: author.id, text: body, ...(translation ? { translation } : {}), ...(quoteId ? { quoteId } : {}) }];
+    const author = catalog.resolve(row), preserveStyle = preserve(author), body = finishGeneratedText(text(row?.text ?? row?.content ?? row?.message), { preserveStyle });
+    const image = generatedImage(row);
+    if ((!body && !image) || !author) return [];
+    const translation = finishGeneratedText(text(row.translation ?? row.translatedText), { preserveStyle });
+    return [{ id: uid(), authorId: author.id, text: body, ...(image ? { image } : {}), ...(translation ? { translation } : {}), ...(quoteId ? { quoteId } : {}), ...(clock ? { publishedAt: [clock.date, clock.time].filter(Boolean).join(' '), createdAt: new Date().toISOString() } : {}) }];
   });
 }
 
-function parseFeed(answer, previous, clock, scope) {
+function parseFeed(answer, previous, context, scope) {
+  const { clock } = context, preserve = author => hasAccountStyleReference(author, context);
   const catalog = accountCatalog(answer.accounts ?? answer.users ?? answer.authors, previous.accounts, false, scope);
   const topics = rows(answer.topics ?? answer.hotTopics).flatMap(row => {
     const name = typeof row === 'string' ? text(row) : text(row?.name ?? row?.title ?? row?.topic);
-    return name ? [{ name, description: text(row?.description ?? row?.text) }] : [];
+    return name ? [{ name, description: finishGeneratedText(text(row?.description ?? row?.text)) }] : [];
   });
   // 临时key只用于这一次归属；持久ID与所有引用由程序一并生成。
   const keys = new Map(), pending = [];
   for (const [index, row] of rows(Array.isArray(answer) ? answer : answer.posts ?? answer.items ?? answer.weibos).entries()) {
-    const body = text(row?.text ?? row?.content ?? row?.body), description = text(row?.image?.description), author = catalog.resolve(row);
+    const author = catalog.resolve(row), preserveStyle = preserve(author), body = finishGeneratedText(text(row?.text ?? row?.content ?? row?.body), { preserveStyle }), description = text(row?.image?.description);
     if ((!body && !description) || !author) continue;
     const id = uid(), key = text(row.key ?? row.id) || `p${index + 1}`;
     keys.set(key, keys.has(key) ? null : id);
-    const translation = text(row.translation ?? row.translatedText), topic = text(row.topic?.name ?? row.topic ?? row.hashtag).replace(/^#|#$/g, '');
+    const translation = finishGeneratedText(text(row.translation ?? row.translatedText), { preserveStyle }), topic = text(row.topic?.name ?? row.topic ?? row.hashtag).replace(/^#|#$/g, '');
     if (topic && !topics.some(item => item.name === topic)) topics.push({ name: topic, description: '' });
     pending.push({ row, post: { id, authorId: author.id, text: body, ...(translation ? { translation } : {}), ...(description ? { image: { description } } : {}), topic,
-      publishedAt: text(row.publishedAt ?? row.published_at ?? row.time) || [clock?.date, clock?.time].filter(Boolean).join(' '), promoted: row.promoted === true || row.ad === true,
+      publishedAt: text(row.publishedAt ?? row.published_at ?? row.time) || [clock?.date, clock?.time].filter(Boolean).join(' '), createdAt: new Date().toISOString(), promoted: row.promoted === true || row.ad === true,
       likes: count(row.likes), commentCount: count(row.commentCount ?? row.commentsCount), repostCount: count(row.repostCount ?? row.repostsCount),
-      comments: interactions(row.comments ?? row.replies, catalog).slice(0, 2), reposts: [] } });
+      comments: interactions(row.comments ?? row.replies, catalog, undefined, preserve, clock).slice(0, 2), reposts: [] } });
   }
   const posts = pending.map(({ row, post }) => {
     const quoteId = keys.get(text(row.quoteKey ?? row.quoteId ?? row.repostOf));
@@ -175,6 +207,58 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
   const period = () => random() < .5 ? 2 : 3;
   return {
     getPost: id => read().posts.find(post => post.id === id),
+    async publishReply(postId, draft) {
+      const body = text(draft.text); if (!body) throw new Error('请先写下回复。');
+      const clock = contextReader.readClock(); let published;
+      await store.updateLiangshi(data => {
+        const post = data.posts.find(row => row.id === postId), comments = post ? liangshiInteractions(post) : [], parent = comments.find(row => row.id === draft.replyToId);
+        if (!ownPost(data, post)) throw new Error('只能在本人微博下回复评论。');
+        if (!parent) throw new Error('这条评论已更新，请重新选择回复。');
+        published = { id: uid(), authorId: post.authorId, userAuthored: true, text: body, replyToId: parent.id, replyToAuthorId: parent.authorId, publishedAt: [clock.date, clock.time].filter(Boolean).join(' '), createdAt: new Date().toISOString() };
+        return { ...data, posts: data.posts.map(row => row.id === postId ? { ...row, comments: [...comments, published] } : row) };
+      });
+      return published;
+    },
+    async generateReplies(postId, { regenerate = false } = {}) {
+      const current = read(), post = current.posts.find(row => row.id === postId);
+      if (!ownPost(current, post)) throw new Error('只能为本人微博生成回应。');
+      const state = liangshiReplyState(post), excluded = new Set(regenerate ? state.last?.commentIds || [] : []);
+      let selected = regenerate ? (state.last?.inputIds || []).map(id => post.comments.find(row => row.id === id)).filter(row => row?.userAuthored === true) : state.pending;
+      if (!selected.length) return null;
+      let material, continuation;
+      while (selected.length) {
+        material = replyMaterial(current, post, selected, excluded, ownName()); continuation = clipProjection(material, 8000);
+        if (continuation) break;
+        selected = selected.slice(0, -1);
+      }
+      if (!continuation) throw new Error('回复关系过长，请先减少本次回复内容。');
+      const selectedIds = new Set(selected.map(row => row.id)), previousBatch = JSON.stringify(post.replyBatch), original = current.posts.find(row => row.id === post.quoteId);
+      const context = await contextReader.readForLiangshi({ scanText: JSON.stringify(continuation), includePhoneContext: true, includeStory: false, includeUserPersona: true, excludeApps: ['liangshi'], authorContactIds: continuation.accounts.map(account => account.contactId).filter(Boolean) });
+      assertPrivateAuthors(store.read(), context);
+      const answer = parseJsonObject(await modelClient.complete({ system: LIANGSHI_REPLY_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, ...continuation }) }] }));
+      let noReplies = false;
+      const saved = await store.updateLiangshi(data => {
+        assertPrivateAuthors(store.read(), context);
+        const latest = withOwnership(data), actual = latest.posts.find(row => row.id === postId);
+        if (!ownPost(latest, actual) || JSON.stringify(postMaterial(actual)) !== JSON.stringify(postMaterial(post)) || JSON.stringify(postMaterial(latest.posts.find(row => row.id === original?.id))) !== JSON.stringify(postMaterial(original)) || JSON.stringify(actual.replyBatch) !== previousBatch)
+          throw new Error('这条微博已修改，请重新生成回应。');
+        for (const row of [...material.replies, ...material.parents]) if (JSON.stringify(publicComment(actual.comments.find(item => item.id === row.id) || {})) !== JSON.stringify(row)) throw new Error('本次回复已修改，请重新生成回应。');
+        const catalog = accountCatalog(answer.accounts ?? answer.users, latest.accounts, true, contactScope(store.read())), raw = answer.comments ?? answer.replies;
+        const comments = rows(raw).flatMap(row => {
+          const parent = actual.comments.find(item => item.id === text(row?.replyToId) && selectedIds.has(item.id)), author = catalog.resolve(row), preserveStyle = hasAccountStyleReference(author, context, continuation.accounts), body = finishGeneratedText(text(row?.text ?? row?.content), { preserveStyle });
+          const image = generatedImage(row);
+          if (!parent || !author || (!body && !image)) return [];
+          const translation = finishGeneratedText(text(row.translation), { preserveStyle });
+          return [{ id: uid(), authorId: author.id, text: body, ...(image ? { image } : {}), ...(translation ? { translation } : {}), replyToId: parent.id, replyToAuthorId: parent.authorId, publishedAt: [context.clock?.date, context.clock?.time].filter(Boolean).join(' '), createdAt: new Date().toISOString() }];
+        });
+        if (!comments.length && !(Array.isArray(raw) && raw.length === 0)) throw new Error('没有生成可用的回应，请重新生成。');
+        noReplies = !comments.length;
+        const batch = { id: uid(), inputIds: [...selectedIds], commentIds: comments.map(row => row.id) };
+        const next = { ...actual, comments: [...actual.comments.filter(row => !excluded.has(row.id)).map(row => selectedIds.has(row.id) ? { ...row, replyHandled: true } : row), ...comments], replyBatch: batch };
+        return { ...latest, accounts: catalog.accounts, posts: latest.posts.map(row => row.id === postId ? next : row) };
+      }, { cleanImages: true });
+      return noReplies ? null : saved.liangshi.posts.find(row => row.id === postId);
+    },
     async publishUser(draft) {
       const body = text(draft.text), translation = text(draft.translation), description = text(draft.imageDescription);
       if (!body && !description) throw new Error('请先写下微博正文或配图描述。');
@@ -184,7 +268,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
         const account = { ...existing, id: existing?.id || `user:${uid()}`, ownerId: '@user', name: ownName(),
           handle: existing?.handle || `user-${uid()}`, kind: 'person', avatar: existing?.avatar || store.read().userProfile?.avatar || createCameoAvatar() };
         published = { id: uid(), authorId: account.id, userAuthored: true, text: body, ...(translation ? { translation } : {}), ...(description ? { image: { description } } : {}),
-          publishedAt: [clock.date, clock.time].filter(Boolean).join(' '), likes: 0, commentCount: 0, repostCount: 0, comments: [], reposts: [] };
+          publishedAt: [clock.date, clock.time].filter(Boolean).join(' '), createdAt: new Date().toISOString(), likes: 0, commentCount: 0, repostCount: 0, comments: [], reposts: [] };
         return { ...current, accounts: [...current.accounts.filter(row => row.id !== account.id), account], posts: [...current.posts, published], userPostIds: [published.id, ...current.userPostIds] };
       });
       return published;
@@ -192,7 +276,8 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
     async draftUser({ seed = '', imageSeed = '' } = {}) {
       const context = await contextReader.readForLiangshiDraft({ seed: text(seed), imageSeed: text(imageSeed) });
       const answer = parseJsonObject(await modelClient.complete({ system: LIANGSHI_DRAFT_PROMPT, messages: [{ role: 'user', content: JSON.stringify(context) }] }));
-      const body = text(answer.text ?? answer.content), translation = text(answer.translation), imageDescription = text(answer.image?.description) || text(imageSeed);
+      const preserveStyle = Boolean(text(context.userPersona) || text(context.seed));
+      const body = finishGeneratedText(text(answer.text ?? answer.content), { preserveStyle }), translation = finishGeneratedText(text(answer.translation), { preserveStyle }), imageDescription = text(answer.image?.description) || text(imageSeed);
       if (!body && !imageDescription) throw new Error('没有生成可用的微博草稿，请重新帮写。');
       return { text: body, imageDescription, ...(body && translation ? { translation } : {}) };
     },
@@ -220,9 +305,11 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
     },
     async refreshFollowing() {
       const context = await contextReader.readForLiangshiFollowing();
+      assertPrivateAuthors(store.read(), context);
       const answer = parseJsonObject(await modelClient.complete({ system: LIANGSHI_FOLLOWING_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, recipe: { posts: 15 } }) }] }));
       const saved = await store.updateLiangshi(latest => {
-        const owned = withOwnership(latest), batch = parseFeed(answer, owned, context.clock, contactScope(store.read()));
+        assertPrivateAuthors(store.read(), context);
+        const owned = withOwnership(latest), batch = parseFeed(answer, owned, context, contactScope(store.read()));
         if (!batch.posts.length) throw new Error('没有生成可读的关注微博，请点刷新重试。');
         const posts = batch.posts.map(post => ({ ...post, ...liangshiStatistics(post) }));
         return retainOwned({ ...owned, followingFeedIds: posts.map(post => post.id), posts: [...owned.posts, ...posts],
@@ -243,6 +330,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
     async refresh() {
       const previous = read(), remaining = previous.promoCountdown || period(), due = remaining === 1;
       const context = await contextReader.readForLiangshi();
+      assertPrivateAuthors(store.read(), context);
       const pool = ['温情', '安利', '引战', '拉踩', '争吵'];
       const selectedSubjects = Array.from({ length: 2 }, () => pool.splice(Math.floor(random() * pool.length), 1)[0]);
       const subjects = [
@@ -255,8 +343,9 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
       const request = { ...context, recipe: { posts: due ? 14 : 15, content: 13, promotions: due ? 1 : 2, programPromotions: due ? 1 : 0, quotes: 2, subjects } };
       const answer = parseJsonObject(await modelClient.complete({ system: LIANGSHI_PROMPT, messages: [{ role: 'user', content: JSON.stringify(request) }] }));
       const saved = await store.updateLiangshi(latest => {
+        assertPrivateAuthors(store.read(), context);
         const owned = withOwnership(latest);
-        const batch = parseFeed(answer, owned, context.clock, contactScope(store.read()));
+        const batch = parseFeed(answer, owned, context, contactScope(store.read()));
         if (!batch.posts.length) throw new Error('没有生成可读的微博，请点刷新重试。');
         if (due) {
           const [name, body] = promotions[Math.floor(random() * promotions.length)];
@@ -264,7 +353,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
           const account = { ...existing, id: existing?.id || uid(), name: `白鳥·${name}`, handle: 'shiratori', kind: 'institution', avatar: existing?.avatar || createCameoAvatar(), followed: existing?.followed === true };
           batch.accounts.push(account);
           batch.posts.splice(Math.floor(random() * (batch.posts.length + 1)), 0, { id: uid(), authorId: account.id, text: body, promoted: true, builtinPromotion: name,
-            topic: '', publishedAt: [context.clock?.date, context.clock?.time].filter(Boolean).join(' '), likes: 0, commentCount: 0, repostCount: 0, comments: [], reposts: [] });
+            topic: '', publishedAt: [context.clock?.date, context.clock?.time].filter(Boolean).join(' '), createdAt: new Date().toISOString(), likes: 0, commentCount: 0, repostCount: 0, comments: [], reposts: [] });
         }
         batch.posts = batch.posts.map(post => ({ ...post, ...liangshiStatistics(post) }));
         batch.promoCountdown = due ? period() : remaining - 1;
@@ -287,11 +376,13 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
       if (!refresh && selected.postIds.length) return selected.postIds.map(id => previous.posts.find(post => post.id === id)).filter(Boolean);
       const topic = { name: selected.name, description: selected.description || '', ...(selected.nameTranslation ? { nameTranslation: selected.nameTranslation } : {}), ...(selected.descriptionTranslation ? { descriptionTranslation: selected.descriptionTranslation } : {}) };
       const context = await contextReader.readForLiangshi({ scanText: [topic.name, topic.description].join('\n') });
+      assertPrivateAuthors(store.read(), context);
       const answer = parseJsonObject(await modelClient.complete({ system: LIANGSHI_TOPIC_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, topic, recipe: { posts: 8 } }) }] }));
       const saved = await store.updateLiangshi(latest => {
+        assertPrivateAuthors(store.read(), context);
         const owned = withOwnership(latest);
         if (!owned.topics.some(item => item.id === topicId)) throw new Error('这条热榜话题已更新，微博未能保存，请返回查看新榜单。');
-        const batch = parseFeed(answer, owned, context.clock, contactScope(store.read()));
+        const batch = parseFeed(answer, owned, context, contactScope(store.read()));
         if (!batch.posts.length) throw new Error('没有生成可读的话题微博，请点刷新重试。');
         const posts = batch.posts.map(post => ({ ...post, topic: topic.name, ...liangshiStatistics(post) }));
         return retainOwned({ ...owned, topics: owned.topics.map(item => item.id === topicId ? { ...item, postIds: posts.map(post => post.id) } : item), posts: [...owned.posts, ...posts],
@@ -303,20 +394,23 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
       const current = read(), post = current.posts.find(item => item.id === postId);
       if (!post) throw new Error('这条微博已不在两事，请返回查看新内容。');
       const original = current.posts.find(item => item.id === post.quoteId);
-      const comments = post.comments.slice(-10), reposts = post.reposts.slice(-4);
+      const comments = liangshiInteractions(post).slice(-10).map(publicComment), reposts = liangshiInteractions(post, 'reposts').slice(-4).map(publicComment);
       const ids = new Set([post.authorId, original?.authorId, ...comments.map(item => item.authorId), ...reposts.map(item => item.authorId)]);
       const accounts = current.accounts.filter(account => ids.has(account.id)).map(account => publicAccount(account.ownerId === '@user' ? { ...account, name: ownName() } : account));
       const own = post.userAuthored === true && current.accounts.some(account => account.id === post.authorId && account.ownerId === '@user');
       const continuation = clipProjection({ post: { ...publicPost(post), comments, reposts }, ...(original ? { original: { ...publicPost(original), comments: [], reposts: [] } } : {}), accounts,
         ...(own ? { currentAccount: accounts.find(account => account.id === post.authorId) } : {}) }, 8000);
-      const context = await contextReader.readForLiangshi({ scanText: [continuation.post.text, continuation.original?.text || '', ...continuation.accounts.map(account => account.name)].join('\n'), includePhoneContext: true, includeStory: false, includeUserPersona: own });
+      const context = await contextReader.readForLiangshi({ scanText: [continuation.post.text, continuation.original?.text || '', ...continuation.accounts.map(account => account.name)].join('\n'), includePhoneContext: true, includeStory: false, includeUserPersona: own, authorContactIds: continuation.accounts.map(account => account.contactId).filter(Boolean) });
+      assertPrivateAuthors(store.read(), context);
       const answer = parseJsonObject(await modelClient.complete({ system: LIANGSHI_MORE_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, ...continuation }) }] }));
       let noNewInteractions = false;
       const saved = await store.updateLiangshi(data => {
+        assertPrivateAuthors(store.read(), context);
         const latest = withOwnership(data), actual = latest.posts.find(item => item.id === postId);
         if (!actual) throw new Error('这条微博已不在两事，互动未能保存。');
         const catalog = accountCatalog(answer.accounts ?? answer.users, latest.accounts, true, contactScope(store.read()));
-        const comments = interactions(answer.comments ?? answer.replies, catalog), reposts = interactions(answer.reposts ?? answer.forwards, catalog, postId);
+        const preserve = author => hasAccountStyleReference(author, context, continuation.accounts);
+        const comments = interactions(answer.comments ?? answer.replies, catalog, undefined, preserve, context.clock), reposts = interactions(answer.reposts ?? answer.forwards, catalog, postId, preserve, context.clock);
         if (!comments.length && !reposts.length) {
           const rawComments = answer.comments ?? answer.replies, rawReposts = answer.reposts ?? answer.forwards;
           if (own && Array.isArray(rawComments) && !rawComments.length && Array.isArray(rawReposts) && !rawReposts.length) { noNewInteractions = true; return data; }

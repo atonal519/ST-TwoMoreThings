@@ -54,7 +54,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: original services
   h.completion = (_path, init) => {
     const input = JSON.parse(JSON.parse(init.body).messages[1].content);
     const proactiveMessages = [{ contactId: 'lin', messages: [{ text: '私信正常保存。' }], todoSuggestions: stale }];
-    const answer = input.task === 'comment' ? { comments: [{ authorId: 'lin', text: '谢谢。' }], proactiveMessages } : { posts: input.authors.filter(person => person.kind !== 'npc').map(person => ({ authorId: person.id, text: '普通近况。', publishedAt: '2026-10-18 17:00' })), proactiveMessages };
+    const answer = input.task === 'comment' ? { comments: [{ authorId: 'lin', text: '谢谢。' }], proactiveMessages } : { posts: input.authors.filter(person => person.kind !== 'npc').map(person => ({ authorId: person.id, image:{description:'日常照片。'}, text: '普通近况。', publishedAt: '2026-10-18 17:00' })), proactiveMessages };
     return { choices: [{ message: { content: JSON.stringify(answer) } }] };
   };
   await social.refresh(); const feed = assertInput();

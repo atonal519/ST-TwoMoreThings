@@ -63,5 +63,5 @@ test('bilingual formal reply and symbol-only text survive parsing and persistent
   const input = JSON.parse(h.modelRequests[0].body.messages[1].content);
   assert.equal(input.clock.time, '22:15');
   assert.equal(input.contact.language, '英语和中文');
-  assert.deepEqual(parsePayload('{"messages":[{"text":"Hello","translation":"你好"},{"text":"!"}]}', 'messages'), [{ text: 'Hello', translation: '你好' }, { text: '!' }]);
+  assert.deepEqual(parsePayload('{"messages":[{"text":"Hello","translation":"你好"},{"text":"!"}]}', 'messages'), [{ text: 'Hello.', translation: '你好。' }, { text: '!' }]);
 });

@@ -15,9 +15,10 @@ export function contentImagePaths(state) {
   const paths = new Set();
   const add = item => { const path = imagePath(item.image?.path); if (path) paths.add(path); };
   for (const messages of Object.values(state.conversations || {})) for (const message of messages) if (message.type === 'image') add(message);
-  for (const post of state.social?.posts || []) add(post);
-  for (const post of state.forum?.posts || []) add(post);
-  for (const post of state.liangshi?.posts || []) add(post);
+  for (const app of [state.social, state.forum, state.liangshi]) for (const post of app?.posts || []) {
+    add(post);
+    if (app !== state.social) for (const row of [...(post.comments || []), ...(Array.isArray(post.reposts) ? post.reposts : [])]) add(row);
+  }
   return paths;
 }
 

@@ -110,10 +110,10 @@ test('does not silently change an explicitly missing source or choose among seve
 });
 
 test('extracts formal answers and keeps valid parts without inventing attribution', () => {
-  assert.deepEqual(parsePayload('说明\n```json\n{"data":{"replies":[{"content":"你好"},{"role":"user","text":"不要代写"},{}]}}\n```', 'messages'), [{ text: '你好' }]);
+  assert.deepEqual(parsePayload('说明\n```json\n{"data":{"replies":[{"content":"你好"},{"role":"user","text":"不要代写"},{}]}}\n```', 'messages'), [{ text: '你好。' }]);
   const posts = parsePayload('{"posts":[{"title":"散步","author":"路人甲","content":"晚风很好","replies":[{"author":"路人乙","content":"同感"}]},{"title":"无作者","content":"不猜作者"}]}', 'forum');
   assert.equal(posts.length, 1);
-  assert.deepEqual(posts[0].comments, [{ author: '路人乙', text: '同感' }]);
+  assert.deepEqual(posts[0].comments, [{ author: '路人乙', text: '同感。' }]);
   assert.throws(() => parsePayload('只有一段无法归属的正文', 'forum'), /没有|无法/);
 });
 

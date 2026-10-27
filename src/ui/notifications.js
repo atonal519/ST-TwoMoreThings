@@ -54,10 +54,10 @@ function socialAuthorNotice(state, id) {
   return noticeButton('social-author', id, `${displayName(author)}的动态已更新`, preview(post?.text || post?.image?.description), avatar(author, true));
 }
 
-function forumNotice(state) {
-  const post = state.forum?.posts?.[0];
+function forumNotice(state, id) {
+  const post = id ? state.forum?.posts?.find(row => row.id === id) : state.forum?.posts?.[0];
   if (!post) return '';
-  return noticeButton('forum', undefined, '论坛有新内容', preview(post.title || post.content), icon('forum'));
+  return noticeButton(id ? 'forum-post' : 'forum', id, id ? '论坛有新回帖' : '论坛有新内容', preview(post.title || post.content), icon('forum'));
 }
 
 function liangshiNotice(state, id, following = false) {
@@ -81,6 +81,7 @@ export function renderPhoneNotice(state, notice) {
     case 'social-feed': return socialFeedNotice(state);
     case 'social-author': return notice.id ? socialAuthorNotice(state, notice.id) : '';
     case 'forum': return forumNotice(state);
+    case 'forum-post': return forumNotice(state, notice.id);
     case 'liangshi-feed': return liangshiNotice(state);
     case 'liangshi-following': return liangshiNotice(state, undefined, true);
     case 'liangshi-hot': return liangshiHotNotice(state);

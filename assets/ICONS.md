@@ -12,6 +12,8 @@ Yesicon 标明图标数据来自 Iconify；下列 Solar 条目的 SVG 使用其 
 | --- | --- | --- |
 | `liangshi` | [`solar:hashtag-square-broken`](https://yesicon.app/solar/hashtag-square-broken) | 两事微博 |
 | `social` | [`solar:camera-square-broken`](https://yesicon.app/solar/camera-square-broken) |  |
+| `like` | [`solar:like-broken`](https://yesicon.app/solar/like-broken) | 论坛赞；SVG body取上述官方Iconify Solar数据 |
+| `dislike` | [`solar:dislike-broken`](https://yesicon.app/solar/dislike-broken) | 论坛踩；SVG body取上述官方Iconify Solar数据 |
 | `heart` | [`solar:heart-broken`](https://yesicon.app/solar/heart-broken) |  |
 | `heart-active` | [`solar:heart-bold`](https://yesicon.app/solar/heart-bold) | 点赞后的红色实心状态；其余心形使用 Broken |
 | `repost` | [`solar:repeat-broken`](https://yesicon.app/solar/repeat-broken) |  |

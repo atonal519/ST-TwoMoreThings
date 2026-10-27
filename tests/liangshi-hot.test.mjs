@@ -40,7 +40,7 @@ for(const kind of ['native','luker'])test(`${kind}: independent hot and topic re
  for(const marker of ['OLD_POST_SENTINEL','OLD_IMAGE_SENTINEL','旧作者','PRIVATE_SMS','PRIVATE_TODO'])assert.equal(JSON.stringify(inputs[0]).includes(marker),false,marker);
  answer(batch());await service.loadTopic(topic.id);const loaded=structuredClone(store.read().liangshi),ids=loaded.topics[0].postIds;
  assert.equal(ids.length,2);assert.deepEqual(loaded.feedIds,['old']);assert.deepEqual(service.getPost('old'),oldPost);
- assert.deepEqual(inputs[1].topic,{name:'同名话题',description:'独立公开事件摘要0'});assert.equal(inputs[1].recipe.posts,8);assert.equal(inputs[1].existingAccounts,undefined);
+ assert.deepEqual(inputs[1].topic,{name:'同名话题',description:'独立公开事件摘要0。'});assert.equal(inputs[1].recipe.posts,8);assert.equal(inputs[1].existingAccounts,undefined);
  await service.loadTopic(topic.id);assert.equal(h.modelRequests.length,2);assert.equal(h.metadataSaves,2);
  await service.toggleLike(ids[0]);await store.updateLiangshi(current=>({...current,posts:current.posts.map(post=>post.id===ids[0]?{...post,image:{...post.image,path:'/user/images/hot.png'}}:post)}));
  answer({comments:[{authorId:service.getPost(ids[0]).authorId,text:'MORE_COMMENT'}],reposts:[{authorId:service.getPost(ids[0]).authorId,text:'MORE_REPOST'}]});await service.loadMore(ids[0]);

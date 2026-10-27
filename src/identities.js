@@ -20,7 +20,8 @@ export function assertIdentitySnapshot(state, snapshot) {
 // Request-local dependencies are deliberately excluded from JSON/model payloads.
 export const identitySource = Symbol('phone identity source');
 export function withIdentitySource(context, state, ids) {
-  const referenced = (context.phoneContext || []).filter(row => row.source?.app === 'messages').flatMap(row => {
+  const rows = [...(context.phoneContext || []), ...(context.authors || []).flatMap(author => author.phoneContext || []), ...(context.knownContacts || []).flatMap(author => author.phoneContext || [])];
+  const referenced = rows.filter(row => row.source?.app === 'messages').flatMap(row => {
     const quote = row.replyTo && !row.replyTo.missing ? (state.conversations[row.conversationId] || []).find(message => message.id === row.replyTo.messageId) : undefined;
     const group = quote && !Object.hasOwn(quote, 'knownToIds') ? (state.groups || []).find(item => item.id === row.conversationId) : undefined;
     const quotedScope = Array.isArray(quote?.knownToIds) ? quote.knownToIds : group ? [...group.memberIds, ...(group.userIsMember ? ['@user'] : [])] : [];

@@ -1,5 +1,7 @@
-import { normalizeContent } from './content.js';
+import { readForumTags } from './forum-tags.js';
+import { normalizeContent, generatedImage } from './content.js';
 import { getSharedProcessingPrompt, prependProcessingPrompt } from './shared-processing-prompt.js';
+import { finishGeneratedText } from './generated-text.js';
 import { modelJsonValues } from './model-json.js';
 
 const pool = settings => settings['schedule-planner']?.apiPresets || [];
@@ -168,7 +170,7 @@ function extract(value, kind) {
   return null;
 }
 
-export function parsePayload(text, kind, { allowEmpty = false, indexed = false } = {}) {
+export function parsePayload(text, kind, { allowEmpty = false, indexed = false, preserveStyle = false } = {}) {
   let items;
   for (const candidate of modelJsonValues(text)) {
     items = extract(candidate, kind);
@@ -178,7 +180,7 @@ export function parsePayload(text, kind, { allowEmpty = false, indexed = false }
     if (kind === 'messages') {
       if (item?.role && !['assistant', 'char'].includes(item.role)) return indexed ? [null] : [];
       const content = normalizeContent(item);
-      return content ? [content] : indexed ? [null] : [];
+      return content ? [{ ...content, ...(!content.type ? { text: finishGeneratedText(content.text, { preserveStyle }), ...(content.translation ? { translation: finishGeneratedText(content.translation, { preserveStyle }) } : {}) } : {}) }] : indexed ? [null] : [];
     }
     if (!item || typeof item !== 'object') return [];
     if (kind === 'contacts') {
@@ -189,17 +191,19 @@ export function parsePayload(text, kind, { allowEmpty = false, indexed = false }
         ...(string(item.sourceId) ? { sourceId: string(item.sourceId) } : {}),
       }] : [];
     }
-    const title = string(item.title), author = string(item.author ?? item.username), content = string(item.content ?? item.text);
-    if (!title || !author || !content) return [];
+    const title = string(item.title), author = string(item.author ?? item.username), content = string(item.content ?? item.text), image = generatedImage(item);
+    if (!title || !author || (!content && !image)) return [];
     const comments = array(item.comments ?? item.replies).flatMap(comment => {
       const author = string(comment?.author ?? comment?.username), text = string(comment?.text ?? comment?.content);
       const translation = string(comment?.translation ?? comment?.translatedText);
-      return author && text ? [{ author, text, ...(translation ? { translation } : {}) }] : [];
+      const image = generatedImage(comment);
+      return author && (text || image) ? [{ author, text: finishGeneratedText(text), ...(translation ? { translation: finishGeneratedText(translation) } : {}), ...(image ? { image } : {}) }] : [];
     });
     const titleTranslation = string(item.titleTranslation ?? item.title_translation);
     const contentTranslation = string(item.contentTranslation ?? item.content_translation ?? item.translation);
-    return [{ title, author, content, comments, category: string(item.category),
-      ...(titleTranslation ? { titleTranslation } : {}), ...(contentTranslation ? { contentTranslation } : {}),
+    return [{ title, author, content: finishGeneratedText(content), comments, category: string(item.category), ...(Object.hasOwn(item, 'tags') ? { tags: readForumTags(item) } : {}),
+      ...(image ? { image } : {}),
+      ...(titleTranslation ? { titleTranslation } : {}), ...(contentTranslation ? { contentTranslation: finishGeneratedText(contentTranslation) } : {}),
     }];
   });
   if (!valid.some(Boolean) && !allowEmpty) throw new Error(kind === 'contacts' ? '回答中没有可用的联系人，请检查角色卡和世界书后重新整理。' : kind === 'forum' ? '回答中没有可用的完整帖子，请重新刷新。' : '回答中没有可用的对方短信，请点继续重试。');

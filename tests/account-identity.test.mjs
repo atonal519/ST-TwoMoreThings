@@ -91,7 +91,7 @@ test('a pending SMS cannot save an old owners private material after manual reas
 });
 
 test('public candidate sets and proactive-message persistence exclude manually user-owned contacts',async()=>{
- const{store,reader,client,h}=setup();let input;h.completion=(_p,init)=>{input=JSON.parse(JSON.parse(init.body).messages[1].content);const author=input.authors.find(p=>p.kind==='contact');return{choices:[{message:{content:JSON.stringify({posts:[{authorId:author.id,text:'普通公开动态'}],proactiveMessages:[{contactId:'ua',messages:[{text:'不能代本人发短信'}]}]})}}]};};
+ const{store,reader,client,h}=setup();let input;h.completion=(_p,init)=>{input=JSON.parse(JSON.parse(init.body).messages[1].content);const author=input.authors.find(p=>p.kind==='contact');return{choices:[{message:{content:JSON.stringify({posts:[{authorId:author.id,image:{description:'公开场景。'},text:'普通公开动态'}],proactiveMessages:[{contactId:'ua',messages:[{text:'不能代本人发短信'}]}]})}}]};};
  await createSocialService({store,contextReader:reader,modelClient:client,random:()=>0}).refresh();assert.ok(!input.authors.some(p=>p.id==='ua'));assert.equal(store.read().conversations.ua.length,1);assert.equal(h.modelRequests.length,1);
  await store.updateSocial(s=>s,{incomingMessages:[{contactId:'ua',messages:[{role:'assistant',text:'持久化口也不能代发'}]}]});assert.equal(store.read().conversations.ua.length,1);
  assert.ok(!(await reader.readForLiangshi()).knownContacts.some(p=>p.id==='ua'));
@@ -101,7 +101,7 @@ test('pending social output and proactive SMS cannot be written after their acto
  const{store,reader,h}=setup();let release,signal,selected;const started=new Promise(r=>signal=r);
  const service=createSocialService({store,contextReader:reader,random:()=>0,modelClient:{complete:request=>{const input=JSON.parse(request.messages[0].content);selected=input.authors.find(p=>p.kind==='contact');signal();return new Promise(r=>release=r);}}});
  const task=service.refresh();await started;await store.saveContact(selected.id,{name:selected.name,identityOwnerId:'@user'});const before=structuredClone(store.read());
- release(JSON.stringify({posts:[{authorId:selected.id,text:'不能保存旧owner的内容'}],proactiveMessages:[{contactId:selected.id,messages:[{text:'不能代本人发来短信'}]}]}));await assert.rejects(task);assert.deepEqual(store.read(),before);assert.equal(h.metadataSaves,1);
+ release(JSON.stringify({posts:[{authorId:selected.id,image:{description:'旧身份照片。'},text:'不能保存旧owner的内容'}],proactiveMessages:[{contactId:selected.id,messages:[{text:'不能代本人发来短信'}]}]}));await assert.rejects(task);assert.deepEqual(store.read(),before);assert.equal(h.metadataSaves,1);
 });
 
 test('a selected group message keeps its original audience owner dependencies during a pending reply',async()=>{

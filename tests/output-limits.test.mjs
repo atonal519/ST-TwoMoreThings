@@ -25,7 +25,7 @@ for(const hostKind of ['native','luker'])test(`${hostKind}: every actual model t
  await run('forum',()=>createForumService({store,contextReader:reader,modelClient:client}).refresh(),{posts:[{title:'公共题目',author:'路人',content:'公共正文'}]},1);
  await run('directory',()=>createDirectoryService({store,contextReader:reader,modelClient:client}).organize(),{contacts:[],groups:[]},0);
  await run('online style',()=>sms.refineOnlineStyle('lin'),{contacts:[{sourceId:'lin',name:'林舟',expression:'简短自然'}]},0);
- const post={authorId:'lin',text:'公开动态',publishedAt:'2031/4/8 09:00'};
+ const post={authorId:'lin',image:{description:'主图。'},text:'公开动态',publishedAt:'2031/4/8 09:00'};
  await run('Ins feed',()=>social.refresh(),{posts:[post]},1);
  await run('Ins author',()=>social.generateAuthor('lin'),{posts:[{...post,publishedAt:'2031/4/7 08:00'}]},1);
  await run('Ins comments',()=>social.comment(store.read().social.posts[0].id,'用户留言'),{comments:[{name:'路人',text:'回应'}]},2);

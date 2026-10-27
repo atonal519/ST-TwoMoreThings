@@ -4,7 +4,7 @@ import { fitRows } from './context-budget.js';
 import { identityOwnerId } from './identities.js';
 
 export const groupAudience = group => [...new Set([...(group.memberIds || []), ...(group.userIsMember ? ['@user'] : [])])];
-const messageAudience = (message, group) => Object.hasOwn(message, 'knownToIds') ? Array.isArray(message.knownToIds) ? message.knownToIds : [] : groupAudience(group);
+export const messageAudience = (message, group) => Object.hasOwn(message, 'knownToIds') ? Array.isArray(message.knownToIds) ? message.knownToIds : [] : groupAudience(group);
 
 // A missing legacy scope uses the present roster; an explicit empty scope stays empty.
 export function readableGroupMessages(state, group, targetIds) {
@@ -28,13 +28,13 @@ export function readPhoneContext(state, { anchor, targetIds = [], publicOnly = f
   const onlyPublic = publicOnly || !targets.length || targets.some(id => id !== '@user' && !people.has(id));
   const excluded = new Set(excludeApps), candidates = [];
   const person = id => ({ id, name: id === '@user' ? name(state.userProfile) || defaultUser || '我' : name(people.get(id)), ...(id === '@user' || people.has(id) ? { personId: id } : {}) });
-  const add = (app, kind, id, author, text, extra = {}, related = []) => {
+  const add = (app, kind, id, author, text, extra = {}, related = [], createdAt = '') => {
     if (excluded.has(app) || !text) return;
     const row = { source: { app, kind, id, ...(extra.parentId ? { parentId: extra.parentId } : {}) }, author, text,
       visibility: extra.knownToIds ? 'members' : 'public', ...extra };
     delete row.parentId;
     const rank = author.personId && targetOwners.has(identityOwnerId(state, author.personId)) ? 0 : related.some(id => targetOwners.has(identityOwnerId(state, id))) ? 1 : 2;
-    candidates.push({ row, rank: onlyPublic ? 2 : rank, index: candidates.length });
+    candidates.push({ row, rank: onlyPublic ? 2 : rank, index: candidates.length, createdAt: typeof createdAt === 'string' ? createdAt : '' });
   };
   if (!onlyPublic && !excluded.has('messages')) {
     const threads = [
@@ -51,7 +51,7 @@ export function readPhoneContext(state, { anchor, targetIds = [], publicOnly = f
         const authorId = speakerId || (role === 'user' ? '@user' : thread.id);
         add('messages', thread.kind, message.id, person(authorId), body.text, { ...body, conversationId: thread.id,
           knownToIds: thread.group ? messageAudience(message, thread.group) : thread.knownToIds,
-          time: time(message), ...(message.batch ? { sourceBatch: message.batch } : {}) }, thread.group ? messageAudience(message, thread.group) : thread.knownToIds);
+          time: time(message), ...(message.batch ? { sourceBatch: message.batch } : {}) }, thread.group ? messageAudience(message, thread.group) : thread.knownToIds, message.createdAt);
       }
     }
   }
@@ -61,11 +61,11 @@ export function readPhoneContext(state, { anchor, targetIds = [], publicOnly = f
       const author = authors.get(post.authorId); if (!author) continue;
       const commenters = (post.comments || []).map(row => row.role === 'user' ? '@user' : authors.get(row.authorId)?.personId).filter(Boolean);
       add('social', 'post', post.id, author, post.text || (post.image?.description ? '[图片]' : ''), {
-        ...(post.translation ? { translation: post.translation } : {}), ...(post.image?.description ? { image: { description: post.image.description } } : {}), time: time(post) }, commenters);
+        ...(post.translation ? { translation: post.translation } : {}), ...(post.image?.description ? { image: { description: post.image.description } } : {}), time: time(post) }, commenters, post.createdAt);
       for (const [index, comment] of (post.comments || []).entries()) {
         const commenter = comment.role === 'user' ? person('@user') : authors.get(comment.authorId) || { ...(comment.authorId ? { id: comment.authorId } : {}), name: comment.name || '' };
         add('social', 'comment', comment.id || `${post.id}:comment:${index}`, commenter, comment.text, { parentId: post.id,
-          ...(comment.translation ? { translation: comment.translation } : {}), ...(comment.replyToId ? { replyToId: comment.replyToId } : {}), time: time(comment) }, [author.personId].filter(Boolean));
+          ...(comment.translation ? { translation: comment.translation } : {}), ...(comment.replyToId ? { replyToId: comment.replyToId } : {}), time: time(comment) }, [author.personId].filter(Boolean), comment.createdAt);
       }
     }
   }
@@ -77,21 +77,25 @@ export function readPhoneContext(state, { anchor, targetIds = [], publicOnly = f
       const related = [...(post.comments || []), ...(post.reposts || [])].map(row => authors.get(row.authorId)?.personId).filter(Boolean);
       add('liangshi', 'post', post.id, author, post.text || (post.image?.description ? '[图片]' : ''), { time: time(post),
         ...(post.editedAt ? { editedAt: post.editedAt } : {}),
-        ...(post.translation ? { translation: post.translation } : {}), ...(post.image?.description ? { image: { description: post.image.description } } : {}), ...(post.quoteId ? { quoteId: post.quoteId } : {}) }, related);
+        ...(post.translation ? { translation: post.translation } : {}), ...(post.image?.description ? { image: { description: post.image.description } } : {}), ...(post.quoteId ? { quoteId: post.quoteId } : {}) }, related, post.createdAt);
       for (const kind of ['comments', 'reposts']) for (const [index, comment] of (post[kind] || []).entries()) {
         const commenter = authors.get(comment.authorId); if (!commenter) continue;
-        add('liangshi', kind === 'comments' ? 'comment' : 'repost', comment.id || `${post.id}:${kind}:${index}`, commenter, comment.text, { parentId: post.id,
-          ...(comment.translation ? { translation: comment.translation } : {}), ...(comment.quoteId ? { quoteId: comment.quoteId } : {}), time: time(comment) }, [author.personId].filter(Boolean));
+        add('liangshi', kind === 'comments' ? 'comment' : 'repost', comment.id || `${post.id}:${kind}:${index}`, commenter, comment.text || (comment.image?.description ? '[图片]' : ''), { parentId: post.id,
+          ...(comment.image?.description ? { image: { description: comment.image.description } } : {}),
+          ...(comment.translation ? { translation: comment.translation } : {}), ...(comment.quoteId ? { quoteId: comment.quoteId } : {}),
+          ...(comment.replyToId ? { replyToId: comment.replyToId, ...(authors.has(comment.replyToAuthorId) ? { replyToAuthor: authors.get(comment.replyToAuthorId) } : {}) } : {}), time: time(comment) }, [author.personId, authors.get(comment.replyToAuthorId)?.personId].filter(Boolean), comment.createdAt);
       }
     }
+
   }
   if (!excluded.has('forum')) for (const post of state.forum?.posts || []) {
-    add('forum', 'post', post.id, { name: post.author }, post.content, { title: post.title, time: time(post),
-      ...(post.titleTranslation ? { titleTranslation: post.titleTranslation } : {}), ...(post.contentTranslation ? { translation: post.contentTranslation } : {}) });
-    for (const [index, comment] of (post.comments || []).entries()) add('forum', 'comment', comment.id || `${post.id}:comment:${index}`, { name: comment.author }, comment.text,
-      { parentId: post.id, time: time(comment), ...(comment.translation ? { translation: comment.translation } : {}) });
+    add('forum', 'post', post.id, { name: post.author }, post.content || (post.image?.description ? '[图片]' : ''), { title: post.title, time: time(post),
+      ...(post.image?.description ? { image: { description: post.image.description } } : {}),
+      ...(post.titleTranslation ? { titleTranslation: post.titleTranslation } : {}), ...(post.contentTranslation ? { translation: post.contentTranslation } : {}) }, [], post.createdAt);
+    for (const [index, comment] of (post.comments || []).entries()) add('forum', 'comment', comment.id || `${post.id}:comment:${index}`, { name: comment.author }, comment.text || (comment.image?.description ? '[图片]' : ''),
+      { parentId: post.id, time: time(comment), ...(comment.image?.description ? { image: { description: comment.image.description } } : {}), ...(comment.translation ? { translation: comment.translation } : {}), ...(comment.replyToId ? { replyToId: comment.replyToId } : {}) }, [], comment.createdAt);
   }
-  const newest = (a, b) => String(b.row.time).localeCompare(String(a.row.time), undefined, { numeric: true }) || b.index - a.index;
+  const newest = (a, b) => String(b.row.time).localeCompare(String(a.row.time), undefined, { numeric: true }) || b.createdAt.localeCompare(a.createdAt) || b.index - a.index;
   const window = candidates.sort(newest).slice(0, 20);
   window.sort((a, b) => a.rank - b.rank || newest(a, b));
   return fitRows(window.map(item => item.row), { limit, budget });

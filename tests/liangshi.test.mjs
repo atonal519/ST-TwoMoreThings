@@ -28,7 +28,7 @@ test('old chat and card presets stay empty until the public feed is manually ref
   assert.equal(stateFromPreset({ schemaVersion: 1, contacts: [], groups: [] }).liangshi, undefined);
 });
 
-for (const hostKind of ['native', 'luker']) test(`${hostKind}: one public request saves the batch and maps forward quotes without private phone data`, async () => {
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: one public request saves the batch and maps forward quotes with private material only under its owning contact`, async () => {
   const initial = { schemaVersion: 1, contacts: [{ id: 'private-person', name: '不公开联系人' }], groups: [], conversations: { 'private-person': [{ id: 'secret', text: '不公开短信' }] }, forum: { posts: [{ id: 'forum-old' }] }, userProfile: { name: '不公开用户' }, social: { posts: [], feedIds: [], npcs: [] }, theme: 'night', defaultLanguage: '中文' };
   const { h, target, store, contextReader, modelClient } = setup(hostKind, initial), scans = [];
   target.readWorldInfo = async options => { scans.push(options.scanText); return '城市公共文化设定'; };
@@ -43,7 +43,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one public reques
   assert.equal(saved.posts[0].comments[0].translation, '真好。');
   assert.deepEqual(store.read(), { ...initial, liangshi: saved }); assert.deepEqual(h.persistedMetadata, { foreign: 'keep', pocketPhone: store.read() });
   const payload = JSON.parse(h.modelRequests[0].body.messages[1].content);
-  for (const secret of ['不公开短信', '不公开用户']) assert.ok(!JSON.stringify(payload).includes(secret));
+  assert.equal(JSON.stringify(payload.phoneContext || []).includes('不公开短信'),false); assert.ok(JSON.stringify(payload.knownContacts.find(row=>row.id==='private-person').phoneContext).includes('不公开短信')); assert.equal(JSON.stringify({...payload,knownContacts:[]}).includes('不公开用户'),false);
   assert.ok(scans[0].includes('微博'));assert.equal(scans[0].includes('城市广场'),true);
   assert.equal(h.modelRequests[0].body.max_tokens, undefined); assert.ok(h.modelRequests[0].body.messages[0].content.startsWith('FIRST SHARED PREFIX'));
   assert.ok(h.modelRequests[0].body.messages[0].content.includes('标准汉语')); assert.equal(saved.promoCountdown, 1);
@@ -53,8 +53,8 @@ test('wrapped aliases and missing mechanical keys retain usable bodies and omit 
   const { h, store, contextReader, modelClient } = setup();
   h.completion = { choices: [{ message: { content: '回答如下：\n```json\n' + JSON.stringify({ result: { users: [{ name: '匿名读者', username: 'reader' }], items: [{ author: 'reader', content: '仍然可读的正文', quoteId: 'absent', translatedText: 'still readable' }, { author: 'unknown', content: '没有可确认作者' }], hotTopics: ['公共话题'] } }) + '\n```' } }] };
   await makeService({ store, contextReader, modelClient, random: () => 0 }).refresh();
-  assert.equal(store.read().liangshi.posts.length, 1); assert.equal(store.read().liangshi.posts[0].text, '仍然可读的正文'); assert.equal(store.read().liangshi.posts[0].quoteId, undefined);
-  assert.equal(store.read().liangshi.posts[0].translation, 'still readable'); assert.equal(h.modelRequests.length, 1);
+  assert.equal(store.read().liangshi.posts.length, 1); assert.equal(store.read().liangshi.posts[0].text, '仍然可读的正文。'); assert.equal(store.read().liangshi.posts[0].quoteId, undefined);
+  assert.equal(store.read().liangshi.posts[0].translation, 'still readable.'); assert.equal(h.modelRequests.length, 1);
 });
 
 test('the due promotion occupies one requested slot and the countdown advances only with the saved batch', async () => {
@@ -124,8 +124,8 @@ test('public knownContacts use only four fields and only explicit existing conta
   h.completion = { choices: [{ message: { content: JSON.stringify({ accounts, posts: accounts.map(account => ({ authorKey: account.key, text: '公开正文' })) }) } }] };
   const service = makeService({ store, contextReader, modelClient, random: () => 0 }); await service.refresh();
   const request = JSON.parse(h.modelRequests[0].body.messages[1].content);
-  assert.deepEqual(request.knownContacts, [{ id: 'lin', name: '林舟', expression: '短句', language: '中文' }]);
-  for (const value of ['仅手机备注', '私人性格资料', 'private-memory', '私信不发送']) assert.equal(JSON.stringify(request).includes(value), false);
+  assert.deepEqual(request.knownContacts.map(({phoneContext,...row})=>row), [{ id: 'lin', name: '林舟', expression: '短句', language: '中文' }]); assert.ok(JSON.stringify(request.knownContacts[0].phoneContext).includes('私信不发送'));
+  for (const value of ['私人性格资料', 'private-memory']) assert.equal(JSON.stringify(request).includes(value), false); assert.equal(JSON.stringify(request.phoneContext || []).includes('私信不发送'),false);
   assert.equal(store.read().liangshi.accounts[0].contactId, 'lin'); assert.ok(store.read().liangshi.accounts.slice(1).every(account => !account.contactId));
   assert.ok(store.read().liangshi.accounts.every(account => account.followed === false));
   h.completion = { choices: [{ message: { content: JSON.stringify({ accounts: [{ key: 'a', name: '公开小林', handle: 'lin-public' }], posts: [{ authorKey: 'a', text: '后续公开正文' }] }) } }] };
@@ -157,7 +157,7 @@ test('two fresh batches omit old posts/accounts while latest story and local ide
   for(const scan of scans)for(const sentinel of ['OLD_ACCOUNT_SENTINEL','OLD_POST_SENTINEL','FIRST_POST_SENTINEL','FIRST_ACCOUNT_SENTINEL'])assert.equal(scan.includes(sentinel),false);
   const post=service.getPost(store.read().liangshi.posts[0].id);assert.equal(post.authorId,'old');assert.equal(store.read().liangshi.accounts.find(account=>account.id==='old').avatar,'LOCAL_AVATAR_SENTINEL');assert.equal(store.read().liangshi.promoCountdown,1);assert.equal(h.modelRequests.length,2);assert.equal(h.metadataSaves,2);
   h.completion={choices:[{message:{content:JSON.stringify({comments:[{authorId:post.authorId,text:'追加互动'}],reposts:[{authorId:post.authorId,text:'追加转发'}]})}}]};await service.loadMore(post.id);
-  const more=JSON.parse(h.modelRequests.at(-1).body.messages[1].content);assert.equal(more.post.text,'SECOND_POST_SENTINEL');assert.equal(more.original.id,post.quoteId);assert.equal(more.post.comments.length,1);assert.ok(more.accounts.some(account=>account.name==='SECOND_ACCOUNT_SENTINEL'));assert.ok(scans[2].includes('SECOND_POST_SENTINEL'));assert.ok(scans[2].includes(more.original.text));assert.equal(scans[2].includes('LATEST_STORY_SENTINEL'),false);assert.equal(more.storyBackground,undefined);assert.equal(more.story,undefined);assert.equal(h.modelRequests.length,3);assert.equal(h.metadataSaves,3);
+  const more=JSON.parse(h.modelRequests.at(-1).body.messages[1].content);assert.equal(more.post.text,'SECOND_POST_SENTINEL.');assert.equal(more.original.id,post.quoteId);assert.equal(more.post.comments.length,1);assert.ok(more.accounts.some(account=>account.name==='SECOND_ACCOUNT_SENTINEL'));assert.ok(scans[2].includes('SECOND_POST_SENTINEL'));assert.ok(scans[2].includes(more.original.text));assert.equal(scans[2].includes('LATEST_STORY_SENTINEL'),false);assert.equal(more.storyBackground,undefined);assert.equal(more.story,undefined);assert.equal(h.modelRequests.length,3);assert.equal(h.metadataSaves,3);
 });
 
 test('untagged ordinary posts and usable extra quotes are saved without a recipe quota gate', async () => {

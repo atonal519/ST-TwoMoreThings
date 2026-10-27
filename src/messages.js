@@ -1,4 +1,5 @@
 import { parsePayload, parseJsonObject } from './api.js';
+import { hasStyleReference } from './generated-text.js';
 import { CONTACTS_PROMPT, MESSAGES_PROMPT } from './prompts.js';
 import { readTimeline } from './timeline.js';
 import { normalizeContent, RICH_MESSAGES_PROMPT } from './content.js';
@@ -52,7 +53,7 @@ export function createMessageService({ target, store, contextReader, modelClient
       });
       const answer = parseJsonObject(reply);
       const actions = Array.isArray(answer.transferActions) ? answer.transferActions : [];
-      const indexedMessages = parsePayload(reply, 'messages', { allowEmpty: actions.length > 0, indexed: true }).map(content => {
+      const indexedMessages = parsePayload(reply, 'messages', { allowEmpty: actions.length > 0, indexed: true, preserveStyle: hasStyleReference(context.contact) || Boolean(context.related?.trim()) }).map(content => {
         if (!content) return null;
         if (content.type === 'transfer') content.transfer.recipientId = '@user';
         return { ...record('assistant', content.text, clock, content.translation, context.batch), ...content };

@@ -61,14 +61,14 @@ test('group references preserve member knowledge, full message projection and la
   assert.deepEqual(store.read().todos, []);
 });
 
-test('public social requests exclude all private group material even with selected known authors', async () => {
+test('shared public material excludes private groups while known authors keep their own references', async () => {
   const { h, target, store, reader } = continuityHarness();
   const before = structuredClone(target.metadata);
   const authors = [...store.read().contacts.slice(0, 2).map(person => ({ ...person, kind: 'contact' })), { id: 'npc', name: '路人', kind: 'npc' }];
   for (const context of [await reader.readForSocial(authors), await reader.readForSocial([authors.at(-1)]), await reader.readForLiangshi(), await reader.readForLiangshiHot(), await reader.readForForum()]) {
     assert.equal('groupHistories' in context, false);
-    assert.equal(JSON.stringify(context).includes('只有两位成员知道的安排'), false);
-    assert.equal(JSON.stringify(context).includes('周二十九点这里见'), false);
+    assert.equal(JSON.stringify(context.phoneContext || []).includes('只有两位成员知道的安排'), false);
+    assert.equal(JSON.stringify(context.phoneContext || []).includes('周二十九点这里见'), false);
     assert.ok((context.authors || []).every(author => !('privateHistory' in author)));
   }
   assert.equal(h.metadataSaves, 0); assert.equal(h.modelRequests.length, 0);
@@ -86,7 +86,7 @@ test('real private arrangements retain later story progress and remain scoped to
   assert.equal(JSON.stringify(group).includes('明天把书带给你'), false);
   const authors = store.read().contacts.slice(0,2).map(person => ({ ...person, kind: 'contact' }));
   const social = await reader.readForSocial(authors);
-  assert.equal(JSON.stringify(social).includes('明天把书带给你'), false);
+  assert.equal(JSON.stringify(social.phoneContext).includes('明天把书带给你'), false); assert.ok(JSON.stringify(social.authors.find(person => person.id === 'lin').phoneContext).includes('明天把书带给你')); assert.equal(JSON.stringify(social.authors.find(person => person.id === 'zhou').phoneContext || []).includes('明天把书带给你'), false);
   assert.ok(social.authors.every(author => !('privateHistory' in author)));
   assert.equal(h.metadataSaves, 0); assert.equal(h.modelRequests.length, 0);
 });
@@ -136,7 +136,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: actual SMS/group/
   h.completion = (_path, init) => {
     const input = JSON.parse(JSON.parse(init.body).messages[1].content);
     const body = input.task === 'comment' ? { comments: [{ authorId: 'lin', text: '谢谢。' }] } : {
-      posts: input.authors.filter(person => person.kind !== 'npc').map(person => ({ authorId: person.id, text: '休息一下。', publishedAt: '2026-10-18 19:00' })),
+      posts: input.authors.filter(person => person.kind !== 'npc').map(person => ({ authorId: person.id, image:{description:'街边风景。'}, text: '休息一下。', publishedAt: '2026-10-18 19:00' })),
     };
     return { choices: [{ message: { content: JSON.stringify(body) } }] };
   };
@@ -220,10 +220,10 @@ test('SMS continuity retains recent prior batches and scopes proactive reference
   assert.equal(contact.previousMessages[0].time, '2026-10-18 15:30');
   const authors = store.read().contacts.slice(0, 2).map(person => ({ ...person, kind: 'contact' }));
   const plain = await reader.readForSocial(authors);
-  assert.equal(JSON.stringify(plain).includes('这三天不安排工作'), false, 'public-only source reads do not request private threads');
+  assert.equal(JSON.stringify(plain.phoneContext).includes('这三天不安排工作'), false); assert.ok(JSON.stringify(plain.authors.find(author=>author.id==='lin').phoneContext).includes('这三天不安排工作')); assert.equal(JSON.stringify(plain.authors.find(author=>author.id!=='lin')?.phoneContext||[]).includes('这三天不安排工作'),false);
   const proactive = await reader.readForSocial(authors);
-  assert.equal(JSON.stringify(proactive).includes('这三天不安排工作'), false);
-  assert.equal(JSON.stringify(proactive).includes('周予的私信'), false);
+  assert.equal(JSON.stringify(proactive.phoneContext).includes('这三天不安排工作'), false);
+  assert.equal(JSON.stringify(proactive.phoneContext).includes('周予的私信'), false); assert.ok(JSON.stringify(proactive.authors.find(author=>author.id==='zhou').phoneContext).includes('周予的私信'));
   assert.equal(JSON.stringify(proactive.authors[0]).includes('周予的私信'), false);
   assert.equal(JSON.stringify(proactive).includes('未入选人物的私信'), false);
   assert.deepEqual(target.metadata, before);
@@ -358,9 +358,9 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: Liangshi primary 
   const reader=createContextReader({target,store,qqjBridgeProvider:()=>{throw Error('fresh public feed does not read private memory');},wrapperSettingsProvider:()=>({})});
   const before=structuredClone(target.metadata),fresh=await reader.readForLiangshi();
   assert.deepEqual(Object.keys(fresh).sort(),['clock','defaultLanguage','emojis','knownContacts','setting','story','worldbook']);assert.equal(fresh.clock.time,'06:07');assert.equal(fresh.defaultLanguage,'英语');assert.ok(fresh.setting.includes('WORLD_SETTING_SENTINEL'));assert.equal(fresh.worldbook,'WORLD_BOOK_SENTINEL');assert.ok(fresh.emojis.length>0);
-  assert.deepEqual(fresh.knownContacts,[{id:'public',name:'公开联系人',expression:'简短',language:'日语'}]);
-  for(const sentinel of ['OLD_ACCOUNT_SENTINEL','OLD_POST_SENTINEL','PRIVATE_NICKNAME_SENTINEL','PRIVATE_PERSONALITY_SENTINEL','PRIVATE_SMS_SENTINEL','PRIVATE_USER_SENTINEL']){assert.equal(JSON.stringify(fresh).includes(sentinel),false);assert.equal(scans[0].includes(sentinel),false);}
-  assert.ok(scans[0].includes('微博'));assert.ok(scans[0].includes('LATEST_STORY_SENTINEL'));assert.equal(fresh.story[0].text,'LATEST_STORY_SENTINEL');await reader.readForLiangshi({scanText:'MORE_PUBLIC_POST_SENTINEL',includeStory:false});assert.ok(scans[1].includes('MORE_PUBLIC_POST_SENTINEL'));assert.equal(scans[1].includes('LATEST_STORY_SENTINEL'),false);assert.deepEqual(target.metadata,before);assert.equal(h.modelRequests.length,0);assert.equal(h.metadataSaves,0);
+  assert.deepEqual(fresh.knownContacts.map(({phoneContext,...profile})=>profile),[{id:'public',name:'公开联系人',expression:'简短',language:'日语'}]);assert.ok(JSON.stringify(fresh.knownContacts[0].phoneContext).includes('PRIVATE_SMS_SENTINEL'));
+  for(const sentinel of ['OLD_ACCOUNT_SENTINEL','OLD_POST_SENTINEL','PRIVATE_PERSONALITY_SENTINEL']){assert.equal(JSON.stringify(fresh).includes(sentinel),false);assert.equal(scans[0].includes(sentinel),false);}
+  for(const sentinel of ['PRIVATE_NICKNAME_SENTINEL','PRIVATE_SMS_SENTINEL','PRIVATE_USER_SENTINEL'])assert.equal(scans[0].includes(sentinel),false);assert.ok(scans[0].includes('微博'));assert.ok(scans[0].includes('LATEST_STORY_SENTINEL'));assert.equal(fresh.story[0].text,'LATEST_STORY_SENTINEL');await reader.readForLiangshi({scanText:'MORE_PUBLIC_POST_SENTINEL',includeStory:false});assert.ok(scans[1].includes('MORE_PUBLIC_POST_SENTINEL'));assert.equal(scans[1].includes('LATEST_STORY_SENTINEL'),false);assert.deepEqual(target.metadata,before);assert.equal(h.modelRequests.length,0);assert.equal(h.metadataSaves,0);
 });
 
 for(const hostKind of ['native','luker'])test(`${hostKind}: hot ranking reads all bounded static book material and latest story without private phone history`,async()=>{

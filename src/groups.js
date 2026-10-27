@@ -1,3 +1,4 @@
+import { finishGeneratedText, hasStyleReference } from './generated-text.js';
 import { parseJsonObject } from './api.js';
 import { isUserIdentity, identitySource, identitySnapshot, assertIdentitySnapshot } from './identities.js';
 import { record } from './messages.js';
@@ -10,7 +11,7 @@ import { replyToMessage } from './replies.js';
 const GROUP_PROMPT = `续写指定手机群里的聊天。一次考虑group.members全体成员的性格、线上表达、语言习惯、当前剧情时间与场景、各人正在做什么和实际知道什么。先确定成员、哪些人有动机发言，再拟消息顺序；不要求人人说话，可以无人发言。成员可互相回应，不必回应用户。userIsMember为false时用户只是旁观者，不得让角色向用户说话或知道用户正在旁观。人物私有资料不是群内共享认知。
 previousMessages是该群此前的近期短信，history是当前批次，均已按本次成员共同可知范围筛选；换到新一楼不重置已说定的安排。history或previousMessages中的replyTo是用户引用的具体群短信，优先接这条内容，但不代表其他成员必须发言。没有明确依据，不新增或改写会议、工作任务和期限，不制造催办。
 ${CONVERSATION_CONTINUITY_RULE}
-遵循各人的线上聊天方式，短句、分条、省略和仅符号回复均可；不输出动作旁白，不代写用户，不增加群外人物。
+遵循各人明确标注的特殊语言与线上表达习惯；没有明确特殊标注时，完整句正常使用句内与句末标点。短句、分条、省略语句成分和仅符号回复均可，不输出动作旁白，不代写用户，不增加群外人物。
 ${STORY_MEMORY_RULE}
 ${LANGUAGE_RULE}
 group.replyMemberIds只是程序本次可代写的账号白名单，不表示账号属于谁或成员已经知道关联，不据此推断或公开账号归属。
@@ -59,7 +60,9 @@ export function createGroupService({ target, store, contextReader, modelClient }
       // 发言归属是保存所需身份，不从姓名或句子内容猜测。
       const indexedMessages = answer.messages.map(item => {
         if (!item || !roster.includes(item.speakerId) || item.speakerId === '@user' || !speakers.includes(item.speakerId)) throw new Error('回答中的发言者不在本轮群聊中，请点继续重试。');
-        const content = normalizeContent(item);
+        const plain = normalizeContent(item);
+        const preserveStyle = hasStyleReference(context.group.members.find(person => person.id === item.speakerId));
+        const content = plain && !plain.type ? { ...plain, text: finishGeneratedText(plain.text, { preserveStyle }), ...(plain.translation ? { translation: finishGeneratedText(plain.translation, { preserveStyle }) } : {}) } : plain;
         if (content?.type === 'transfer' && (!roster.includes(content.transfer.recipientId) || content.transfer.recipientId === item.speakerId)) throw new Error('转账收款人无法对应群成员，请点继续重试。');
         return content ? { ...record('assistant', content.text, context.clock, content.translation, context.batch), ...content, speakerId: item.speakerId } : null;
       });

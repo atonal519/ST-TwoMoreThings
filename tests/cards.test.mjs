@@ -131,7 +131,7 @@ test('model message parser keeps sticker, location, transfer and photo semantics
   assert.equal(result[2].transfer.status, 'pending');
   assert.equal(result[3].image.description, '窗边的一杯热咖啡');
   assert.equal(result[4].type, undefined);
-  assert.equal(result[4].text, '笑了');
+  assert.equal(result[4].text, '笑了。');
 });
 
 test('sending a sticker and receiving rich replies use the same stored batch and semantic context', async () => {

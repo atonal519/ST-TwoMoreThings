@@ -5,6 +5,7 @@ import { renderFeedback, renderShell } from './ui/shell.js';
 import { renderDesktop } from './ui/desktop.js';
 import { renderInbox, renderChat } from './ui/messages.js';
 import { renderForum, renderPost } from './ui/forum.js';
+import { forumComments } from './forum.js';
 import { renderSettings, renderSettingsVersion, renderStorySmsInstall } from './ui/settings.js';
 import { renderProfile, renderIdentityOptions } from './ui/profiles.js';
 import { readImage } from './ui/images.js';
@@ -22,7 +23,7 @@ import { createPhoneWindow } from './ui/window.js';
 import { createChatScroll } from './ui/chat-scroll.js';
 import { renderSocial, renderSocialProfile } from './ui/social.js';
 import { renderLiangshi, renderLiangshiOwnMenu } from './ui/liangshi.js';
-import { findLiangshiTopicForPost, isLiangshiFollowingPost, isLiangshiUserPost } from './liangshi.js';
+import { findLiangshiTopicForPost, isLiangshiFollowingPost, isLiangshiUserPost, liangshiInteractions } from './liangshi.js';
 import { imagePath } from './image-files.js';
 import { findBlobEmoji } from './emojis.js';
 import { readContactAvatars, readContactAvatarDraft } from './contact-avatars.js';
@@ -100,7 +101,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     groupMembersOpen: false,
     socialAuthorId: '', socialPastOpen: false, socialLimit: 30, socialScroll: 0,
     socialCommentOpen: new Set(), socialDrafts: new Map(), notice: null,
-    liangshiPage: { kind: 'feed', tab: 'square' }, liangshiTrail: [], liangshiExpanded: new Set(), liangshiDraft: null, liangshiMenu: '',
+    forumDrafts: new Map(), forumVotes: new Map(), forumScroll: 0, forumTag: '',
+    liangshiPage: { kind: 'feed', tab: 'square' }, liangshiTrail: [], liangshiExpanded: new Set(), liangshiDraft: null, liangshiMenu: '', liangshiReplyDrafts: new Map(),
     drawers: { connection: true, appearance: false, content: false },
     manual: false, apiDraft: apiSettings.readDraft?.() || {}, models: [], modelSearch: '', modelsOpen: false, sourcesOpen: false,
     attachment: '', attachmentDraft: {}, stickerPack: 'emoji', photo: null,
@@ -108,6 +110,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     replyToId: '',
   };
   const busy = new Set();
+  let renderedRoute = '';
   if (!control.isEnabled()) ui.view = 'settings';
   const clock = createPhoneClock({ root, element, readTime });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
@@ -175,6 +178,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   function notifyCompletion(key, result) {
     let notice;
     if (key === 'forum' && ui.view !== 'forum') notice = { kind: 'forum' };
+    if (key.startsWith('forum-more:') && result !== null) { const id = key.slice('forum-more:'.length); if (ui.view !== 'post' || ui.postId !== id) notice = { kind: 'forum-post', id }; }
     if (key === 'social' && ui.view !== 'social') notice = { kind: 'social-feed' };
     if (key === 'liangshi' && (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'feed' || ui.liangshiPage.tab !== 'square')) notice = { kind: 'liangshi-feed' };
     if (key === 'liangshi-following' && (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'feed' || ui.liangshiPage.tab !== 'following')) notice = { kind: 'liangshi-following' };
@@ -183,9 +187,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       const id = key.slice('liangshi-topic:'.length);
       if (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'hot-topic' || ui.liangshiPage.id !== id) notice = { kind: 'liangshi-topic', id };
     }
-    if (key.startsWith('liangshi-more:')) {
+    if (key.startsWith('liangshi-more:') || key.startsWith('liangshi-replies:')) {
       if (result === null) return;
-      const id = key.slice('liangshi-more:'.length);
+      const id = key.slice(key.indexOf(':') + 1);
       if (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'post' || ui.liangshiPage.id !== id) notice = { kind: 'liangshi-post', id };
     }
     if (key.startsWith('social-author:')) {
@@ -219,26 +223,34 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   // 导航、草稿、事件与服务调用由控制器统一持有，页面只负责展示。
   function render({ bottom = false } = {}) {
     if (!element.isConnected) return;
+    const route = JSON.stringify([ui.view, ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'post' ? ui.postId : ui.view === 'social-profile' ? ui.socialAuthorId : inChat() ? conversationId() : '']);
+    const sameRoute = route === renderedRoute;
+    renderedRoute = route;
     const currentLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
     if (currentLockImage) {
       lockImageNode = currentLockImage;
       lockImageSrc = currentLockImage.getAttribute('src') || '';
     }
-    const previousDraft = root.querySelector('#sms-draft');
+    const previousDraft = sameRoute ? root.querySelector('#sms-draft') : null;
     const selection = previousDraft && { text: previousDraft.value, start: previousDraft.selectionStart, end: previousDraft.selectionEnd };
-    const activeSocialComment = root.activeElement?.matches?.('.social-comment-form textarea') ? root.activeElement : null;
+    const activeSocialComment = sameRoute && root.activeElement?.matches?.('.social-comment-form textarea') ? root.activeElement : null;
     const socialSelection = activeSocialComment && {
       postId: activeSocialComment.closest('.social-comment-form')?.dataset.socialCommentForm,
       text: activeSocialComment.value,
       start: activeSocialComment.selectionStart,
       end: activeSocialComment.selectionEnd,
     };
-    const composing = root.activeElement?.closest?.('.ls-compose-form') ? root.activeElement : null;
+    const forumInput = sameRoute && root.activeElement?.closest?.('.forum-comment-form') ? root.activeElement : null;
+    const forumSelection = forumInput && { postId: forumInput.closest('.forum-comment-form').dataset.forumPost, text: forumInput.value, start: forumInput.selectionStart, end: forumInput.selectionEnd };
+    const composing = sameRoute && root.activeElement?.closest?.('.ls-compose-form') ? root.activeElement : null;
     const composeSelection = composing && { name: composing.name, start: composing.selectionStart, end: composing.selectionEnd };
-    const scrollTop = inChat() ? root.querySelector('.message-feed')?.scrollTop : undefined;
-    const settingsScroll = root.querySelector('.view-settings')?.scrollTop;
-    const socialScroll = ['social', 'social-profile'].includes(ui.view) ? root.querySelector(`.view-${ui.view}`)?.scrollTop : undefined;
-    const liangshiScroll = ui.view === 'liangshi' ? root.querySelector('.view-liangshi')?.scrollTop : undefined;
+    const replying = sameRoute && root.activeElement?.closest?.('.ls-reply-form') ? root.activeElement : null;
+    const replySelection = replying && { postId: replying.closest('.ls-reply-form').dataset.liangshiReplyForm, text: replying.value, start: replying.selectionStart, end: replying.selectionEnd };
+    const scrollTop = sameRoute && inChat() ? root.querySelector('.message-feed')?.scrollTop : undefined;
+    const forumScroll = sameRoute && ['forum','post'].includes(ui.view) ? root.querySelector(`.phone-main.view-${ui.view}`)?.scrollTop : undefined;
+    const settingsScroll = sameRoute ? root.querySelector('.view-settings')?.scrollTop : undefined;
+    const socialScroll = sameRoute && ['social', 'social-profile'].includes(ui.view) ? root.querySelector(`.view-${ui.view}`)?.scrollTop : undefined;
+    const liangshiScroll = sameRoute && ui.view === 'liangshi' ? root.querySelector('.view-liangshi')?.scrollTop : undefined;
     let state = store.read();
     const enabled = control.isEnabled();
     element.dataset.enabled = String(enabled);
@@ -298,11 +310,17 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         textarea.focus({ preventScroll: true });
       }
     }
+    if (forumSelection) { const input = root.querySelector(`[data-forum-post="${CSS.escape(forumSelection.postId)}"] textarea`); if (input?.value === forumSelection.text) { input.focus({ preventScroll: true }); input.setSelectionRange(forumSelection.start, forumSelection.end); } }
     if (composeSelection) {
       const input = root.querySelector(`.ls-compose-form [name="${composeSelection.name}"]`);
       if (input) { input.focus({ preventScroll: true }); input.setSelectionRange(composeSelection.start, composeSelection.end); }
     }
+    if (replySelection) {
+      const input = root.querySelector(`[data-liangshi-reply-form="${CSS.escape(replySelection.postId)}"] textarea`);
+      if (input?.value === replySelection.text) { input.focus({ preventScroll: true }); input.setSelectionRange(replySelection.start, replySelection.end); }
+    }
     chatScroll.attach();
+    if (forumScroll !== undefined && ['forum','post'].includes(ui.view)) root.querySelector('.phone-main').scrollTop = forumScroll;
     if (settingsScroll !== undefined && ui.view === 'settings') root.querySelector('.view-settings').scrollTop = settingsScroll;
     if (socialScroll !== undefined && ['social', 'social-profile'].includes(ui.view)) root.querySelector('.phone-main').scrollTop = socialScroll;
     if (liangshiScroll !== undefined && ui.view === 'liangshi') root.querySelector('.phone-main').scrollTop = liangshiScroll;
@@ -415,10 +433,26 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.models = []; ui.modelSearch = ''; ui.modelsOpen = false; ui.sourcesOpen = false;
   }
   const manualApi = () => ui.manual || !apiSettings.listSources().length || apiSettings.getSelected()?.kind === 'none';
-  function showPage(view, { bottom = false } = {}) {
+  function listPosition(source) {
+    const main = root.querySelector('.phone-main'), item = source?.closest('.forum-card[data-post], .social-post[data-social-post], .ls-post[data-liangshi-id], .ls-hot-row[data-liangshi-hot]');
+    const attribute = item && ['data-post', 'data-social-post', 'data-liangshi-id', 'data-liangshi-hot'].find(name => item.hasAttribute(name));
+    return { scroll: main?.scrollTop || 0, ...(item && main ? { anchor: { attribute, id: item.getAttribute(attribute), offset: item.getBoundingClientRect().top - main.getBoundingClientRect().top } } : {}) };
+  }
+  function restoreListPosition(position) {
+    const main = root.querySelector('.phone-main'); if (!main) return;
+    const saved = typeof position === 'number' ? { scroll: position } : position;
+    main.scrollTop = saved?.scroll || 0;
+    const anchor = saved?.anchor, item = anchor && main.querySelector(`[${anchor.attribute}="${CSS.escape(anchor.id)}"]`);
+    if (item) {
+      const bounds = main.getBoundingClientRect(), header = main.querySelector('.social-header, .ls-chrome')?.getBoundingClientRect();
+      const offset = Math.min(main.clientHeight - 24, Math.max((header ? header.bottom - bounds.top : 0) + 8, anchor.offset));
+      main.scrollTop += item.getBoundingClientRect().top - bounds.top - offset;
+    }
+  }
+  function showPage(view, { bottom = false, sourceNode } = {}) {
     if (view !== 'liangshi') discardLiangshiDraft();
     if (view === 'settings' && ui.view !== 'settings') fillApiDraft();
-    if (ui.view === 'social' && view !== 'social') ui.socialScroll = root.querySelector('.view-social')?.scrollTop || 0;
+    if (ui.view === 'social' && view !== 'social') ui.socialScroll = listPosition(sourceNode);
     dismissMenus();
     if (view !== 'group-chat') ui.replyToId = '';
     ui.view = view;
@@ -429,7 +463,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     render({ bottom });
     if (view === 'settings' && ui.drawers.content) void refreshStorySmsStatus();
     recoverVisibleImages();
-    if (view === 'social') root.querySelector('.view-social').scrollTop = ui.socialScroll;
+    if (view === 'social') restoreListPosition(ui.socialScroll);
     readVisibleSocialReplies();
   }
   function openConversation(id, isGroup = false) {
@@ -452,9 +486,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (anchor && main) main.scrollTop += anchor.getBoundingClientRect().top - main.getBoundingClientRect().top - 8;
     readVisibleSocialReplies();
   }
-  function openLiangshiPage(page, remember = true) {
+  function openLiangshiPage(page, remember = true, sourceNode) {
     if (page.kind !== 'compose') ui.liangshiDraft = null;
-    if (remember && ui.view === 'liangshi') ui.liangshiTrail.push({ page: ui.liangshiPage, scroll: root.querySelector('.phone-main')?.scrollTop || 0 });
+    if (remember && ui.view === 'liangshi') ui.liangshiTrail.push({ page: ui.liangshiPage, ...listPosition(sourceNode) });
     ui.liangshiPage = page;
     showPage('liangshi');
     root.querySelector('.phone-main').scrollTop = 0;
@@ -465,7 +499,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       if (ui.liangshiPage.kind === 'compose') ui.liangshiDraft = null;
       const previous = ui.liangshiTrail.pop();
       ui.liangshiPage = previous?.page || { kind: 'feed', tab: 'square' };
-      showPage('liangshi'); root.querySelector('.phone-main').scrollTop = previous?.scroll || 0; return;
+      showPage('liangshi'); restoreListPosition(previous); return;
     }
     if (inChat() && ui.confirmClear) { ui.confirmClear = false; render(); return; }
     let parent = 'desktop';
@@ -492,7 +526,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         ui.deletion = null;
         break;
     }
+    if (parent === 'forum') ui.forumTag = ui.forumScroll?.tag || '';
     showPage(parent, { bottom: ['chat', 'group-chat'].includes(parent) });
+    if (parent === 'forum') restoreListPosition(ui.forumScroll);
   }
   function editGroup(id = '') {
     const group = store.read().groups?.find(item => item.id === id);
@@ -656,7 +692,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       if (button.dataset.action === 'conflict-disable') void perform('conflict', () => control.setEnabled(false), () => { ui.conflict = false; ui.view = 'settings'; entries.refreshVisibility?.(); onContextChange(); });
       return;
     }
-    const content = event.target.closest('.message-original, .message-translation, .message-reply > span, .post-body, .post-excerpt, .social-caption, .social-comment, .ls-copy, .ls-quote, .photo-description, .photo-viewer p, .location-message > strong, .location-message > small, .transfer-amount, .transfer-message > span:not(.card-label)');
+    const content = event.target.closest('.message-original, .message-translation, .message-reply > span, .post-body, .post-excerpt, .social-caption, .social-comment, .comment-row p, .ls-copy, .ls-quote, .photo-description, .photo-viewer p, .location-message > strong, .location-message > small, .transfer-amount, .transfer-message > span:not(.card-label)');
     const selection = root.getSelection?.() || doc.getSelection();
     // 拖选正文后松开鼠标保留选区，点击导航或消息菜单会重绘正文。
     if (content && selection && !selection.isCollapsed && selection.containsNode(content, true)) return;
@@ -672,13 +708,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
     if (button?.dataset.liangshiHot !== undefined) {
       const id = button.dataset.liangshiHot;
-      openLiangshiPage({ kind: 'hot-topic', id });
+      openLiangshiPage({ kind: 'hot-topic', id }, true, button);
       return;
     }
-    if (button?.dataset.liangshiTopic !== undefined) { openLiangshiPage({ kind: 'topic', topic: button.dataset.liangshiTopic, source: button.dataset.liangshiTopicSource }); return; }
+    if (button?.dataset.liangshiTopic !== undefined) { openLiangshiPage({ kind: 'topic', topic: button.dataset.liangshiTopic, source: button.dataset.liangshiTopicSource }, true, button); return; }
     if (button?.dataset.liangshiDetailTab) { ui.liangshiPage = { ...ui.liangshiPage, tab: button.dataset.liangshiDetailTab }; render(); return; }
     const liangshiPost = event.target.closest('[data-liangshi-open]');
-    if (liangshiPost) { openLiangshiPage({ kind: 'post', id: liangshiPost.dataset.liangshiOpen, tab: liangshiPost.dataset.liangshiSection || 'comments' }); return; }
+    if (liangshiPost) { openLiangshiPage({ kind: 'post', id: liangshiPost.dataset.liangshiOpen, tab: liangshiPost.dataset.liangshiSection || 'comments' }, true, liangshiPost); return; }
     if (button?.dataset.liangshiTab) { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: button.dataset.liangshiTab }, false); return; }
     if (!button || button.disabled) return;
     if (button.dataset.wallpaper !== undefined) { const theme = store.read().theme; void perform('wallpaper', () => store.setWallpaper(theme, button.dataset.wallpaper)); return; }
@@ -730,7 +766,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       openConversation(button.dataset.group || button.dataset.contact, Boolean(button.dataset.group)); return;
     }
     if (button.dataset.message) { ui.chatMenu = false; ui.selectedMessage = ui.selectedMessage === button.dataset.message ? '' : button.dataset.message; render(); return; }
-    if (button.dataset.post) { ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
+    if (button.dataset.post) { ui.forumScroll = { ...listPosition(button), tag: ui.forumTag }; ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
       case 'dismiss-phone-notice': dismissPhoneNotice(); break;
@@ -742,6 +778,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         else if (notice?.kind === 'social-author') { ui.socialAuthorId = notice.id; showPage('social-profile'); }
         else if (notice?.kind === 'social-feed') showPage('social');
         else if (notice?.kind === 'forum') showPage('forum');
+        else if (notice?.kind === 'forum-post') { ui.forumScroll = 0; ui.forumTag = ''; ui.postId = notice.id; showPage('post'); }
         else if (notice?.kind === 'liangshi-feed') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'square' }, false); }
         else if (notice?.kind === 'liangshi-following') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'following' }, false); }
         else if (notice?.kind === 'liangshi-hot') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'hot' }, false); }
@@ -764,10 +801,21 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         else {
           closeLiangshiMenu(); ui.liangshiMenu = id;
           button.setAttribute('aria-expanded', 'true');
-          surface.insertAdjacentHTML('beforeend', renderLiangshiOwnMenu(id, busy)); placeLiangshiMenu();
+          surface.insertAdjacentHTML('beforeend', renderLiangshiOwnMenu(liangshi.getPost(id), busy)); placeLiangshiMenu();
           (root.querySelector('.ls-own-menu button:not(:disabled)') || button).focus({ preventScroll: true });
         }
         break;
+      }
+      case 'liangshi-reply': {
+        const id = button.dataset.liangshiId, previous = ui.liangshiReplyDrafts.get(id);
+        ui.liangshiReplyDrafts.set(id, { replyToId: button.dataset.liangshiComment, text: previous?.text || '' });
+        render(); root.querySelector('#ls-reply-text')?.focus({ preventScroll: true }); break;
+      }
+      case 'liangshi-reply-cancel': ui.liangshiReplyDrafts.delete(button.dataset.liangshiId); render(); break;
+      case 'liangshi-generate-replies':
+      case 'liangshi-regenerate-replies': {
+        const id = button.dataset.liangshiId, regenerate = button.dataset.action === 'liangshi-regenerate-replies'; closeLiangshiMenu();
+        void perform(`liangshi-replies:${id}`, () => liangshi.generateReplies(id, { regenerate }), result => { if (result === null) setFeedback({ text: '暂时没有新的回应。' }); }); break;
       }
       case 'liangshi-edit': {
         const data = store.read().liangshi, post = data.posts.find(row => row.id === button.dataset.liangshiId), account = data.accounts.find(row => row.id === post?.authorId);
@@ -812,10 +860,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         break;
       }
       case 'liangshi-image': {
-        const postId = button.dataset.liangshiImage;
-        const readImage = () => store.read().liangshi?.posts.find(post => post.id === postId)?.image;
+        const postId = button.dataset.liangshiImage, id = button.dataset.liangshiRow, collection = button.dataset.liangshiCollection || 'comments';
+        const readImage = () => { const post = store.read().liangshi?.posts.find(post => post.id === postId); return id && post ? liangshiInteractions(post, collection).find(row => row.id === id)?.image : post?.image; };
         if (readImage()?.path) void viewPhoto(readImage);
-        else void perform(`liangshi-image:${postId}`, () => images.generateLiangshi(postId));
+        else void perform(`liangshi-image:${postId}${id ? `:${id}` : ''}`, () => images.generateLiangshi(postId, { collection, id }));
         break;
       }
       case 'liangshi-expand': { const postId = button.dataset.liangshiId; ui.liangshiExpanded.has(postId) ? ui.liangshiExpanded.delete(postId) : ui.liangshiExpanded.add(postId); render(); break; }
@@ -849,7 +897,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'social-author': {
         const authorId = button.dataset.socialAuthor;
         if (ui.view !== 'social-profile' || ui.socialAuthorId !== authorId) {
-          ui.socialAuthorId = authorId; showPage('social-profile');
+          ui.socialAuthorId = authorId; showPage('social-profile', { sourceNode: button });
         }
         break;
       }
@@ -861,9 +909,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'social-past': ui.socialPastOpen = !ui.socialPastOpen; render(); break;
       case 'social-earlier': ui.socialLimit += 30; render(); break;
       case 'social-image': {
-        const post = store.read().social?.posts.find(item => item.id === button.dataset.socialImage);
-        if (post?.image?.path) void viewPhoto(() => store.read().social?.posts.find(item => item.id === button.dataset.socialImage)?.image);
-        else void perform(`social-image:${button.dataset.socialImage}`, () => images.generatePost(button.dataset.socialImage));
+        const postId = button.dataset.socialImage, readImage = () => store.read().social?.posts.find(item => item.id === postId)?.image;
+        if (readImage()?.path) void viewPhoto(readImage);
+        else void perform(`social-image:${postId}`, () => images.generatePost(postId));
         break;
       }
       case 'restore-chat-background': {
@@ -899,6 +947,30 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         else void perform(`image:${button.dataset.photo}`, () => images.generate(id, button.dataset.photo));
         break;
       }
+      case 'forum-reply': {
+        const previous = ui.forumDrafts.get(ui.postId); ui.forumDrafts.set(ui.postId, { text: previous?.text || '', replyToId: button.dataset.forumComment });
+        render(); root.querySelector('.forum-comment-form')?.scrollIntoView({ block: 'nearest' }); root.querySelector('#forum-comment-text')?.focus({ preventScroll: true }); break;
+      }
+      case 'forum-reply-cancel': { const previous = ui.forumDrafts.get(ui.postId); ui.forumDrafts.set(ui.postId, { text: previous?.text || '', replyToId: '' }); render(); break; }
+      case 'forum-jump': {
+        const target = button.dataset.forumComment === ui.postId ? root.querySelector('.post-detail') : [...root.querySelectorAll('.comment-row[data-forum-comment]')].find(row => row.dataset.forumComment === button.dataset.forumComment);
+        if (target) {
+          target.scrollIntoView({ block: 'center' }); target.focus({ preventScroll: true });
+          if (!doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            const body = target.querySelector(':scope > div') || target;
+            body.animate([{ backgroundColor: doc.defaultView.getComputedStyle(target).getPropertyValue('--pp-pale') }, { backgroundColor: doc.defaultView.getComputedStyle(body).backgroundColor }], { duration: 1000, easing: 'cubic-bezier(.16,1,.3,1)' });
+          }
+        }
+        break;
+      }
+      case 'forum-vote': {
+        const vote = button.dataset.forumVote; ui.forumVotes.set(ui.postId, ui.forumVotes.get(ui.postId) === vote ? '' : vote); render();
+        if (!doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches) root.querySelector(`[data-forum-vote="${vote}"]`)?.animate([{ transform: 'scale(1)' },{ transform: 'scale(1.12)', offset: .4 },{ transform: 'scale(1)' }], { duration: 200, easing: 'cubic-bezier(.16,1,.3,1)' });
+        break;
+      }
+      case 'forum-more': { const id = ui.postId; void perform(`forum-more:${id}`, () => forum.loadMore(id), result => { if (result === null) setFeedback({ text: '暂时没有新的回帖。' }); }); break; }
+      case 'forum-tag': ui.forumTag = button.dataset.forumTag; render(); root.querySelector('.phone-main').scrollTop = 0; break;
+      case 'forum-image': { const id = ui.postId, commentId = button.dataset.forumComment, readImage = () => { const post = store.read().forum?.posts.find(post => post.id === id); return commentId && post ? forumComments(post).find(row => row.id === commentId)?.image : post?.image; }; if (readImage()?.path) void viewPhoto(readImage); else void perform(`forum-image:${id}${commentId ? `:${commentId}` : ''}`, () => images.generateForum(id, commentId)); break; }
       case 'back-inbox':
       case 'back-forum': goBack(); break;
       case 'profile': editProfile('contact', id); break;
@@ -973,7 +1045,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         break;
       }
       case 'continue': void perform(`continue:${id}`, () => service.continueChat(id), onContextChange); break;
-      case 'refresh': void perform('forum', () => forum.refresh()); break;
+      case 'refresh': void perform('forum', () => forum.refresh(), () => { const ids = new Set(store.read().forum.posts.map(post => post.id)); for (const id of ui.forumDrafts.keys()) if (!ids.has(id)) ui.forumDrafts.delete(id); for (const id of ui.forumVotes.keys()) if (!ids.has(id)) ui.forumVotes.delete(id); }); break;
       case 'restore-wallpaper': { const theme = store.read().theme; void perform('wallpaper', () => wallpaper.restore(theme)); break; }
       case 'sources-menu': if (ui.sourcesOpen) closeSources(); else openSources(); break;
       case 'models-menu': closeSources(); ui.modelsOpen = !ui.modelsOpen; render(); if (ui.modelsOpen) root.querySelector('#model-search').focus(); break;
@@ -1022,6 +1094,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       ui.drafts.set(conversationId(), event.target.value);
       resizeDraft();
     }
+    const replyForm = event.target.closest('.ls-reply-form');
+    if (replyForm && event.target.name === 'reply') { const draft = ui.liangshiReplyDrafts.get(replyForm.dataset.liangshiReplyForm); if (draft) draft.text = event.target.value; }
+    const forumComment = event.target.closest('.forum-comment-form');
+    if (forumComment && event.target.name === 'comment') { const id = forumComment.dataset.forumPost, draft = ui.forumDrafts.get(id) || { text: '', replyToId: '' }; draft.text = event.target.value; ui.forumDrafts.set(id, draft); }
     const socialComment = event.target.closest('.social-comment-form');
     if (socialComment && event.target.name === 'comment') ui.socialDrafts.set(socialComment.dataset.socialCommentForm, event.target.value);
     if (event.target.closest('.ls-compose-form') && ui.liangshiDraft) {
@@ -1096,6 +1172,21 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
   }
   function submit(event) {
+    if (event.target.matches('.forum-comment-form')) {
+      event.preventDefault(); const id = event.target.dataset.forumPost, draft = ui.forumDrafts.get(id); if (!draft) return;
+      const before = { ...draft };
+      void perform(`forum-comment:${id}`, () => forum.publishComment(id, before), () => { if (ui.forumDrafts.get(id) === draft && draft.text === before.text && draft.replyToId === before.replyToId) ui.forumDrafts.delete(id); }); return;
+    }
+    const replyForm = event.target.closest('.ls-reply-form');
+    if (replyForm) {
+      event.preventDefault(); const id = replyForm.dataset.liangshiReplyForm, draft = ui.liangshiReplyDrafts.get(id);
+      if (!draft) return;
+      const before = { ...draft };
+      void perform(`liangshi-reply:${id}`, () => liangshi.publishReply(id, before), () => {
+        if (ui.liangshiReplyDrafts.get(id) === draft && draft.text === before.text && draft.replyToId === before.replyToId) ui.liangshiReplyDrafts.delete(id);
+      }); return;
+    }
+
     event.preventDefault();
     if (event.target.matches('.attachment-form')) {
       const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages, type = ui.attachment;

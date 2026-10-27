@@ -2,6 +2,7 @@ import { findSticker } from './stickers.js';
 import { replyContext } from './replies.js';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
+export const generatedImage = value => text(value?.image?.description) ? { description: text(value.image.description) } : undefined;
 const states = { pending: '待收款', accepted: '已收下', returned: '已退回' };
 
 export function messageText(message) {

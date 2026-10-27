@@ -1,3 +1,4 @@
+import { imageSource } from '../image-files.js';
 import { avatarSource, displayName } from '../profiles.js';
 import { isCameoAvatar } from '../cameo-avatar.js';
 import { splitEmojiText } from '../emojis.js';
@@ -5,6 +6,8 @@ import { phoneUrl } from '../paths.js';
 
 // Solar by 480 Design via Yesicon; original fingerprint kept by request. Sources: ../../assets/ICONS.md.
 const icons = {
+  like: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M3 21.5127V10.2341"/><path d="M3 10.2342L3.9716 21.4707C3.99621 21.7553 3.77207 22 3.48671 22C3.21791 22 3 21.7818 3 21.5127"/><path d="M13.9951 5.22145C14.1027 4.56438 14.072 3.89203 13.9048 3.24756"/><path d="M8.59634 22C7.73256 22 7.01226 21.3386 6.93776 20.4771L6.1256 11.0844C6.07944 10.5506 6.29247 10.027 6.69813 9.67749L8.13687 8.43769C8.8044 7.86246 9.44659 7.24017 9.86194 6.46261C10.1462 5.93045 10.3667 5.36723 10.518 4.78374L10.9938 2.94989C11.0859 2.59473 11.3344 2.29611 11.6742 2.13239C11.9829 1.98365 12.3402 1.95918 12.6676 2.06435L12.8126 2.11093C13.3543 2.28495 13.7662 2.71364 13.9047 3.24753"/><path d="M13.9949 5.22135L13.3322 9.26591C13.2491 9.77321 13.6401 10.2341 14.1536 10.2341H19.3347"/><path d="M19.3349 10.2342C20.3678 10.2342 21.1515 11.1662 20.9752 12.1852L20.2697 16.265C19.6974 19.5744 16.7263 22 13.2451 22H8.59644"/></g>',
+  dislike: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M3 2.48733V13.7659"/><path d="M3 13.7658L3.9716 2.52928C3.99621 2.24466 3.77207 2 3.48671 2C3.21791 2 3 2.21815 3 2.48726"/><path d="M13.9951 18.7785C14.1027 19.4356 14.072 20.108 13.9048 20.7524"/><path d="M8.59634 2C7.73256 2 7.01226 2.66139 6.93776 3.52293L6.1256 12.9156C6.07944 13.4494 6.29247 13.973 6.69813 14.3225L8.13687 15.5623C8.8044 16.1375 9.44659 16.7598 9.86194 17.5374C10.1462 18.0695 10.3667 18.6328 10.518 19.2163L10.9938 21.0501C11.0859 21.4053 11.3344 21.7039 11.6742 21.8676C11.9829 22.0163 12.3402 22.0408 12.6676 21.9356L12.8126 21.8891C13.3543 21.715 13.7662 21.2864 13.9047 20.7525"/><path d="M13.9949 18.7787L13.3322 14.7341C13.2491 14.2268 13.6401 13.7659 14.1536 13.7659H19.3347"/><path d="M19.3349 13.7658C20.3678 13.7658 21.1515 12.8338 20.9752 11.8148L20.2697 7.73505C19.6974 4.42561 16.7263 2 13.2451 2H8.59644"/></g>',
   liangshi: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path stroke-linejoin="round" d="M11 7L8 17"/><path stroke-linejoin="round" d="M16 7L13 17"/><path stroke-linejoin="round" d="M18 10H7"/><path stroke-linejoin="round" d="M17 14H6"/><path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8"/></g>',
   social: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><circle cx="12" cy="12" r="4"/><path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8"/></g>',
   heart: '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.52401 17C7.34949 17.6794 8.19243 18.3044 8.96173 18.9109C10 19.7294 11 20.5 12 20.5C13 20.5 14 19.7294 15.0383 18.9109C17.9806 16.5914 22 14 22 9.1371C22 4.27416 16.4998 0.825464 12 5.50063C7.50016 0.825464 2 4.27416 2 9.1371C2 10.639 2.38338 11.9242 3 13.0516"/>',
@@ -101,4 +104,12 @@ export function pageHeading(title, actions = '') {
 }
 export function empty(title, text, iconName = 'messages') {
   return `<div class="empty-state"><div class="empty-symbol">${icon(iconName)}</div><h2>${title}</h2>${text ? `<p>${text}</p>` : ''}</div>`;
+}
+
+export function renderContentImage(image, { action, data = {}, busy = false, label = '配图' } = {}) {
+  if (!image?.description) return '';
+  const attributes = Object.entries(data).map(([key, value]) => `data-${key}="${escape(value)}"`).join(' ');
+  return `<button type="button" class="content-photo" data-action="${escape(action)}" ${attributes} aria-label="${image.path ? '查看' : '生成'}${escape(label)}" aria-busy="${busy}" ${busy ? 'disabled' : ''}>${image.path
+    ? `<img data-phone-image="${escape(image.path)}" src="${escape(imageSource(image.path))}" alt="${escape(image.description)}" loading="lazy" draggable="false">`
+    : `<span>${icon(busy ? 'refresh' : 'image')}<span>${busy ? '生成中…' : escape(image.description)}</span>${busy ? '' : '<small>点击生成图片</small>'}</span>`}</button>`;
 }

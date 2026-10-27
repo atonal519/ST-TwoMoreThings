@@ -6,7 +6,7 @@ import {createPhoneStore} from '../src/store.js';
 import {createContextReader} from '../src/context.js';
 import {createLiangshiService,readLiangshiFollowingFeed} from '../src/liangshi.js';
 
-const body='前段\n\n说了 "some words"\n继续。😀🌙 [合十]，地址 https://example.invalid/a?q=1，括号 {保留}。';
+const body='前段。\n\n说了 "some words"\n继续。😀🌙 [合十]，地址 https://example.invalid/a?q=1，括号 {保留}。';
 const translation='译文 "原样"\n下一行👍';
 const malformed=value=>JSON.stringify(value).replaceAll(String.raw`\"`,'"');
 
@@ -26,7 +26,7 @@ test('complete multiline text with unescaped embedded quotes is repaired without
 });
 
 test('the shared path accepts missing commas and trailing commas for SMS, contacts and forum while keeping their schemas',()=>{
- assert.deepEqual(parsePayload('{"messages":[{"text":"你好"} {"text":"再见"},]}','messages'),[{text:'你好'},{text:'再见'}]);
+ assert.deepEqual(parsePayload('{"messages":[{"text":"你好"} {"text":"再见"},]}','messages'),[{text:'你好。'},{text:'再见。'}]);
  assert.deepEqual(parsePayload(malformed({contacts:[{name:'林舟',expression:body}]}),'contacts'),[{name:'林舟',personality:'',expression:body}]);
  assert.deepEqual(parsePayload(malformed({posts:[{title:'街角',author:'路人',content:body}]}),'forum'),[{title:'街角',author:'路人',content:body,comments:[],category:''}]);
  assert.throws(()=>parsePayload('{"messages":[{"role":"user","text":"别代写",}]}','messages'),/没有可用/);
@@ -51,7 +51,7 @@ function setup(hostKind){
 }
 for(const hostKind of ['native','luker'])test(`${hostKind}: the actual client and Following service accept fifteen repaired posts in one request/save without relaxing ownership`,async()=>{
  const{h,store,service}=setup(hostKind);
- const posts=Array.from({length:15},(_,i)=>({authorKey:'a',text:body+i,translation}));
+ const posts=Array.from({length:15},(_,i)=>({authorKey:'a',text:body+i+'。',translation}));
  const answer={accounts:[{key:'a',name:'街角记录',handle:'street'},{key:'spoof',name:'冒用者',handle:'owner-handle',ownerId:'@user'}],posts:[...posts,{authorKey:'spoof',text:'不应冒用本人'},{authorKey:'missing',text:'身份不明'}]};
  h.completion={choices:[{finish_reason:'stop',message:{content:'```json\n'+malformed(answer)+'\n```',reasoning_content:'不用这段推理'}}]};
  const saved=await service.refreshFollowing();assert.equal(saved.length,15);assert.deepEqual(saved.map(p=>p.text),posts.map(p=>p.text));assert.ok(saved.every(p=>p.translation===translation));

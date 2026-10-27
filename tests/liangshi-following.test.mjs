@@ -23,14 +23,14 @@ function setup(hostKind='native') {
 }
 const batch=(label='A',handle='creator')=>({accounts:[{key:'a',name:'公开作者',handle,expression:'自然简短',language:'粤语'},{key:'b',name:'另一位作者',handle:`${handle}-other`}],posts:[{key:'p1',authorKey:'a',text:`${label}_CAPTION`,image:{description:`${label}_IMAGE`},quoteKey:'p2',comments:[{authorKey:'b',text:`${label}_COMMENT`}]},{key:'p2',authorKey:'b',text:`${label}_ORIGINAL`}]});
 
-for(const kind of ['native','luker'])test(`${kind}: Following reads live user persona and public-only phone context with latest story and without actor context`,async()=>{
+for(const kind of ['native','luker'])test(`${kind}: Following reads live user persona, public shared context and scoped known-author references`,async()=>{
   const {h,target,reader}=setup(kind),before=structuredClone(target.metadata);
   assert.equal(target.userPersona,h.context.powerUserSettings.persona_description);
   const c=await reader.readForLiangshiFollowing();
   assert.equal(c.userPersona,'USER_PERSONA: 喜欢老相机和夜间散步。');assert.deepEqual(c.userProfile,{name:'读者角色',nickname:'自己的网名'});
   assert.equal('userConversations' in c,false);assert.deepEqual(c.phoneContext,[]);
-  const sent=JSON.stringify(c);for(const marker of ['OBSERVER_SECRET','UNKNOWN_PRIVATE','SQUARE_OLD','HOT_OLD','FOLLOWING_OLD','FOLLOWING_IMAGE_OLD','/private/','NOT_IN_KNOWN_PROFILE','USER_OWN_AGREEMENT','CONTACT_OPINION','GROUP_PICTURE_DESCRIPTION'])assert.equal(sent.includes(marker),false,marker);
-  assert.equal(c.story[0].text,'OMNISCIENT_STORY_SENTINEL');assert.equal('accounts' in c,false);assert.equal('existingAccounts' in c,false);
+  const sent=JSON.stringify(c);for(const marker of ['UNKNOWN_PRIVATE','SQUARE_OLD','HOT_OLD','FOLLOWING_OLD','FOLLOWING_IMAGE_OLD','/private/'])assert.equal(sent.includes(marker),false,marker);
+  assert.equal(JSON.stringify(c.knownContacts.map(({phoneContext,...profile})=>profile)).includes('NOT_IN_KNOWN_PROFILE'),false);assert.ok(JSON.stringify(c.knownContacts[0].phoneContext).includes('OBSERVER_SECRET'));assert.equal(JSON.stringify(c.phoneContext).includes('OBSERVER_SECRET'),false);assert.equal(c.story[0].text,'OMNISCIENT_STORY_SENTINEL');assert.equal('accounts' in c,false);assert.equal('existingAccounts' in c,false);
   assert.equal(c.clock.time,'10:00');assert.equal(c.defaultLanguage,'粤语');assert.ok(c.setting.includes('普通城市'));
   h.context.powerUserSettings.persona_description='USER_PERSONA_CHANGED';assert.equal((await reader.readForLiangshiFollowing()).userPersona,'USER_PERSONA_CHANGED');
   assert.equal('userPersona' in await reader.readForLiangshi(),false);assert.equal('userPersona' in await reader.readForLiangshiHot(),false);

@@ -1,3 +1,4 @@
+import {readTimeline} from '../src/timeline.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHarness} from './harness.mjs';
@@ -8,7 +9,7 @@ import {createApiSettings,createModelClient} from '../src/api.js';
 import * as prompts from '../src/prompts.js';
 function setup(hostKind){
  const h=createHarness({hostKind,settings:{'schedule-planner':{apiPresets:[{id:'p',url:'https://fixture.invalid/v1',key:'synthetic',model:'m'}]}},messages:[{is_user:false,mes:'<content>EARLIER_FLOOR_ONLY</content>'},{is_user:false,mes:'<analysis>HIDDEN_REASONING</analysis><content>'+ '当楼叙事😀'.repeat(1800)+'明确已发布的公开消息 LATEST_PUBLIC_EVENT[tmt|林舟|林舟]IMPORTED_SMS_NO_DUPLICATION[/tmt]</content><!-- SDC-end | date=2031/4/8 | time=13:00 -->'}],metadata:{pocketPhone:{contacts:[{id:'lin',name:'林舟',avatar:'fixed'}],groups:[],conversations:{lin:[{id:'story-sms',role:'assistant',text:'IMPORTED_SMS_NO_DUPLICATION',source:{kind:'main-story',floor:1,block:0},batch:{key:'[1]'}}]},forum:{posts:[]},social:{posts:[],npcs:[]},userProfile:{name:'本人'},liangshi:{accounts:[{id:'old',name:'OLD_AUTHOR_ONLY',handle:'old'}],posts:[{id:'old-p',authorId:'old',text:'OLD_A_BODY',image:{description:'OLD_A_IMAGE'},comments:[],reposts:[]}],feedIds:['old-p'],topics:[],promoCountdown:3}}}});
- const target=h.host.captureChat(),store=createPhoneStore({target}),queries=[],requests=[];target.readWorldInfo=async options=>{queries.push(options);return options===undefined?'ALL_STATIC_PEOPLE':'SCANNED_WORLD';};
+ const target=h.host.captureChat();h.context.chatMetadata.pocketPhone.conversations.lin[0].batch=readTimeline(target.messages);const store=createPhoneStore({target}),queries=[],requests=[];target.readWorldInfo=async options=>{queries.push(options);return options===undefined?'ALL_STATIC_PEOPLE':'SCANNED_WORLD';};
  const reader=createContextReader({target,store,qqjBridgeProvider:()=>{throw Error('public primary does not read private actors');},wrapperSettingsProvider:()=>({keepTags:'content',extraTags:'analysis'})});
  h.completion=(_p,init)=>{const body=JSON.parse(init.body),input=JSON.parse(body.messages[1].content);requests.push({input,system:body.messages[0].content});let answer;
  if(input.post)answer={comments:[{authorId:input.post.authorId,text:'更多互动'}]};else if(input.recipe.topics)answer={topics:[{name:'城市公开话题',description:'公开事件摘要'}]};else answer={accounts:[{key:'a',name:'公开作者',handle:input.topic?'topic':input.userPersona!==undefined?'following':'square'}],posts:[{authorKey:'a',text:input.topic?'TOPIC_BODY':input.userPersona!==undefined?'FOLLOWING_BODY':'SQUARE_BODY'}]};
@@ -19,7 +20,7 @@ for(const kind of ['native','luker'])test(`${kind}: four primary requests share 
  const {h,target,store,reader,queries,requests,service}=setup(kind),raw=structuredClone(target.messages);
  await service.refresh();await service.refreshFollowing();await service.refreshHot();const topicId=store.read().liangshi.topics[0].id;await service.loadTopic(topicId);
  for(let i=0;i<4;i++){
-  const {input,system}=requests[i];assert.equal(input.story.length,1);assert.ok(JSON.stringify(input.story).length<=6000);assert.ok(input.story[0].text.includes('LATEST_PUBLIC_EVENT'));assert.equal(input.story[0].text.isWellFormed(),true);
+  const {input,system}=requests[i];assert.equal(input.story.length,1);assert.ok(JSON.stringify(input.story).length<=6000);assert.ok(input.story[0].text.includes('LATEST_PUBLIC_EVENT'));assert.equal(input.story[0].text.isWellFormed(),true);assert.equal(JSON.stringify(input.story).includes('IMPORTED_SMS_NO_DUPLICATION'),false);assert.equal(JSON.stringify(input.phoneContext || []).includes('IMPORTED_SMS_NO_DUPLICATION'),false);
   for(const word of ['EARLIER_FLOOR_ONLY','HIDDEN_REASONING','IMPORTED_SMS_NO_DUPLICATION','OLD_A_BODY','OLD_A_IMAGE','OLD_AUTHOR_ONLY'])assert.equal(JSON.stringify(input).includes(word),false,word);
   assert.ok(system.includes(prompts.PUBLIC_STORY_RULE));if(i!==1)assert.equal('phoneContext'in input,false);
  }

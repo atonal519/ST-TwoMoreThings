@@ -161,11 +161,12 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         return { ...state, conversations: { ...state.conversations, [id]: messages.map(message => message.role === 'assistant' && message.read === false ? { ...message, read: true } : message) } };
       });
     },
-    updateImage(id, messageId, image, description) {
+    updateImage(id, messageId, image, description, validate) {
       return update(state => {
         assertEnabled();
         const messages = state.conversations[id] || [], current = messages.find(message => message.id === messageId);
         if (!current || current.type !== 'image') throw new Error('这条图片消息已删除，无法保存图片。');
+        validate?.(state, current);
         if (description !== undefined && current.image.description !== description) throw new Error('这条图片描述已修改，请重新点击生成。');
         return { ...state, conversations: { ...state.conversations, [id]: messages.map(message => message.id === messageId ? { ...message, image: { ...message.image, ...image } } : message) } };
       });
@@ -174,16 +175,23 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       const missing = new Set(paths.map(imagePath).filter(Boolean));
       return update(state => {
         let changed = false;
-        const clear = item => {
-          if (!missing.has(imagePath(item.image?.path))) return item;
-          changed = true;
-          const { path, seed, ...image } = item.image;
-          return { ...item, image };
+        const clear = (item, children = true) => {
+          let next = item;
+          if (missing.has(imagePath(item.image?.path))) {
+            changed = true;
+            const { path, seed, ...image } = item.image;
+            next = { ...item, image };
+          }
+          if (children) for (const key of ['comments', 'reposts']) if (Array.isArray(item[key])) {
+            const rows = item[key].map(row => clear(row));
+            if (rows.some((row, index) => row !== item[key][index])) next = { ...next, [key]: rows };
+          }
+          return next;
         };
-        const conversations = Object.fromEntries(Object.entries(state.conversations).map(([id, messages]) => [id, messages.map(clear)]));
-        const social = state.social && { ...state.social, posts: state.social.posts.map(clear) };
-        const forum = state.forum && { ...state.forum, posts: state.forum.posts.map(clear) };
-        const liangshi = state.liangshi && { ...state.liangshi, posts: state.liangshi.posts.map(clear) };
+        const conversations = Object.fromEntries(Object.entries(state.conversations).map(([id, messages]) => [id, messages.map(row => clear(row))]));
+        const social = state.social && { ...state.social, posts: state.social.posts.map(row => clear(row, false)) };
+        const forum = state.forum && { ...state.forum, posts: state.forum.posts.map(row => clear(row)) };
+        const liangshi = state.liangshi && { ...state.liangshi, posts: state.liangshi.posts.map(row => clear(row)) };
         return changed ? { ...state, conversations, ...(social ? { social } : {}), ...(forum ? { forum } : {}), ...(liangshi ? { liangshi } : {}) } : state;
       }, true);
     },
@@ -317,7 +325,10 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         return { ...state, [key]: state[key].map(person => person.id === id ? { ...person, background } : person) };
       });
     },
-    replaceForum(posts) { return update(state => { assertEnabled(); return { ...state, forum: { posts } }; }, true); },
+    updateForum(change, { cleanImages = false } = {}) {
+      return update(state => { assertEnabled(); const current = state.forum || { posts: [] }, next = change(current); return next === current ? state : { ...state, forum: next }; }, cleanImages);
+    },
+    replaceForum(posts) { return store.updateForum(current => ({ ...current, posts }), { cleanImages: true }); },
     upsertContacts(items) {
       return update(state => {
         const contacts = new Map(state.contacts.map(item => [item.id, item]));
