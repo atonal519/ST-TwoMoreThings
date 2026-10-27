@@ -17,6 +17,7 @@ export function contentImagePaths(state) {
   for (const messages of Object.values(state.conversations || {})) for (const message of messages) if (message.type === 'image') add(message);
   for (const post of state.social?.posts || []) add(post);
   for (const post of state.forum?.posts || []) add(post);
+  for (const post of state.liangshi?.posts || []) add(post);
   return paths;
 }
 

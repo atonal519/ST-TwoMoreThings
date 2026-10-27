@@ -67,3 +67,17 @@ test('missing, unready or empty avatar sources stay empty and are read again on 
   assert.equal(readContactAvatars(contacts, { getPeopleAvatars: () => ({ status: 'ready', avatarsByEntityId: { 'person-id': portrait } }) })[0].avatar, portrait);
   assert.equal(contacts[0].avatar, undefined);
 });
+
+test('contact editor projects QQJ only for unchanged or explicitly restored automatic drafts', async () => {
+  const { createCameoAvatar } = await import('../src/cameo-avatar.js');
+  const { readContactAvatarDraft } = await import('../src/contact-avatars.js');
+  const current = { id: 'a', name: '人物甲', avatar: createCameoAvatar('editor'), source: { kind: 'qqj', entityId: 'p' } };
+  const draft = { name: current.name, avatar: current.avatar };
+  const bridge = { getPeopleAvatars: () => ({ status: 'ready', avatarsByEntityId: { p: portrait } }) };
+  assert.equal(readContactAvatarDraft(draft, current, bridge).avatar, portrait);
+  assert.equal(draft.avatar, current.avatar);
+  assert.equal(readContactAvatarDraft({ ...draft, avatar: '', automaticAvatar: false }, current, bridge).avatar, '');
+  const protectedPerson = { ...current, manualFields: ['avatar', 'expression'], avatar: '' };
+  assert.equal(readContactAvatarDraft({ ...draft, automaticAvatar: true }, protectedPerson, bridge).avatar, portrait);
+  assert.deepEqual(protectedPerson.manualFields, ['avatar', 'expression']);
+});

@@ -28,6 +28,7 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
         metadata: ctx.chatMetadata || {}, messages: ctx.chat || [],
         character: character ? { name: character.name, avatar: character.avatar, description: character.description || character.data?.description || '', personality: character.personality || character.data?.personality || '', scenario: character.scenario || character.data?.scenario || '', world: character.data?.extensions?.world || '' } : null,
         user: ctx.name1 || '我', personaWorld: ctx.powerUserSettings?.persona_description_lorebook || '',
+        get userPersona() { return typeof ctx.powerUserSettings?.persona_description === 'string' ? ctx.powerUserSettings.persona_description : ''; },
         async saveMetadata() {
           if (!target.id) throw new Error('请先打开一个角色聊天，再保存手机内容。');
           try {
@@ -42,6 +43,16 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       return target;
     },
     readSettings: () => context().extensionSettings,
+    async readStorySmsBindings() {
+      const origin = globalThis.location.href;
+      const [world, regex, power] = await Promise.all([
+        import(new URL('/scripts/world-info.js', origin).href),
+        import(new URL('/scripts/extensions/regex/engine.js', origin).href),
+        import(new URL('/scripts/power-user.js', origin).href),
+      ]);
+      return { load: world.loadWorldInfo, create: world.createWorldInfoEntry, save: world.saveWorldInfo,
+        getRules: () => regex.getScriptsByType(regex.SCRIPT_TYPES.GLOBAL), saveRules: scripts => regex.saveScriptsByType(scripts, regex.SCRIPT_TYPES.GLOBAL), htmlEncoded: () => power.power_user.encode_tags === true };
+    },
     getRequestHeaders: () => context().getRequestHeaders(),
     async readExtensionTypes() { return (await import(new URL('/scripts/extensions.js', globalThis.location.href).href)).extensionTypes; },
     getEventSource: () => context().eventSource,
@@ -83,7 +94,7 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
         const rows = Object.values(book.entries || {});
         const entries = scanText === undefined ? rows : selectWorldEntries(rows, scanText, { defaults: bindings.defaults, user: target.user, char: target.character?.name });
         for (const entry of entries) {
-          if (entry.disable || typeof entry.content !== 'string') continue;
+          if (entry.disable || entry.extensions?.twoMoreThings?.storySms === true || typeof entry.content !== 'string') continue;
           const text = `${entry.comment || ''}\n${entry.content}`.slice(0, remaining);
           parts.push(text); remaining -= text.length;
           if (!remaining) return parts.join('\n\n');

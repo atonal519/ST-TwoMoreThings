@@ -24,11 +24,11 @@ export function renderHome(state, { weather } = {}) {
       ${renderLockMeta(weather)}
     </div>` : `<div class="home-artboard">
     ${image.custom ? `<img class="home-wallpaper" src="${escape(image.src)}" alt="${image.alt}" draggable="false">` : ''}
-    <svg class="home-clock" viewBox="0 0 340 420" preserveAspectRatio="none" role="img" aria-label="当前时间">
+    <div class="classic-clock-stage"><svg class="home-clock" viewBox="0 0 340 420" preserveAspectRatio="none" role="img" aria-label="当前时间">
       <text data-clock-digits y="345" text-anchor="middle"><tspan x="40"></tspan><tspan x="119"></tspan><tspan x="221"></tspan><tspan x="300"></tspan></text>
       <path d="${night ? 'M170 90v.01M170 120v.01' : 'M170 116v.01M170 259v.01'}"
         fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-    </svg>
+    </svg></div>
     ${image.custom ? '' : `<img class="home-art" src="${image.src}" alt="${image.alt}" draggable="false">`}
   </div>`;
   return `${artwork}

@@ -1,9 +1,11 @@
 import { avatarSource, displayName } from '../profiles.js';
 import { isCameoAvatar } from '../cameo-avatar.js';
 import { splitEmojiText } from '../emojis.js';
+import { phoneUrl } from '../paths.js';
 
 // Solar by 480 Design via Yesicon; original fingerprint kept by request. Sources: ../../assets/ICONS.md.
 const icons = {
+  liangshi: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path stroke-linejoin="round" d="M11 7L8 17"/><path stroke-linejoin="round" d="M16 7L13 17"/><path stroke-linejoin="round" d="M18 10H7"/><path stroke-linejoin="round" d="M17 14H6"/><path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8"/></g>',
   social: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><circle cx="12" cy="12" r="4"/><path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8"/></g>',
   heart: '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6.52401 17C7.34949 17.6794 8.19243 18.3044 8.96173 18.9109C10 19.7294 11 20.5 12 20.5C13 20.5 14 19.7294 15.0383 18.9109C17.9806 16.5914 22 14 22 9.1371C22 4.27416 16.4998 0.825464 12 5.50063C7.50016 0.825464 2 4.27416 2 9.1371C2 10.639 2.38338 11.9242 3 13.0516"/>',
   'heart-active': '<path fill="currentColor" d="M2 9.1371C2 14 6.01943 16.5914 8.96173 18.9109C10 19.7294 11 20.5 12 20.5C13 20.5 14 19.7294 15.0383 18.9109C17.9806 16.5914 22 14 22 9.1371C22 4.27416 16.4998 0.825464 12 5.50063C7.50016 0.825464 2 4.27416 2 9.1371Z"/>',
@@ -14,7 +16,6 @@ const icons = {
   wifi: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M8.66699 15.893C9.2104 15.3065 9.85347 14.8931 10.5374 14.6528"/><path d="M13.376 14.6233C14.0924 14.8584 14.7672 15.2817 15.3337 15.8932"/><path d="M5.33301 12.295C7.39361 10.0709 10.1707 9.09151 12.8624 9.35689"/><path d="M16.6313 10.624C17.3601 11.0681 18.0457 11.625 18.6664 12.2949"/><path d="M2 8.69695C2.78921 7.8451 3.6485 7.11498 4.55783 6.50659"/><path d="M8.53662 4.68847C13.2026 3.42167 18.3504 4.75782 21.9999 8.69694"/><path stroke-linejoin="round" d="M12.0176 19.4644H12.0177"/></g>',
   battery: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M7 9C7 9 7.5 9.9 7.5 12C7.5 14.1 7 15 7 15"/><path d="M10.5 9C10.5 9 11 9.9 11 12C11 14.1 10.5 15 10.5 15"/><path d="M14 9C14 9 14.5 9.9 14.5 12C14.5 14.1 14 15 14 15"/><path d="M20 10C20.9428 10 21.4142 10 21.7071 10.2929C22 10.5858 22 11.0572 22 12C22 12.9428 22 13.4142 21.7071 13.7071C21.4142 14 20.9428 14 20 14V10Z"/><path d="M2 12C2 8.22876 2 6.34315 3.17157 5.17157C4.34315 4 6.22876 4 10 4H11.5C15.2712 4 17.1569 4 18.3284 5.17157C19.5 6.34315 19.5 8.22876 19.5 12C19.5 15.7712 19.5 17.6569 18.3284 18.8284C17.1569 20 15.2712 20 11.5 20H10C6.22876 20 4.34315 20 3.17157 18.8284C2.51839 18.1752 2.22937 17.3001 2.10149 16"/></g>',
   calendar: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M7 4V2.5"/><path d="M17 4V2.5"/><path stroke-linejoin="round" d="M9 14.5L10.5 13V17"/><path d="M13 16V14C13 13.4477 13.4477 13 14 13C14.5523 13 15 13.4477 15 14V16C15 16.5523 14.5523 17 14 17C13.4477 17 13 16.5523 13 16Z"/><path d="M21.5 9H16.625H10.75M2 9H5.875"/><path d="M14 22H10C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 17.7712 2 14V12C2 8.22876 2 6.34315 3.17157 5.17157C4.34315 4 6.22876 4 10 4H14C17.7712 4 19.6569 4 20.8284 5.17157C22 6.34315 22 8.22876 22 12V14C22 17.7712 22 19.6569 20.8284 20.8284C20.1752 21.4816 19.3001 21.7706 18 21.8985"/></g>',
-  todos: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path stroke-linejoin="round" d="M6 15.8L7.14286 17L10 14"/><path stroke-linejoin="round" d="M6 8.8L7.14286 10L10 7"/><path d="M13 9L18 9"/><path d="M13 16L18 16"/><path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8"/></g>',
   smile: '<g fill="none" stroke="currentColor" stroke-linecap="round"><path stroke-width="1.5" d="M9 16C9.85038 16.6303 10.8846 17 12 17C13.1154 17 14.1496 16.6303 15 16"/><path stroke-width="1.5" d="M7 3.33782C8.47087 2.48697 10.1786 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 10.1786 2.48697 8.47087 3.33782 7"/><path d="M15.5 10.5C15.5 11.0523 15.2761 11.5 15 11.5C14.7239 11.5 14.5 11.0523 14.5 10.5C14.5 9.94772 14.7239 9.5 15 9.5C15.2761 9.5 15.5 9.94772 15.5 10.5Z"/><ellipse cx="9" cy="10.5" rx=".5" ry="1"/></g>',
   location: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M12.5 7.04148C12.3374 7.0142 12.1704 7 12 7C10.3431 7 9 8.34315 9 10C9 11.6569 10.3431 13 12 13C13.6569 13 15 11.6569 15 10C15 9.82964 14.9858 9.6626 14.9585 9.5"/><path d="M5 15.2161C4.35254 13.5622 4 11.8013 4 10.1433C4 5.64588 7.58172 2 12 2C16.4183 2 20 5.64588 20 10.1433C20 14.6055 17.4467 19.8124 13.4629 21.6744C12.5343 22.1085 11.4657 22.1085 10.5371 21.6744C9.26474 21.0797 8.13831 20.1439 7.19438 19"/></g>',
   transfer: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M9.5 4L4 10L14 10M20 10L17.5 10"/><path d="M14.5 20L20 14L10 14M4 14L6.5 14"/></g>',
@@ -35,7 +36,7 @@ const icons = {
   'phone-close': '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5"/><path d="M7 3.33782C8.47087 2.48697 10.1786 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 10.1786 2.48697 8.47087 3.33782 7"/></g>',
   home: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"><path d="M22 12.2039V13.725C22 17.6258 22 19.5763 20.8284 20.7881C19.6569 22 17.7712 22 14 22H10C6.22876 22 4.34315 22 3.17157 20.7881C2 19.5763 2 17.6258 2 13.725V12.2039C2 9.91549 2 8.77128 2.5192 7.82274C3.0384 6.87421 3.98695 6.28551 5.88403 5.10813L7.88403 3.86687C9.88939 2.62229 10.8921 2 12 2C13.1079 2 14.1106 2.62229 16.116 3.86687L18.116 5.10812C20.0131 6.28551 20.9616 6.87421 21.4808 7.82274"/><path d="M15 18H9"/></g>',
 };
-export const asset = name => new URL(`../../assets/${name}`, import.meta.url).href;
+export const asset = name => phoneUrl(`assets/${name}`);
 export const icon = name => ['messages', 'forum'].includes(name)
   ? `<span class="app-icon" style="--pp-app-icon:url('${asset(`${name}.svg`)}')" aria-hidden="true"></span>`
   : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">${icons[name] || ''}</svg>`;
@@ -59,15 +60,38 @@ export function renderMentionText(text, people = []) {
 }
 
 export function renderBilingual(text, translation) {
-  return `<span class="message-original">${renderEmojiText(text)}</span>${translation ? `<span class="message-translation" lang="zh-CN">${renderEmojiText(translation)}</span>` : ''}`;
+  const shown = translationForDisplay(text, translation);
+  return `<span class="message-original">${renderEmojiText(text)}</span>${shown ? `<span class="message-translation" lang="zh-CN">${renderEmojiText(shown)}</span>` : ''}`;
+}
+
+function translationComparisonText(value) {
+  return splitEmojiText(value).filter(part => !part.emoji).map(part => part.text).join('')
+    .replace(/[\s。，、！？!?；;：“”‘’"'「」『』《》〈〉….,:]/gu, (mark, index, source) => {
+      // 数字内的小数点、分隔号与时间冒号保留；金额、运算符和组合音标保持原文。
+      const beforeNumber = /\p{N}$/u.test(source.slice(0, index)), afterNumber = /^\p{N}/u.test(source.slice(index + mark.length));
+      return /[.,:，：]/u.test(mark) && afterNumber && (beforeNumber || mark === '.') ? mark : '';
+    });
+}
+
+export function translationForDisplay(text, translation) {
+  if (!translation) return '';
+  const original = translationComparisonText(text);
+  return original && original === translationComparisonText(translation) ? '' : translation;
 }
 
 export function avatar(contact, small = false) {
   const source = avatarSource(contact.avatar);
   return `<span class="avatar ${small ? 'avatar-small' : ''}" data-tone="${escape(contact.tone || 'blue')}" aria-hidden="true"><span>${escape(Array.from(displayName(contact))[0])}</span>${source ? `<img${isCameoAvatar(source) ? ' class="avatar-cameo"' : ''} src="${escape(source)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>`;
 }
-export function avatarEditor(person) {
-  return `<div class="avatar-editor"><div class="profile-avatar">${avatar(person)}</div><div class="avatar-actions"><label class="avatar-picker">选择头像图片<input type="file" accept="image/*" aria-label="选择头像图片"></label>${action('remove-avatar', '移除头像', '', 'quiet-button')}</div></div>`;
+export function avatarEditor(person, { open = false, canRestore = false, busy = false } = {}) {
+  return `<div class="avatar-editor"><div class="profile-avatar">${avatar(person)}</div><div class="avatar-controls">
+    <button type="button" class="icon-button avatar-menu-toggle" data-action="avatar-menu" aria-label="头像操作" aria-expanded="${open}" ${busy ? 'disabled' : ''}>${icon('more')}</button>
+    ${open ? `<div class="avatar-menu" role="group" aria-label="头像操作菜单">
+      <label class="avatar-picker avatar-menu-item">上传<input type="file" accept="image/*" aria-label="选择头像图片"></label>
+      <button type="button" class="avatar-menu-item" data-action="remove-avatar" aria-label="移除头像">移除</button>
+      ${canRestore ? '<button type="button" class="avatar-menu-item" data-action="restore-avatar" aria-label="恢复自动头像">恢复</button>' : ''}
+    </div>` : ''}
+  </div></div>`;
 }
 export function action(name, label, iconName, className = '', disabled = false) {
   return `<button type="button" class="${className}" data-action="${name}" aria-label="${label}" ${disabled ? 'disabled' : ''}>${iconName ? icon(iconName) : ''}<span>${label}</span></button>`;

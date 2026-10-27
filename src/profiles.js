@@ -9,7 +9,8 @@ export function cleanProfile(draft, contact = false) {
   const text = key => String(draft[key] || '').trim();
   if (!text('name')) throw new Error('请填写姓名。');
   if (text('avatar') && !avatarSource(draft.avatar)) throw new Error('头像地址需使用 http 或 https，也可以选择本地图片。');
+  if (contact && Object.hasOwn(draft, 'identityOwnerId') && typeof draft.identityOwnerId !== 'string') throw new Error('请选择有效的所属人物。');
   return { name: text('name'), nickname: text('nickname'), avatar: avatarSource(draft.avatar),
-    ...(contact ? { expression: text('expression'), language: text('language') } : {}),
+    ...(contact ? { expression: text('expression'), language: text('language'), ...(Object.hasOwn(draft, 'identityOwnerId') ? { identityOwnerId: text('identityOwnerId') } : {}) } : {}),
   };
 }

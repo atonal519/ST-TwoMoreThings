@@ -27,12 +27,13 @@ export function createPhoneDialog({ mount, documentRef }) {
         overlay.addEventListener('keydown', event => {
           event.stopPropagation();
           if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+          if (event.key === 'Enter' && event.target.matches('input')) { event.preventDefault(); confirm.click(); }
           if (event.key === 'Tab') {
-            const buttons = [...panel.querySelectorAll('button, a[href]')], index = buttons.indexOf(mount.getRootNode().activeElement);
+            const buttons = [...panel.querySelectorAll('button, a[href], input, textarea, select')].filter(node => !node.disabled), index = buttons.indexOf(mount.getRootNode().activeElement);
             event.preventDefault(); buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
           }
         });
-        active = { overlay, finish }; attach(); confirm.focus({ preventScroll: true });
+        active = { overlay, finish }; attach(); (panel.querySelector('input, textarea, select') || confirm).focus({ preventScroll: true });
       });
     },
     dispose() { active?.finish(false); },

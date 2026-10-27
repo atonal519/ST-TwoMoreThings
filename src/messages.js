@@ -1,9 +1,9 @@
 import { parsePayload, parseJsonObject } from './api.js';
-import { CONTACTS_PROMPT, MESSAGES_PROMPT, TODO_SUGGESTIONS_PROMPT } from './prompts.js';
+import { CONTACTS_PROMPT, MESSAGES_PROMPT } from './prompts.js';
 import { readTimeline } from './timeline.js';
 import { normalizeContent, RICH_MESSAGES_PROMPT } from './content.js';
 import { CALENDAR_PROMPT } from './calendar.js';
-import { parseTodoCandidates } from './todos.js';
+import { identityProfile, isUserIdentity, identitySource, identitySnapshot, assertIdentitySnapshot } from './identities.js';
 
 export function record(role, text, clock, translation, batch) {
   const now = new Date();
@@ -26,9 +26,9 @@ export function createMessageService({ target, store, contextReader, modelClient
       await store.appendMessage(id, { ...record('user', content.text, batch.clock, '', batch), ...content });
     },
     async refineOnlineStyle(id) {
-      const contact = store.read().contacts.find(person => person.id === id);
+      const state = store.read(), account = state.contacts.find(person => person.id === id), contact = account && identityProfile(state, account);
       if (!contact) throw new Error('这个联系人已不存在，请返回短信重新选择。');
-      const reply = await modelClient.complete({ system: CONTACTS_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ people: [{ sourceId: contact.id, name: contact.name, personality: contact.personality || '', expression: contact.expression || '', language: contact.language || '' }] }) }], maxTokens: 800 });
+      const reply = await modelClient.complete({ system: CONTACTS_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ people: [{ sourceId: contact.id, name: contact.name, personality: contact.personality || '', language: contact.language || '' }] }) }] });
       const result = parsePayload(reply, 'contacts').find(person => person.sourceId === id);
       if (!result?.expression) throw new Error('没有生成这位联系人的线上聊天方式，请重新提炼。');
       return result.expression;
@@ -41,10 +41,13 @@ export function createMessageService({ target, store, contextReader, modelClient
       await store.appendMessage(id, record('user', content, batch.clock, '', batch));
     },
     async continueChat(id) {
+      if (isUserIdentity(store.read(), id)) throw new Error('本人账号不能由AI代发消息。');
       const context = await contextReader.readForContact(id);
+      const identityOwners = context[identitySource] || identitySnapshot(store.read(), [id]);
+      assertIdentitySnapshot(store.read(), identityOwners);
       const clock = context.clock;
       const reply = await modelClient.complete({
-        system: `${MESSAGES_PROMPT}\n${RICH_MESSAGES_PROMPT}\n${TODO_SUGGESTIONS_PROMPT}${context.calendar ? `\n${CALENDAR_PROMPT}` : ''}`,
+        system: `${MESSAGES_PROMPT}\n${RICH_MESSAGES_PROMPT}${context.calendar ? `\n${CALENDAR_PROMPT}` : ''}`,
         messages: [{ role: 'user', content: JSON.stringify(context) }],
       });
       const answer = parseJsonObject(reply);
@@ -55,9 +58,8 @@ export function createMessageService({ target, store, contextReader, modelClient
         return { ...record('assistant', content.text, clock, content.translation, context.batch), ...content };
       });
       const messages = indexedMessages.filter(Boolean);
-      const todoCandidates = parseTodoCandidates(answer.todoSuggestions ?? answer.todos, { conversationId: id, messages: indexedMessages, participantIds: (context.todoPeople || []).map(person => person.id) });
-      for (const item of actions) await store.respondTransfer(id, item.transferId, item.status, id, context.batch);
-      if (messages.length) await store.appendMessages(id, messages, { todoCandidates });
+      for (const item of actions) await store.respondTransfer(id, item.transferId, item.status, id, context.batch, identityOwners);
+      if (messages.length) await store.appendMessages(id, messages, { identityOwners });
       return messages;
     },
   };

@@ -1,11 +1,11 @@
-import { initialize } from './src/runtime.js';
+import { initialize } from './dist/runtime.js';
 
 // 随卡入口仅由加载脚本显式调用；导入共享核心不会再启动独立扩展。
 export function mountEmbedded({ preset, host, documentRef = document, release, updateError } = {}) {
   const options = { mode: 'embedded', preset, documentRef, ...(host ? { host } : {}) };
   async function replaceCore(coreUrl, nextRelease) {
     let next;
-    try { next = await import(new URL('./src/runtime.js', coreUrl).href); }
+    try { next = await import(new URL('./dist/runtime.js', coreUrl).href); }
     catch { throw new Error('手机新版本加载失败，当前手机仍可使用，请稍后再更新。'); }
     if (typeof next.initialize !== 'function') throw new Error('手机新版本加载不完整，当前手机仍可使用，请稍后再更新。');
     app.dispose({ preserveQuickReply: true });

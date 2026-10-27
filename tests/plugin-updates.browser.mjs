@@ -3,10 +3,17 @@ import { createRequire } from 'node:module';
 import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, extname, basename } from 'node:path';
 import { openApp } from './navigation.mjs';
+import buildConfig from '../vite.config.js';
 
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
 const browser = await chromium.launch({ executablePath: '/tmp/st-tools-browsers/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell', args: ['--no-sandbox'], env: { ...process.env, LD_LIBRARY_PATH: '/tmp/st-tools-browser-libs/root/usr/lib/x86_64-linux-gnu' } });
 const root = resolve(import.meta.dirname, '..'), oldSha = '56a6614198bd177f967a9406f7b6f425f9a810af', newSha = 'a'.repeat(40);
+const { build } = await import(process.env.POCKET_VITE_MODULE || 'vite');
+const versionBundles = new Map();
+for (const version of ['0.3.6', '0.3.7']) {
+  const result = await build({ ...buildConfig, root, configFile: false, logLevel: 'silent', build: { ...buildConfig.build, write: false }, plugins: [{ name: 'fixture-version', transform(code, id) { if (id === resolve(root, 'src/version.js')) return `export const VERSION=${JSON.stringify(version)};`; } }] });
+  versionBundles.set(version, (Array.isArray(result) ? result[0] : result).output.find(item => item.type === 'chunk').code);
+}
 const announcement = '# 版本公告\n\n[说明](https://example.invalid)\n\n<img src=x onerror=alert(1)>\n\n' + readFileSync(resolve(root, 'README.md'), 'utf8');
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.png': 'image/png', '.webp': 'image/webp' };
 const file = (route, path) => route.fulfill({ path, contentType: types[extname(path)] || 'text/plain', headers: { 'Access-Control-Allow-Origin': '*' } });
@@ -44,6 +51,10 @@ try {
     const phone = page.locator('#pocket-phone-host'); await openApp(phone, '设置');
     await phone.locator('.app-version').getByText('两三事 0.3.9', { exact: true }).waitFor();
     await phone.getByRole('button', { name: '可更新', exact: true }).waitFor();
+    assert.equal(await phone.locator('.master-switch-actions').evaluate(row => {
+      const button = row.querySelector('.pp-update-status'), toggle = row.querySelector('.switch'), a = button.getBoundingClientRect(), b = toggle.getBoundingClientRect();
+      return a.right <= b.left && a.height === 20 && b.height === 20 && Math.abs(a.y - b.y) < 1 && !button.closest('label');
+    }), true, 'version button is immediately left of the separate equal-height toggle');
     assert.equal(posts.length, 1);
     if (kind === 'native' && installation === 'local' && process.env.POCKET_UPDATE_SCREENSHOTS !== '0') {
       mkdirSync('/tmp/tmt-plugin-updates-screenshots', { recursive: true });
@@ -90,7 +101,8 @@ try {
     await phone.getByRole('button', { name: '稳定版本', exact: true }).waitFor();
     assert.equal(posts.length, 3);
     for (const request of posts) assert.deepEqual(request.body, { extensionName: 'My Phone', global: installation === 'global' });
-    assert.deepEqual(await page.evaluate(() => previewHarness.notices), ['两三事已更新，请刷新酒馆后使用']);
+    assert.deepEqual(await page.evaluate(() => previewHarness.notices), []);
+    await phone.locator('.feedback').getByText('两三事已更新，请刷新酒馆后使用', { exact: true }).waitFor();
     await phone.locator('.app-version').getByRole('button', { name: '查看公告', exact: true }).click();
     const installedNotice = phone.getByRole('dialog', { name: '已安装版本公告' });
     await installedNotice.getByRole('heading', { name: '两三事 0.3.9', exact: true }).waitFor();
@@ -112,9 +124,9 @@ try {
     await page.route('https://cdn.jsdelivr.net/**', route => {
       const pathname = new URL(route.request().url()).pathname, [revision, ...parts] = pathname.split('@')[1].split('/'), path = parts.join('/');
       imported.push({ revision, path });
-      if (revision === newSha && path === 'src/runtime.js' && failImport) return route.abort('failed');
+      if (revision === newSha && path === 'dist/runtime.js' && failImport) return route.abort('failed');
       if (path === 'docs/new.md') return route.fulfill({ status: custom ? 200 : 404, body: custom ? '# 随卡新版公告' : '', headers: { 'Access-Control-Allow-Origin': '*' } });
-      if (path === 'src/version.js') return route.fulfill({ contentType: 'text/javascript', body: `export const VERSION='${revision === newSha ? '0.3.7' : '0.3.6'}';`, headers: { 'Access-Control-Allow-Origin': '*' } });
+      if (path === 'dist/runtime.js') return route.fulfill({ contentType: 'text/javascript', body: versionBundles.get(revision === newSha ? '0.3.7' : '0.3.6'), headers: { 'Access-Control-Allow-Origin': '*' } });
       return file(route, resolve(root, path));
     });
     await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${kind}`);
@@ -161,11 +173,13 @@ try {
       await openApp(phone, '设置');
       await phone.getByText('两三事 0.3.7', { exact: true }).waitFor();
       await phone.getByRole('button', { name: '稳定版本', exact: true }).waitFor();
-      assert.deepEqual(await page.evaluate(() => previewHarness.notices), ['两三事已更新，可继续使用。']);
+      assert.deepEqual(await page.evaluate(() => previewHarness.notices), ['两三事已更新，可继续使用。'], 'a retired phone uses the original host toast once for the update result');
       assert.deepEqual(await page.evaluate(() => previewHarness.qrDeletes || []), []);
       assert.equal(await page.evaluate(() => !!previewHarness.context.SlashCommandParser.commands['tmt-card-open']), true);
       if (custom) assert.ok(await page.evaluate(() => previewHarness.customCaptures) > captures);
       assert.equal(imported.filter(item => item.revision === newSha && item.path === 'embed.js').length, 0, 'replacement imports runtime, not another mount proxy');
+      assert.equal(imported.filter(item => item.revision === newSha && item.path === 'dist/runtime.js').length, 1, 'replacement imports the single bundled core');
+      assert.equal(imported.some(item => item.revision === newSha && item.path.startsWith('src/')), false, 'new SHA has no source-module fanout');
       if (custom) {
         await openApp(phone, '短信');
         await phone.getByRole('button', { name: /作者联系人/ }).waitFor();

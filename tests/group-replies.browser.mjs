@@ -25,7 +25,7 @@ try {
       const style = document.createElement('style'); style.textContent = ':host{font-family:PocketPreviewCJK,sans-serif}'; document.querySelector('.pocket-phone').shadowRoot.append(style);
       previewHarness.metadata.pocketPhone.theme = theme; previewHarness.app.open();
     }, { css: fontCss, theme });
-    await page.evaluate(async () => { await document.fonts.load('14px PocketPreviewCJK', '短信引用待办林舟收到'); await document.fonts.ready; });
+    await page.evaluate(async () => { await document.fonts.load('14px PocketPreviewCJK', '短信引用林舟收到'); await document.fonts.ready; });
     await page.getByRole('button', { name: '进入桌面', exact: true }).click();
     await page.getByRole('button', { name: '短信', exact: true }).click();
     await page.locator('[data-group="preview-friends"]').click();

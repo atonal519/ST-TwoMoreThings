@@ -6,6 +6,17 @@ import { readRelease, RELEASE_URL, releaseUrlForCore } from '../src/release.js';
 
 const oldSha = '56a6614198bd177f967a9406f7b6f425f9a810af', newSha = 'a'.repeat(40);
 const released = { version: '0.3.7', sha: newSha, update_notice: 'docs/updates-0.3.7.md' };
+test('release readers use a single CDN manifest request, including the self-contained exported function', async () => {
+  const expected = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@latest/release.json', requests = [];
+  const embeddedReader = Function(`return (${readRelease.toString()})`)();
+  for (const reader of [readRelease, embeddedReader]) {
+    assert.deepEqual(await reader({ fetchImpl: async (url, init) => { requests.push({ url, init }); return Response.json(released); } }), released);
+  }
+  assert.equal(RELEASE_URL, expected);
+  assert.deepEqual(requests.map(item => item.url), [expected, expected]);
+  for (const { init } of requests) { assert.equal(init.cache, 'no-store'); assert.equal(init.credentials, 'omit'); assert.equal(init.headers, undefined); }
+  assert.equal(releaseUrlForCore('http://localhost/scripts/extensions/third-party/Phone/embed.js'), 'http://localhost/scripts/extensions/third-party/Phone/release.json');
+});
 for (const type of ['local', 'global']) test(`${type}: plugin updates use only the actual installation and host headers`, async () => {
   const requests = [], moduleUrl = 'https://tavern.invalid/scripts/extensions/third-party/My%20Phone/src/runtime.js';
   const updates = createPluginUpdates({ moduleUrl, extensionTypes: async () => ({ 'third-party/My Phone': type }), headers: () => ({ 'X-CSRF-Token': 'fixture', 'Content-Type': 'application/json' }), fetchImpl: async (url, init) => {
@@ -95,7 +106,7 @@ test('release reader rejects incomplete commits and aborts its single request at
 
 test('same or older releases stay stable even when a pointer commit differs; forks keep their source', async () => {
   const url = `https://fastly.jsdelivr.net/gh/another-owner/phone@${oldSha}/embed.js`, calls = [];
-  assert.equal(releaseUrlForCore(url), 'https://raw.githubusercontent.com/another-owner/phone/main/release.json');
+  assert.equal(releaseUrlForCore(url), 'https://fastly.jsdelivr.net/gh/another-owner/phone@latest/release.json');
   const updates = createEmbeddedUpdates({ coreUrl: url, version: '0.3.7', fetchImpl: async () => Response.json(released) });
   await updates.check(); assert.equal(updates.getState().status, 'stable');
   const older = createEmbeddedUpdates({ version: '0.3.8', fetchImpl: async () => Response.json(released) });
@@ -106,5 +117,5 @@ test('same or older releases stay stable even when a pointer commit differs; for
   }, replaceCore: async () => {} });
   await current.check(); await current.update();
   assert.deepEqual(await current.readNotice('installed'), { ok: true, markdown: '新版公告' });
-  assert.deepEqual(calls, ['https://raw.githubusercontent.com/another-owner/phone/main/release.json', `https://fastly.jsdelivr.net/gh/another-owner/phone@${newSha}/docs/updates-0.3.7.md`]);
+  assert.deepEqual(calls, ['https://fastly.jsdelivr.net/gh/another-owner/phone@latest/release.json', `https://fastly.jsdelivr.net/gh/another-owner/phone@${newSha}/docs/updates-0.3.7.md`]);
 });

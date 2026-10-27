@@ -1,3 +1,5 @@
+import { phoneUrl } from './paths.js';
+
 // 预设编号随卡保存，图样由当前核心提供；上传图片仍使用宿主文件地址。
 export const chatColors = [
   { id: 'cream', name: '米白', day: '#edece5', night: '#202d32' },
@@ -20,8 +22,8 @@ export const wallpaperPresets = [{
   night: glassArtwork(['#102b38', '#315e6b', '#8d676d', '#25434c']),
 }, {
   id: 'paper-petals', name: '花瓣剪纸',
-  day: new URL('../assets/lock-petals-day.png', import.meta.url).href,
-  night: new URL('../assets/lock-petals-night.png', import.meta.url).href,
+  day: phoneUrl('assets/lock-petals-day.png'),
+  night: phoneUrl('assets/lock-petals-night.png'),
 }];
 
 export const wallpaperPreset = value => wallpaperPresets.find(item => `builtin:${item.id}` === value);

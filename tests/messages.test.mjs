@@ -7,7 +7,7 @@ import { createContextReader } from '../src/context.js';
 import { createMessageService } from '../src/messages.js';
 
 export async function serviceHarness(options = {}) {
-  const h = createHarness({ settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test-key', apiModel: 'm' } }, ...options });
+  const h = createHarness({ settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test-key', model: 'm' }] } }, ...options });
   const target = h.host.captureChat();
   const store = createPhoneStore({ target });
   await store.upsertContacts([{ id: 'lin', name: '林舟', personality: '温和', expression: '说话简短' }]);
@@ -28,6 +28,9 @@ test('send and continue are separate and do not write any main floor', async () 
   assert.equal(store.read().conversations.lin.at(-1).role, 'assistant');
   assert.deepEqual(main, [{ mes: '约好今晚去书店。', is_user: false }]);
   assert.ok(JSON.stringify(h.modelRequests[0].body.messages).includes('约好今晚去书店。'));
+  assert.ok(h.modelRequests[0].body.messages[0].content.includes('无需等用户索要'));
+  assert.ok(h.modelRequests[0].body.messages[0].content.includes('两者均省略译文字段'));
+  assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"translation":'));
   assert.equal(h.persistedMetadata.pocketPhone.conversations.lin.length, 3);
 });
 
@@ -48,6 +51,19 @@ test('continue saves originals and optional translations for several bubbles in 
   assert.equal(input.contact.language, '日语，附中文译文');
   assert.equal(h.metadataSaves, before + 1);
   assert.equal(h.modelRequests.length, 1);
+});
+
+test('a saved Cantonese default reaches the real request and preserves its standard Chinese translation in the same save', async () => {
+  const { h, store, service } = await serviceHarness({ completion: { choices: [{ message: { content: '{"messages":[{"text":"我到咗啦。","translation":"我到了。"}]}' } }] } });
+  await store.setDefaultLanguage('粤语');
+  const before = h.metadataSaves;
+  await service.continueChat('lin');
+  const request = h.modelRequests[0].body;
+  assert.equal(JSON.parse(request.messages.find(message => message.role === 'user').content).defaultLanguage, '粤语');
+  assert.ok(request.messages[0].content.includes('粤语也要翻译'));
+  assert.equal(store.read().conversations.lin.at(-1).text, '我到咗啦。');
+  assert.equal(store.read().conversations.lin.at(-1).translation, '我到了。');
+  assert.equal(h.modelRequests.length, 1); assert.equal(h.metadataSaves, before + 1);
 });
 
 test('new SMS use story time while createdAt still records actual save order', async () => {

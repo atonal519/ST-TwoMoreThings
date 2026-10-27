@@ -1,4 +1,13 @@
-import { action, escape, icon } from './shared.js';
+import { action, escape, icon, refKey } from './shared.js';
+
+export function renderSourcePicker(ui, sources, selected) {
+  const value = ui.manual || !sources.length ? 'manual' : refKey(selected);
+  const options = [{ value: 'manual', label: '自行填写' }, ...sources.map(source => ({ value: refKey(source.ref), label: source.label }))];
+  return `<div class="source-picker">
+    <button type="button" id="api-source" class="source-list-toggle" data-action="sources-menu" aria-label="使用的配置" aria-haspopup="listbox" aria-expanded="${ui.sourcesOpen}"><span>${escape(options.find(option => option.value === value)?.label || '请选择现有连接')}</span>${icon('next')}</button>
+    ${ui.sourcesOpen ? `<div class="model-popup source-popup"><div class="model-options source-options" role="listbox" aria-label="可用配置">${options.map(option => `<button type="button" role="option" data-api-source="${escape(option.value)}" aria-selected="${option.value === value}">${escape(option.label)}</button>`).join('')}</div></div>` : ''}
+  </div>`;
+}
 
 // 沿用千千结的内嵌模型列表：只过滤已拉取结果，不因搜索再次请求接口。
 export function renderModelOptions(ui) {

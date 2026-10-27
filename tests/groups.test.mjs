@@ -5,7 +5,7 @@ import { createPhoneStore } from '../src/store.js';
 import { readTimeline } from '../src/timeline.js';
 
 async function setup(reply, hostKind = 'native') {
-  const h = createHarness({ hostKind, messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026年10月4日 | weekday=周日 | time=22:15 -->' }], settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test', apiModel: 'm' } }, completion: { choices: [{ message: { content: JSON.stringify(reply) } }] } });
+  const h = createHarness({ hostKind, messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026年10月4日 | weekday=周日 | time=22:15 -->' }], settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } }, completion: { choices: [{ message: { content: JSON.stringify(reply) } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   await store.upsertContacts([{ id: 'lin', name: '林舟', expression: '短句不用句号' }, { id: 'zhou', name: '周予', expression: '熟人间调侃', language: '日语，附中文译文' }, { id: 'xu', name: '许知' }]);
   assert.equal(typeof store.saveGroup, 'function', '应能保存当前聊天内的群聊');
@@ -25,6 +25,9 @@ for (const kind of ['native', 'luker']) test(`${kind}: observer group generates 
   const before = h.metadataSaves;
   await service.continueChat(group.id);
   assert.equal(h.modelRequests.length, 1);
+  assert.ok(h.modelRequests[0].body.messages[0].content.includes('无需等用户索要'));
+  assert.ok(h.modelRequests[0].body.messages[0].content.includes('两者均省略译文字段'));
+  assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"translation":'));
   assert.equal(h.metadataSaves, before + 1);
   const history = store.read().conversations[group.id];
   assert.deepEqual(history.map(x => x.speakerId), ['lin', 'zhou', 'lin']);

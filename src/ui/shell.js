@@ -18,7 +18,7 @@ export function renderFeedback(feedback) {
   </div>` : '';
 }
 
-export function renderShell({ content, view, enabled, weather, feedback, photo, conflict, mode, conflictBusy, lockStyle }) {
+export function renderShell({ content, view, enabled, weather, feedback, photo, conflict, mode, conflictBusy, lockStyle, settingsVersion = '' }) {
   const locked = view === 'home', themed = locked && ['stacked', 'rounded'].includes(lockStyle);
   const footer = `<footer class="phone-footer ${locked ? 'home-footer' : ''}">
     ${locked ? `${action('unlock', '进入桌面', 'fingerprint', 'icon-button unlock-button')}
@@ -27,8 +27,9 @@ export function renderShell({ content, view, enabled, weather, feedback, photo, 
   </footer>`;
 
   return `${renderStatusBar()}
-    <main class="phone-main view-${view}${themed ? lockStyle === 'rounded' ? ' is-rounded' : ' is-stacked' : ''}">${content}${themed ? footer : ''}</main>
+    <main class="phone-main view-${view}${themed ? lockStyle === 'rounded' ? ' is-rounded' : ' is-stacked' : locked ? ' is-classic' : ''}">${content}${locked ? footer : ''}</main>
     ${conflict ? '' : renderFeedback(feedback)}
-    ${themed ? '' : footer}${renderPhotoViewer(photo)}
-    ${conflict ? renderConflict({ mode, busy: conflictBusy, feedback }) : ''}`;
+    ${settingsVersion}
+    ${locked ? '' : footer}${renderPhotoViewer(photo)}
+    ${conflict ? renderConflict({ mode, busy: conflictBusy, feedbackMarkup: renderFeedback(feedback) }) : ''}`;
 }

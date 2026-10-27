@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createCameoAvatar, isCameoAvatar } from '../src/cameo-avatar.js';
 import { createPhoneStore } from '../src/store.js';
 import { createHarness } from './harness.mjs';
 
@@ -56,4 +57,17 @@ test('incoming message notices refer only to the messages this operation actuall
   h.saveFailure = new Error('保存失败');
   await assert.rejects(store.appendMessage('lin', { id: 'failed', role: 'assistant', text: '没存成。' }));
   assert.deepEqual(notices, ['lin', 'zhou']);
+});
+
+test('restoring automatic contact avatars changes only avatar ownership in the normal save', async () => {
+  const cameo = createCameoAvatar('restore-test');
+  const h = createHarness({ metadata: { pocketPhone: { contacts: [{ id: 'a', name: '人物甲', avatar: '', edited: true, manualFields: ['avatar', 'expression'], expression: '手工习惯' }], groups: [], conversations: {} } } });
+  const store = createPhoneStore({ target: h.host.captureChat() });
+  await store.saveContact('a', { ...store.read().contacts[0], avatar: cameo, automaticAvatar: true });
+  const person = store.read().contacts[0];
+  assert.equal(person.avatar, cameo); assert.equal(isCameoAvatar(person.avatar), true);
+  assert.deepEqual(person.manualFields, ['expression']); assert.equal(person.expression, '手工习惯');
+  assert.equal('automaticAvatar' in person, false); assert.equal(h.metadataSaves, 1);
+  await store.saveContact('a', { ...person, avatar: '', automaticAvatar: false });
+  assert.ok(store.read().contacts[0].manualFields.includes('avatar')); assert.equal(store.read().contacts[0].avatar, '');
 });

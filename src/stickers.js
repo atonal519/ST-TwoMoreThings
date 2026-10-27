@@ -1,4 +1,5 @@
 import { findBlobEmoji } from './emojis.js';
+import { phoneUrl } from './paths.js';
 
 // 目录是贴纸身份与语义的唯一来源；消息只保存 id，不接受模型给出的远程图片地址。
 const blob = [
@@ -14,6 +15,6 @@ export const stickerPacks = [
 export const stickers = [
   ...blob.map(code => ({ id: `blob.${code}`, pack: 'blob', label: findBlobEmoji(code).label, file: `blob-${code}.svg` })),
   ...sepia.map(([code, label], index) => ({ id: `sepia.${code}`, pack: 'sepia', label, file: `sepia-${index}.png` })),
-].map(item => ({ ...item, src: new URL(`../assets/stickers/${item.file}`, import.meta.url).href }));
+].map(item => ({ ...item, src: phoneUrl(`assets/stickers/${item.file}`) }));
 export const findSticker = id => stickers.find(item => item.id === id);
 export const stickerChoices = () => stickers.map(({ id, label }) => ({ id, meaning: label }));

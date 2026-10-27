@@ -10,7 +10,7 @@ export function createDirectoryService({ store, contextReader, modelClient }) {
   return {
     async organize() {
       const input = await contextReader.readDirectorySources();
-      const reply = await modelClient.complete({ system: DIRECTORY_PROMPT, messages: [{ role: 'user', content: JSON.stringify(input) }], maxTokens: 3200 });
+      const reply = await modelClient.complete({ system: DIRECTORY_PROMPT, messages: [{ role: 'user', content: JSON.stringify(input) }] });
       const answer = parseJsonObject(reply);
       if (!Array.isArray(answer.contacts) && !Array.isArray(answer.groups)) throw new Error('回答中没有通讯录内容，请重新整理。');
       const sources = new Map(input.people.map(person => [person.sourceId, person]));

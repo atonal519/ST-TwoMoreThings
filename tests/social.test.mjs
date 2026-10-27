@@ -10,7 +10,7 @@ async function setup(count = 5, bridge = null) {
   const h = createHarness({
     metadata: { foreign: { keep: true } },
     messages: [{ name: '林舟', mes: '午后正在街边散步。<!-- QQJ-end | date=2026年10月19日 | weekday=周一 | time=14:20 -->' }],
-    settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test', apiModel: 'm' } },
+    settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } },
   });
   const store = createPhoneStore({ target: h.host.captureChat() });
   await store.upsertContacts(Array.from({ length: count }, (_, i) => ({ id: `friend-${i}`, name: `朋友${i}`, nickname: `昵称${i}`, personality: '随和',
@@ -42,6 +42,8 @@ test('feed chooses five friends, replaces the previous batch and its profile his
   assert.ok(first.every(post => store.read().contacts.some(person => person.id === post.authorId)));
   assert.equal(h.modelRequests.length, 1);
   assert.equal(h.metadataSaves, before + 1);
+  assert.ok(h.modelRequests[0].body.messages[0].content.includes('两者均省略译文字段'));
+  assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"translation":'));
   assert.equal(JSON.parse(h.modelRequests[0].body.messages[1].content).authors.length, 5);
   assert.equal(first[0].publishedAt, '2026-10-19 14:10');
   assert.equal(first[0].batch.clock.time, '14:20', '生成卡口不随发布时间移动');
@@ -121,7 +123,7 @@ test('explicit author refresh appends posts without changing the home feed and c
   assert.deepEqual(store.read().social.feedIds, feedIds);
   const input = JSON.parse(h.modelRequests[1].body.messages[1].content);
   assert.deepEqual(input.authors.map(author => author.id), [authorId]);
-  assert.equal(input.existingPosts.length, 1, 'author generation receives its saved posts to avoid repeating them');
+  assert.equal(input.existingPosts, undefined, 'author history uses its publication boundary without old caption or image examples');
   assert.equal(input.historyBefore, '2026-10-19 14:10');
   const before = h.metadataSaves;
   await create().generateAuthor(authorId);
@@ -155,16 +157,49 @@ test('home keeps the selected authors and resolves each latest saved publication
   assert.deepEqual(readSocialFeed(state).map(post => post.id), ['a-new', 'b-new']);
 });
 
-test('feed input includes latest posts for newly selected friends outside the previous home selection', async () => {
-  const { h, service, store } = await setup(7);
-  await store.updateSocial(social => ({ ...social, posts: [
-    { id: 'previous-home', authorId: 'friend-0', text: '上次主页的作者。', publishedAt: '2026-10-18 10:00' },
-    { id: 'other-history', authorId: 'friend-1', text: '新入选作者也有历史。', publishedAt: '2026-10-18 11:00' },
-  ], feedIds: ['previous-home'] }));
+test('replacement public feed omits its prior draft and private SMS while keeping character context without retired tasks', async () => {
+  const bridge = { getStatus: () => ({ status: 'ready' }), readContext: async ({ entityIds }) => ({ status: 'ready', actors: entityIds.map(entityId => ({ entityId, memoryText: 'FIXED_PERSON_MEMORY' })) }) };
+  const { h, service, store } = await setup(1, bridge);
+  h.host.readWorldInfo = async () => 'FIXED_WORLD';
+  await store.saveContact('friend-0', { name: '朋友0', personality: '随和', expression: 'FIXED_EXPRESSION', language: '粤语' });
+  const batch = { key: '[0,"2026年10月19日","14:20"]', label: '固定短信来源' };
+  const messages = ['open', 'done', 'candidate'].map(status => ({ id: `fixed-${status}`, role: 'assistant', text: `FIXED_SMS_${status}`, batch }));
+  await store.appendMessages('friend-0', messages);
+  h.context.chatMetadata.pocketPhone.todos = ['open','done','candidate'].map((status,index) => ({ id: `old-${index}`, title: ['FIXED_OPEN','FIXED_DONE','UNCONFIRMED_CANDIDATE'][index], status }));
+  const legacy = structuredClone(store.read().todos);
+  let draft = 'A';
+  h.completion = (_path, init) => {
+    const input = JSON.parse(JSON.parse(init.body).messages[1].content);
+    return { choices: [{ message: { content: JSON.stringify({
+      npcs: input.authors.filter(author => author.kind === 'npc').map((author,index) => ({ id: author.id, name: `路人${index}`, description: '普通路人' })),
+      posts: input.authors.map(author => ({ authorId: author.id, text: `${draft}_OLD_CAPTION`, image: { description: `${draft}_OLD_IMAGE` }, publishedAt: '2026-10-19 14:10', comments: [{ name: '路人', text: `${draft}_OLD_COMMENT` }] })),
+      proactiveMessages: [{ contactId: 'friend-0', messages: [{ text: 'SAVED_PROACTIVE_SMS' }], todoSuggestions: [{ title: 'PROACTIVE_CANDIDATE', participantIds: ['@user','friend-0'], sourceMessageIndexes: [0] }] }],
+    }) } }] };
+  };
   await service.refresh();
-  const input = JSON.parse(h.modelRequests[0].body.messages[1].content);
-  assert.equal(input.existingPosts.some(post => post.authorId === 'friend-1'), true);
-  assert.equal(input.existingPosts.some(post => post.authorId === 'friend-0'), false);
+  draft = 'B';
+  await service.refresh();
+  const input = JSON.parse(h.modelRequests[1].body.messages[1].content), sent = JSON.stringify(input);
+  assert.equal(input.existingPosts, undefined);
+  for (const marker of ['A_OLD_CAPTION','A_OLD_IMAGE','A_OLD_COMMENT','UNCONFIRMED_CANDIDATE','PROACTIVE_CANDIDATE','FIXED_OPEN','FIXED_DONE']) assert.equal(sent.includes(marker), false, marker);
+  const author = input.authors.find(person => person.id === 'friend-0');
+  assert.equal(author.personality, '随和'); assert.equal(author.expression, 'FIXED_EXPRESSION'); assert.equal(author.language, '粤语');
+  assert.equal(author.related, 'FIXED_PERSON_MEMORY');
+  assert.equal('privateHistory' in author, false);
+  for (const marker of ['SAVED_PROACTIVE_SMS', 'FIXED_SMS_open', 'FIXED_SMS_done', 'FIXED_SMS_candidate']) assert.equal(sent.includes(marker), false, marker);
+  assert.equal('todos' in author, false);
+  assert.equal(input.story[0].text, '午后正在街边散步。'); assert.ok(input.character.includes('普通城市')); assert.equal(input.worldbook, 'FIXED_WORLD');
+  assert.equal(input.clock.time, '14:20');
+  assert.equal(store.read().social.posts.length, 5); assert.ok(store.read().social.posts.every(post => post.text === 'B_OLD_CAPTION'));
+  assert.equal(store.read().conversations['friend-0'].filter(message => message.text === 'SAVED_PROACTIVE_SMS').length, 2);
+  assert.equal('todos' in store.read(), false);
+  const beforeMore = h.metadataSaves;
+  await service.generateAuthor('friend-0');
+  const historyInput = JSON.parse(h.modelRequests[2].body.messages[1].content);
+  assert.equal(historyInput.existingPosts, undefined); assert.equal(historyInput.historyBefore, '2026-10-19 14:10');
+  for (const marker of ['A_OLD_CAPTION','A_OLD_IMAGE','A_OLD_COMMENT','B_OLD_CAPTION','B_OLD_IMAGE','B_OLD_COMMENT']) assert.equal(JSON.stringify(historyInput).includes(marker), false, marker);
+  assert.equal(historyInput.authors[0].expression, 'FIXED_EXPRESSION'); assert.equal(historyInput.authors[0].related, 'FIXED_PERSON_MEMORY');
+  assert.equal(h.metadataSaves, beforeMore + 1); assert.equal(store.read().social.posts.length, 6);
 });
 
 test('history without known publication times supplies the story clock as its boundary', async () => {
@@ -279,7 +314,7 @@ test('a genuinely deleted friend is not restored as an author or named comment w
   assert.deepEqual(posts[0].comments, [{ name: '路过的人', text: '保留的评论' }]);
 });
 
-test('social context scopes selected friends private SMS for proactive replies and excludes unrelated memory', async () => {
+test('public social context excludes private SMS and preserves only the original selected external memory', async () => {
   const calls = [];
   const bridge = { getStatus: () => ({ status: 'ready' }), readContext: async request => {
     calls.push(request);
@@ -297,7 +332,7 @@ test('social context scopes selected friends private SMS for proactive replies a
   assert.equal(input.authors.find(author => author.id === 'friend-0').related, 'entity-0的状态\nentity-0的记忆');
   assert.equal(input.authors.find(author => author.kind === 'npc').related, '');
   assert.equal(JSON.stringify(input).includes('不相关人物的秘密'), false);
-  assert.equal(input.authors.find(author => author.id === 'friend-0').privateHistory[0].text, '不应进入动态的私信');
+  assert.equal(JSON.stringify(input).includes('不应进入动态的私信'), false);
   assert.equal(input.authors.filter(author => author.id !== 'friend-0').some(author => JSON.stringify(author).includes('不应进入动态的私信')), false);
 });
 
@@ -318,6 +353,8 @@ test('comment uses one model call after publishing the user comment, then saves 
   const before = h.metadataSaves;
   const result = await service.comment(post.id, '我也喜欢这里。');
   assert.equal(h.modelRequests.length, 2);
+  assert.ok(h.modelRequests[1].body.messages[0].content.includes('两者均省略译文字段'));
+  assert.ok(!h.modelRequests[1].body.messages[0].content.includes('"translation":'));
   assert.equal(h.metadataSaves, before + 2);
   const saved = store.read().social.posts.find(item => item.id === post.id);
   assert.equal(saved.commentsCount, 6, 'virtual count 3 plus user comment and two accepted replies');

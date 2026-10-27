@@ -1,0 +1,86 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { resolve, extname } from 'node:path';
+import { openApp } from './navigation.mjs';
+import { liangshiFeed } from './liangshi-fixture.mjs';
+const root=resolve(import.meta.dirname,'..'),prefix='/scripts/extensions/third-party/ST-PocketPhone/',output=process.env.POCKET_POLISH_OUTPUT;
+if(output)await mkdir(output,{recursive:true});
+const {chromium}=createRequire('/tmp/st-tools-browser/package.json')('playwright');
+const browser=await chromium.launch({executablePath:'/tmp/st-tools-browsers/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell',args:['--no-sandbox'],env:{...process.env,LD_LIBRARY_PATH:'/tmp/st-tools-browser-libs/root/usr/lib/x86_64-linux-gnu'}});
+const results=[],mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.ttf':'font/ttf'};
+try{for(const [kind,mode] of [['native','standalone'],['luker','embedded']]){
+ const page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(6000);
+ const ownKey=mode==='embedded'?'twoMoreThingsEmbedded':'pocketPhone',models=[],lists=[],errors=[],unexpected=[];
+ let expectedModel='model-beta',expectedUrl='https://manual.invalid/v1',expectedKey='manual-key';
+ page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/*',async route=>{
+  const url=new URL(route.request().url()),path=url.pathname;
+  if(url.hostname!=='127.0.0.1'){unexpected.push(url.href);return route.abort();}
+  if(path.startsWith(prefix))return route.fulfill({path:resolve(root,decodeURIComponent(path.slice(prefix.length))),contentType:mime[extname(path)]||'text/plain'});
+  if(path==='/scripts/extensions.js')return route.fulfill({contentType:'text/javascript',body:"export const extensionTypes={'third-party/ST-PocketPhone':'local'};"});
+  if(path==='/scripts/world-info.js')return route.fulfill({contentType:'text/javascript',body:'export const selected_world_info=[],world_info={};export async function loadWorldInfo(){return {entries:{0:{content:"公开城市背景。",constant:true}}}}'});
+  if(path==='/api/extensions/version')return route.fulfill({json:{currentBranchName:'main',currentCommitHash:'a'.repeat(40),remoteUrl:'https://github.com/fixture/phone',isUpToDate:true}});
+  if(path==='/user/images/polish.svg')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="400" height="250"><rect width="400" height="250" fill="#c7d8d0"/><circle cx="300" cy="70" r="35" fill="#e9c68e"/></svg>'});
+  if(path==='/api/backends/chat-completions/status'){lists.push(route.request().postDataJSON());return route.fulfill({json:{data:[{id:'model-alpha'},{id:'model-beta'}]}});}
+  if(path==='/api/backends/chat-completions/generate'){
+   const request=route.request().postDataJSON(),payload=JSON.parse(request.messages[1].content),system=request.messages[0].content;
+   assert.equal(request.model,expectedModel);assert.equal(request.reverse_proxy,expectedUrl);assert.equal(request.proxy_password,expectedKey);
+   let answer,type;
+   if(payload.recipe){type='liangshi';answer=liangshiFeed(payload.recipe.promotions);answer.accounts[0].contactId='lin';answer.posts[0].image={description:'河边风景'};answer.posts.at(-2).text='白鳥两三事把短信、群聊、论坛与动态装进小手机。';answer.posts.at(-2).likes=0;answer.posts.at(-2).commentCount=0;answer.posts.at(-2).repostCount=0;}
+   else if(payload.post){type='liangshi-more';assert.equal(payload.post.likes,50000);assert.equal(payload.post.commentCount,5000);assert.equal(payload.post.repostCount,2000);answer={comments:Array.from({length:10},(_,index)=>({authorId:payload.accounts[0].id,text:`合成评论${index+1}：这个小手机有意思😂`})),reposts:Array.from({length:4},(_,index)=>({authorId:payload.accounts[0].id,text:`合成转发${index+1}：记下这个功能`}))};}
+   else if(payload.description){type='image-tags';answer={prompt:'river, landscape',characters:[],size:'landscape'};}
+   else if(payload.maxCharacters){type='summary';answer={summary:'合成短信内容供主楼参考。'};}
+   else if(payload.task==='feed'){type='social';answer={posts:[{authorId:'lin',text:'普通动态',publishedAt:'2031年4月8日 09:20'}]};}
+   else if(payload.group){type='group';answer={anchor:{memberIds:payload.group.members.map(person=>person.id),speakerIds:['lin']},messages:[{speakerId:'lin',text:'合成群消息'}]};}
+   else if(payload.contact){type='sms';answer={messages:[{text:'合成短信回复'},{type:'location',location:{name:'合成公园',address:'合成路一号'}},{type:'transfer',transfer:{amount:'42',currency:'CNY',note:'合成午饭备注',recipientId:'@user'}},{type:'image',image:{description:'合成照片说明'}}]};}
+   else if(system.includes('外部公众视角的论坛')){type='forum';answer={posts:[{title:'合成城市消息',author:'路人',content:'普通公开消息'}]};}
+   else throw Error('unexpected task');
+   models.push({type,model:request.model});return route.fulfill({json:{choices:[{message:{content:JSON.stringify(answer)}}]}});
+  }
+  unexpected.push(url.href);return route.abort();
+ });
+ await page.goto(`http://127.0.0.1:8917${prefix}tests/startup.html?host=${kind}&mode=${mode}`);await page.waitForFunction(()=>startupHarness.ready);
+
+ await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+ await page.evaluate(key=>{const h=startupHarness;h.settings['schedule-planner'].apiPresets=[{id:'first',name:'公共连接一',url:'https://manual.invalid/v1',key:'manual-key',model:'remote-one'},{id:'second',name:'公共连接二',url:'https://second.invalid/v1',key:'second-key',model:'remote-two'}];h.settings[key].apiSourceRef={kind:'shared-preset',presetId:'first'};h.settings[key].apiModel='model-beta';},ownKey);
+ await page.getByRole('button',{name:mode==='embedded'?'打开两三事 · 随卡':'打开两三事',exact:true}).click();
+ const phone=page.locator(mode==='embedded'?'#pocket-phone-card-host':'#pocket-phone-host');
+ if(output&&kind==='native'){
+  const font=(await readFile('/tmp/st-dollars-npc-rewrite-20261017/graph-ui-20261018/diagnostic-assets/NotoSansCJKsc-Regular.otf')).toString('base64');await phone.evaluate(async(element,data)=>{const face=new FontFace('PhoneFixtureCJK',`url(data:font/otf;base64,${data})`);await face.load();document.fonts.add(face);const style=document.createElement('style');style.textContent=':host{font-family:PhoneFixtureCJK,sans-serif}';element.shadowRoot.append(style);},font);
+ }
+ async function dragText(selector){const item=phone.locator(selector).first();await item.scrollIntoViewIfNeeded();const rect=await item.boundingBox();assert.ok(rect&&rect.width>16,selector);await page.evaluate(()=>getSelection().removeAllRanges());await page.mouse.move(rect.x+3,rect.y+rect.height/2);await page.mouse.down();await page.mouse.move(rect.x+Math.min(rect.width-3,150),rect.y+rect.height/2,{steps:12});await page.mouse.up();const after=await page.evaluate(()=>getSelection().toString());return after;}
+ assert.equal(await dragText('.round-clock span'),'','lock clock is chrome');
+ await openApp(phone,'设置');assert.equal(await phone.locator('#api-source').evaluate(element=>element.tagName),'BUTTON','connection picker stays inside the phone');
+ const source=phone.locator('#api-source');await source.focus();await source.press('ArrowDown');await phone.locator('[data-api-source="shared-preset:first"]').waitFor();assert.equal(await phone.locator('[data-api-source="shared-preset:first"]').getAttribute('aria-selected'),'true');
+ await phone.locator('[data-api-source="shared-preset:first"]').press('ArrowDown');await phone.locator('[data-api-source="shared-preset:second"]').press('Enter');await page.waitForFunction(key=>startupHarness.settings[key].apiSourceRef.presetId==='second',ownKey);assert.equal(await phone.locator('#api-model').inputValue(),'remote-two');expectedUrl='https://second.invalid/v1';expectedKey='second-key';
+ await source.click();await phone.locator('[data-api-source="shared-preset:second"]').press('Escape');assert.equal(await phone.locator('.source-popup').count(),0);assert.equal(await source.getAttribute('aria-expanded'),'false');assert.equal(await phone.locator('.phone-shell').isVisible(),true);
+ await source.click();await phone.locator('.page-heading h1').click();assert.equal(await phone.locator('.source-popup').count(),0);
+ await source.click();await phone.locator('[data-api-source="manual"]').click();await phone.locator('#api-url:not([readonly])').fill('https://manual.invalid');await phone.locator('#api-key').fill('manual-key');await phone.locator('#api-model').fill('   ');await phone.getByRole('button',{name:'拉取模型',exact:true}).click();await phone.locator('.model-options').waitFor();assert.equal(await phone.locator('#api-model').inputValue(),'model-alpha');await phone.locator('[data-model="model-beta"]').click();
+ await source.click();await phone.locator('.api-form').getByRole('button',{name:'保存',exact:true}).click();await phone.locator('#api-url[readonly]').waitFor();assert.equal(await phone.locator('.source-popup').count(),0);assert.equal(await page.evaluate(()=>startupHarness.settings['schedule-planner'].apiPresets.length),3);assert.equal(await page.evaluate(key=>startupHarness.settings[key].apiModel,ownKey),'model-beta');expectedUrl='https://manual.invalid/v1';expectedKey='manual-key';
+ await source.click();if(output&&kind==='native')await phone.locator('.phone-shell').screenshot({path:resolve(output,'source-picker.png')});await phone.locator('[data-api-source="shared-preset:first"]').click();expectedModel='remote-one';await phone.locator('#api-model').fill('unsaved-model');
+ await openApp(phone,'论坛');await phone.getByRole('button',{name:'刷新',exact:true}).click();await phone.getByText('合成城市消息',{exact:true}).waitFor();assert.equal(models.at(-1).model,'remote-one');await openApp(phone,'设置');assert.equal(await phone.locator('#api-model').inputValue(),'remote-one');assert.equal(await phone.locator('.source-popup').count(),0);assert.ok((await source.innerText()).includes('公共连接一'));
+ await phone.locator('#api-model').fill('model-alpha');await source.click();await phone.locator('.api-form').getByRole('button',{name:'保存',exact:true}).click();await page.waitForFunction(key=>startupHarness.settings[key].apiModel==='model-alpha',ownKey);expectedModel='model-alpha';assert.equal(await page.evaluate(()=>startupHarness.settings['schedule-planner'].apiPresets[0].model),'remote-one');
+ await phone.locator('#api-model').focus();await page.keyboard.press('Control+a');await page.keyboard.press('Control+c');assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'model-alpha');
+ await source.click();await phone.locator('[data-drawer="connection"]').click();await phone.locator('[data-drawer="connection"]').click();assert.equal(await phone.locator('.source-popup').count(),0);
+ await openApp(phone,'短信');await phone.locator('[data-contact="lin"]').click();await phone.getByRole('button',{name:'继续',exact:true}).click();await phone.getByText('合成短信回复',{exact:true}).waitFor();const selectedSms=await dragText('.message-original');assert.ok(selectedSms.length>0,'SMS body supports drag selection');await page.keyboard.press('Control+c');assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),selectedSms);await phone.locator('#sms-draft').fill('可编辑短信草稿');await phone.locator('#sms-draft').focus();await page.keyboard.press('Control+a');await page.keyboard.press('Control+c');assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'可编辑短信草稿');
+ const cardCopy=[];for(const selector of ['.location-message > strong','.location-message > small','.transfer-message > span:not(.card-label)','.photo-description']){const before=models.length,selected=await dragText(selector);assert.ok(selected.length>0,selector+' supports selection');await page.keyboard.press('Control+c');assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),selected);assert.equal(models.length,before);cardCopy.push(selector);}
+ await page.evaluate(()=>{const photo=startupHarness.metadata.pocketPhone.conversations.lin.find(message=>message.type==='image');photo.image.path='/user/images/polish.svg';});await page.getByRole('button',{name:mode==='embedded'?'打开两三事 · 随卡':'打开两三事',exact:true}).click();await phone.getByRole('button',{name:'查看图片',exact:true}).click();await phone.locator('.photo-viewer').waitFor();const photoCaption=await dragText('.photo-viewer p');assert.ok(photoCaption.length>0);await page.keyboard.press('Control+c');assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),photoCaption);await phone.getByRole('button',{name:'关闭图片',exact:true}).click();
+ const iconColors=[];
+ for(const lockStyle of ['classic','rounded'])for(const theme of ['day','night']){
+  await page.evaluate(({lockStyle,theme})=>Object.assign(startupHarness.metadata.pocketPhone,{lockStyle,theme}),{lockStyle,theme});await openApp(phone,'设置');await phone.getByRole('button',{name:'主页',exact:true}).click();
+  const icons=await phone.locator('.desktop-app-icon').evaluateAll(nodes=>nodes.map(node=>({app:node.className,color:getComputedStyle(node).color,geometryColor:getComputedStyle(node.querySelector('svg,.app-icon')).color,active:getComputedStyle(node).getPropertyValue('--pp-active').trim()})));
+  const expected=await phone.locator('.desktop-app-messages').evaluate(node=>getComputedStyle(node).color);assert.ok(icons.every(icon=>icon.color===expected&&icon.geometryColor===expected));iconColors.push({lockStyle,theme,icons});
+  assert.equal(await dragText('.desktop-app > span:last-child'),'','desktop labels are chrome');await phone.getByRole('button',{name:'主页',exact:true}).click();await phone.locator('.view-desktop').waitFor();
+  if(output&&kind==='native'&&lockStyle==='rounded')await phone.locator('.phone-shell').screenshot({path:resolve(output,`desktop-${theme}.png`)});
+ }
+ await page.evaluate(()=>Object.assign(startupHarness.metadata.pocketPhone,{lockStyle:'classic',theme:'day'}));await phone.getByRole('button',{name:'关闭手机',exact:true}).click();await page.getByRole('button',{name:mode==='embedded'?'打开两三事 · 随卡':'打开两三事',exact:true}).click();
+ const classic=await phone.evaluate(element=>{const root=element.shadowRoot,main=root.querySelector('.phone-main').getBoundingClientRect(),footer=root.querySelector('.home-footer').getBoundingClientRect();return {mainBottom:main.bottom,footerTop:footer.top,footerHeight:footer.height};});assert.ok(classic.mainBottom>classic.footerTop);assert.equal(classic.footerHeight,112);if(output&&kind==='native')await phone.locator('.phone-shell').screenshot({path:resolve(output,'classic-lock.png')});
+ await openApp(phone,'两事');assert.equal(await dragText('.ls-wordmark'),'','page title is chrome');await phone.getByRole('button',{name:'刷新广场',exact:true}).click();await phone.locator('.ls-post').first().waitFor();await phone.locator('.ls-post').first().getByRole('button',{name:'查看评论',exact:true}).click();
+ const selectedBody=await dragText('.ls-post .message-original');assert.ok(selectedBody.length>0,'post body supports drag selection');await page.keyboard.press('Control+c');assert.ok((await page.evaluate(()=>navigator.clipboard.readText())).startsWith(selectedBody));
+ const stats=[];for(const width of [320,390]){await page.setViewportSize({width,height:844});const items=await phone.locator('.ls-detail-stats').evaluate(element=>{const pairs=[...element.querySelectorAll('button, :scope > span')].map(node=>{const rect=node.getBoundingClientRect(),label=node.firstElementChild?.getBoundingClientRect(),value=node.querySelector('strong')?.getBoundingClientRect();return {text:node.textContent,top:rect.top,height:rect.height,labelTop:label?.top,valueTop:value?.top};});return {text:element.innerText,pairs,overflow:element.scrollWidth>element.clientWidth};});assert.equal(items.pairs.length,3);assert.ok(!items.text.includes('收藏'));assert.ok(!items.overflow);assert.ok(items.pairs.every(item=>Math.abs(item.top-items.pairs[0].top)<1));assert.ok(items.pairs.slice(0,2).every(item=>Math.abs(item.labelTop-item.valueTop)<2));stats.push({width,...items});}
+ const requestsBeforeTab=models.length,savesBeforeTab=await page.evaluate(()=>startupHarness.metadataSaves);await phone.getByRole('tab',{name:'转发',exact:true}).click();await phone.getByRole('tab',{name:'评论',exact:true}).click();assert.equal(models.length,requestsBeforeTab);assert.equal(await page.evaluate(()=>startupHarness.metadataSaves),savesBeforeTab);if(output&&kind==='native')await phone.locator('.phone-shell').screenshot({path:resolve(output,'liangshi-inline-stats.png')});
+ assert.deepEqual(errors,[]);assert.deepEqual(unexpected,[]);results.push({kind,mode,sourceMouseKeyboard:true,sourceOutsideEscape:true,manualFirstSave:true,sharedModelFirstSave:true,presetDefaultAdopted:true,unsavedDraftInactive:true,editableClipboard:true,textareaClipboard:true,chromeDragBlocked:true,bodyClipboard:true,smsClipboard:true,cardCopy,photoCaptionCopy:true,iconColors,classic,stats,modelRequests:models,statusRequests:lists.length,errors,unexpected});await page.close();
+}}
+finally{await browser.close();}
+if(output)await writeFile(resolve(output,'browser-result.json'),JSON.stringify(results,null,2)+'\n');console.log(JSON.stringify(results.map(({kind,mode,modelRequests,statusRequests,cardCopy,errors,unexpected})=>({kind,mode,modelRequests: modelRequests.length,statusRequests,cardCopy,errors,unexpected})),null,2));

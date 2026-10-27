@@ -30,6 +30,7 @@ try {
     await page.evaluate(async mode => {
       const h = previewHarness;
       for (const person of h.metadata.pocketPhone.contacts) person.source = { kind: 'qqj', entityId: person.id };
+      h.metadata.pocketPhone.contacts[0].language = '日语';
       h.qqjStatus = 'ready'; h.memoryReads = { qqj: 0, bbs: 0 };
       globalThis.qqj_v3_public_bridge_v1 = {
         getStatus: () => ({ status: h.qqjStatus }),
@@ -37,7 +38,7 @@ try {
       };
       globalThis.STBaiBaiBook = { apiVersion: 1, getInjectedHistory() { h.memoryReads.bbs++; return { nodes: [{ text: '已选剧情摘要', timeStart: '2031/4/7 18:00', timeEnd: '2031/4/7 19:00' }] }; }, getHistory() { throw new Error('不能读全档'); } };
       h.settings.baibai_book = { enabled: false };
-      h.mainMessages[0].mes = '<bbs_start>2031/4/8 09:10</bbs_start>街上很安静。<BBS_END source="story"> 2031/4/8 09:30 </BBS_END>';
+      h.mainMessages[0].mes = '<bbs_start>2031/4/8 09:10</bbs_start>街上很安静。<BBS_END source="story"> 2031/4/8 09:30 </BBS_END><!-- SDC-end | date=2031-04-08 | weekday=周二 | time=11:00 -->';
       if (mode === 'embedded') {
         h.settings.pocketPhone = { disabledCards: { 'chat:preview': true } };
         const { mountEmbedded } = await import('/embed.js');
@@ -52,10 +53,14 @@ try {
     const select = phone.locator('#api-source');
     await select.selectOption(await select.locator('option').evaluateAll(options => options.find(option => option.value && option.value !== 'manual').value));
     await page.waitForFunction(() => previewHarness.settingsSaves > 0);
+    await phone.getByRole('button', { name: '内容设置', exact: true }).click();
+    await phone.getByRole('combobox', { name: '默认语言', exact: true }).selectOption('粤语');
+    await page.waitForFunction(() => previewHarness.metadata.pocketPhone.defaultLanguage === '粤语');
     await openApp(phone, '短信'); await phone.locator('[data-contact="lin"]').click();
     await phone.getByRole('button', { name: '继续', exact: true }).click();
     await phone.getByText('一会儿书店见。', { exact: true }).waitFor();
     assert.equal(requests[0].input.related, 'lin的独立记忆');
+    assert.equal(requests[0].input.contact.language, '日语');
     assert.equal(requests[0].input.storyMemory, undefined);
     await page.evaluate(() => { previewHarness.qqjStatus = 'disabled'; previewHarness.settings.baibai_book.enabled = true; previewHarness.context.saveSettingsDebounced(); });
     await phone.getByRole('button', { name: '继续', exact: true }).click();
@@ -98,18 +103,24 @@ try {
     await phone.getByRole('button', { name: '发送', exact: true }).click();
     await phone.getByText('双开仍能保存普通短信', { exact: true }).waitFor();
     assert.equal(requests.length, 5);
+    await openApp(phone, '设置');
+    await phone.getByRole('combobox', { name: '默认语言', exact: true }).selectOption('中文');
+    await page.waitForFunction(() => previewHarness.metadata.pocketPhone.defaultLanguage === '中文');
     await openApp(phone, '论坛'); await phone.getByRole('button', { name: '刷新', exact: true }).click();
     await phone.getByText('街边新店', { exact: true }).waitFor();
     assert.equal(requests[5].input.storyMemory, undefined);
+    assert.ok(requests.slice(0, 5).every(request => request.input.defaultLanguage === '粤语'));
+    assert.equal(requests[5].input.defaultLanguage, '中文');
+    assert.equal('contacts' in requests[5].input, false);
     assert.deepEqual(await page.evaluate(() => previewHarness.memoryReads), beforeConflict.reads);
     await openApp(phone, '设置');
-    await phone.getByRole('button', { name: '内容设置', exact: true }).click();
+    if (await phone.getByRole('button', { name: '内容设置', exact: true }).getAttribute('aria-expanded') === 'false') await phone.getByRole('button', { name: '内容设置', exact: true }).click();
     await phone.getByRole('switch', { name: '短信带入正文' }).check();
     await page.evaluate(() => previewHarness.beforeGeneration());
     assert.equal(requests.length, 6, 'short backflow adds no model request or external memory read');
     assert.ok(await page.evaluate(() => previewHarness.prompt.includes('2031/4/8') && previewHarness.prompt.includes('09:30') && previewHarness.prompt.includes('一会儿书店见。')));
     assert.deepEqual(errors, []);
-    console.log(`${kind}/${mode}: live QQJ→BBS selection, single-copy 4 BBS reads, BBS clock/SMS/batch/backflow, group/feed/comment payloads, conflict modal before save with retained draft, pure send and forum unaffected; 6 simulated model calls.`);
+    console.log(`${kind}/${mode}: live QQJ→BBS selection, single-copy 4 BBS reads, BBS clock over trailing SDC offset by 90 minutes through SMS/batch/backflow, group/feed/comment payloads, conflict modal before save with retained draft, pure send and forum unaffected; 6 simulated model calls.`);
     await page.close();
   }
 } finally { await browser.close(); }

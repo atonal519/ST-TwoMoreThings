@@ -8,7 +8,7 @@ import { readTimeline } from '../src/timeline.js';
 import { createMessageService } from '../src/messages.js';
 
 for (const hostKind of ['native', 'luker']) test(`${hostKind}: delete and clear remove saved SMS from generation and main-story reference`, async () => {
-  const h = createHarness({ hostKind, metadata: { foreign: { keep: 1 } }, settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test', apiModel: 'm' } }, completion: (_path, init) => {
+  const h = createHarness({ hostKind, metadata: { foreign: { keep: 1 } }, settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } }, completion: (_path, init) => {
     const input = JSON.parse(JSON.parse(init.body).messages[1].content);
     return { choices: [{ message: { content: JSON.stringify({ summary: input.conversations.flatMap(item => item.messages).map(item => item.text + (item.translation || '')).join('；') }) } }] };
   } });
@@ -52,7 +52,7 @@ test('manual profiles survive reopening and AI contact refresh, with no host per
 });
 
 test('bilingual formal reply and symbol-only text survive parsing and persistent history', async () => {
-  const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | weekday=周日 | time=22:15 -->' }], settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'key', apiModel: 'model' } }, completion: { choices: [{ message: { content: JSON.stringify({ messages: [{ text: 'On my way.', translation: '我在路上。' }, { text: '?' }] }) } }] } });
+  const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | weekday=周日 | time=22:15 -->' }], settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'key', model: 'model' }] } }, completion: { choices: [{ message: { content: JSON.stringify({ messages: [{ text: 'On my way.', translation: '我在路上。' }, { text: '?' }] }) } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   await store.upsertContacts([{ id: 'lin', name: '林舟', language: '英语和中文' }]);
   const reader = createContextReader({ target, store });

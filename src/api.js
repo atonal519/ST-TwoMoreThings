@@ -1,36 +1,26 @@
 import { normalizeContent } from './content.js';
+import { getSharedProcessingPrompt, prependProcessingPrompt } from './shared-processing-prompt.js';
+import { modelJsonValues } from './model-json.js';
 
 const pool = settings => settings['schedule-planner']?.apiPresets || [];
 const refKey = ref => ref ? `${ref.kind}:${ref.presetId || ''}` : '';
-const flat = value => value && ({ url: value.apiUrl, key: value.apiKey, model: value.apiModel, excludeParams: value.apiExcludeParams, timeoutSec: value.apiTimeoutSec });
 const normalizeUrl = value => {
   const url = String(value || '').trim().replace(/\/+$/, '').replace(/\/chat\/completions$/i, '');
   return /^https?:\/\/[^/?#]+$/i.test(url) ? `${url}/v1` : url;
 };
 
+const sharedConfig = (settings, ref) => ref?.kind === 'shared-preset' ? pool(settings).find(item => item.id === ref.presetId) : undefined;
+
 export function listApiSources(settings) {
-  const sources = [];
-  const qqj = settings.qianqianjie;
-  const gouhua = settings['schedule-planner'];
-  if (qqj?.apiUrl || qqj?.apiKey || qqj?.apiMode === 'seven-preset' && qqj.selectedSevenDaysPresetId) {
-    const value = qqj.apiMode === 'seven-preset' ? pool(settings).find(x => x.id === qqj.selectedSevenDaysPresetId) : flat(qqj);
-    sources.push({ ref: { kind: 'qqj-current' }, label: '跟随千千结', model: value?.model });
-  }
-  if (gouhua?.apiUrl || gouhua?.apiKey) sources.push({ ref: { kind: 'gouhua-current' }, label: '跟随构画', model: gouhua.apiModel });
-  for (const item of pool(settings)) if (item.id) sources.push({ ref: { kind: 'shared-preset', presetId: item.id }, label: `共享预设 · ${item.name || item.model || '未命名'}`, model: item.model });
-  return sources;
+  return pool(settings).filter(item => item.id).map(item => ({ ref: { kind: 'shared-preset', presetId: item.id }, label: item.name || item.model || '未命名', model: item.model, hasKey: Boolean(item.key) }));
 }
 
-export function resolveApiConfig(settings, ref) {
-  let config;
-  if (ref?.kind === 'qqj-current') {
-    const q = settings.qianqianjie;
-    config = q?.apiMode === 'seven-preset' ? pool(settings).find(x => x.id === q.selectedSevenDaysPresetId) : flat(q);
-  } else if (ref?.kind === 'gouhua-current') config = flat(settings['schedule-planner']);
-  else if (ref?.kind === 'shared-preset') config = pool(settings).find(x => x.id === ref.presetId);
-  const url = normalizeUrl(config?.url);
-  if (!/^https?:\/\//i.test(url) || !config?.key || !config?.model) throw new Error('请在手机设置中选择可用连接，或在原配置中补全地址、密钥和模型。');
-  return { url, key: config.key, model: config.model, excludeParams: config.excludeParams || [], timeoutSec: config.timeoutSec };
+export function resolveApiConfig(settings, ref, localModel) {
+  const config = sharedConfig(settings, ref), url = normalizeUrl(config?.url);
+  if (!/^https?:\/\//i.test(url) || !config?.key) throw new Error('请在手机设置中选择共享预设，或自行填写连接。');
+  const model = String(localModel || config.model || '').trim();
+  if (!model) throw new Error('请在手机连接设置中填写模型并保存。');
+  return { url, key: config.key, model, excludeParams: config.excludeParams || [], timeoutSec: config.timeoutSec };
 }
 
 export async function saveManualPreset(settings, draft, saveSettings) {
@@ -46,10 +36,28 @@ export async function saveManualPreset(settings, draft, saveSettings) {
 
 export function createApiSettings({ host, onBusyChange = () => {} }) {
   const settingsKey = host.phoneSettingsKey || 'pocketPhone';
+  async function persistPresets(presets, patch, errorText) {
+    const settings = host.readSettings(), previous = settings[settingsKey], previousShared = settings['schedule-planner'];
+    const shared = settings['schedule-planner'] ||= {}, previousPresets = shared.apiPresets;
+    shared.apiPresets = presets; settings[settingsKey] = { ...previous, ...patch };
+    try { await host.saveSettings(); }
+    catch {
+      if (previousShared === undefined) delete settings['schedule-planner']; else shared.apiPresets = previousPresets;
+      if (previous === undefined) delete settings[settingsKey]; else settings[settingsKey] = previous;
+      throw new Error(errorText);
+    }
+  }
+  function draftConfig(draft, ref) {
+    const base = sharedConfig(host.readSettings(), ref);
+    const config = { url: normalizeUrl(draft.url), key: String(draft.key || '').trim() || String(base?.key || '').trim(), model: String(draft.model || '').trim() };
+    resolveApiConfig({ 'schedule-planner': { apiPresets: [{ id: 'draft', ...config }] } }, { kind: 'shared-preset', presetId: 'draft' });
+    return config;
+  }
   const api = {
     listSources: () => listApiSources(host.readSettings()),
-    async fetchModels(draft) {
-      const url = normalizeUrl(draft.url), key = String(draft.key || '').trim();
+    async fetchModels(draft, ref) {
+      const config = ref ? sharedConfig(host.readSettings(), ref) : draft;
+      const url = normalizeUrl(draft.url), key = String(draft.key || '').trim() || String(config?.key || '').trim();
       if (!/^https?:\/\//i.test(url) || !key) throw new Error('请先填写接口地址和密钥，再拉取模型。');
       onBusyChange(true);
       try {
@@ -71,34 +79,68 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
       const selected = settings[settingsKey]?.apiSourceRef || settings.pocketPhone?.apiSourceRef;
       if (selected) return selected;
       const sources = api.listSources();
-      return sources.find(x => x.ref.kind === 'qqj-current')?.ref || sources.find(x => x.ref.kind === 'gouhua-current')?.ref || (sources.length === 1 ? sources[0].ref : null);
+      return sources.length === 1 ? sources[0].ref : null;
     },
-    async select(ref) {
+    readDraft(ref = api.getSelected()) {
+      const settings = host.readSettings(), config = sharedConfig(settings, ref);
+      return { url: normalizeUrl(config?.url), key: '', model: String(settings[settingsKey]?.apiModel || config?.model || '').trim() };
+    },
+    async saveModel(value) {
+      const model = String(value || '').trim();
+      if (!model) throw new Error('请填写模型名称。');
+      const settings = host.readSettings(), previous = settings[settingsKey];
+      resolveApiConfig(settings, api.getSelected(), model);
+      settings[settingsKey] = { ...previous, apiModel: model };
+      try { await host.saveSettings(); }
+      catch { settings[settingsKey] = previous; throw new Error('模型设置保存失败，请重试。'); }
+    },
+    async select(ref, { model } = {}) {
       if (!api.listSources().some(x => refKey(x.ref) === refKey(ref))) throw new Error('这条连接已不存在，请重新选择。');
       const settings = host.readSettings();
-      const previous = settings[settingsKey];
-      settings[settingsKey] = { ...previous, apiSourceRef: { ...ref } };
+      const previous = settings[settingsKey], changed = refKey(api.getSelected()) !== refKey(ref);
+      const selectedModel = model !== undefined ? model.trim() : changed ? String(sharedConfig(settings, ref)?.model || '').trim() : undefined;
+      settings[settingsKey] = { ...previous, apiSourceRef: { ...ref }, ...(selectedModel !== undefined ? { apiModel: selectedModel } : {}) };
       try { await host.saveSettings(); }
       catch { settings[settingsKey] = previous; throw new Error('连接选择保存失败，请重试。'); }
     },
     async saveManual(draft) {
       const ref = await saveManualPreset(host.readSettings(), draft, host.saveSettings);
-      await api.select(ref);
+      await api.select(ref, { model: draft.model });
       return ref;
     },
-    resolve: () => resolveApiConfig(host.readSettings(), api.getSelected()),
+    async saveCurrent(draft) {
+      const settings = host.readSettings(), ref = api.getSelected(), current = sharedConfig(settings, ref);
+      if (!current) throw new Error('这条连接已不存在，请重新选择或另存为。');
+      const config = draftConfig(draft, ref);
+      const presets = pool(settings).map(preset => preset.id === ref.presetId ? { ...preset, url: config.url, key: config.key } : preset);
+      await persistPresets(presets, { apiSourceRef: { ...ref }, apiModel: config.model }, '连接保存失败，请重试。');
+    },
+    async saveAs(draft, name, ref = api.getSelected()) {
+      const label = String(name || '').trim(); if (!label) throw new Error('请输入预设名称。');
+      const settings = host.readSettings(), config = draftConfig(draft, ref), current = sharedConfig(settings, ref);
+      const preset = { excludeParams: [], timeoutSec: 180, stream: false, ...current, ...config, id: globalThis.crypto.randomUUID(), name: label };
+      const selected = { kind: 'shared-preset', presetId: preset.id };
+      await persistPresets([...pool(settings), preset], { apiSourceRef: selected, apiModel: config.model }, '连接保存失败，请重试。');
+      return selected;
+    },
+    async deletePreset(ref = api.getSelected()) {
+      const settings = host.readSettings();
+      if (!sharedConfig(settings, ref)) throw new Error('这条连接已不存在，请重新选择。');
+      await persistPresets(pool(settings).filter(preset => preset.id !== ref.presetId), refKey(api.getSelected()) === refKey(ref) ? { apiSourceRef: { kind: 'none' }, apiModel: '' } : {}, '连接删除失败，请重试。');
+    },
+    resolve: () => resolveApiConfig(host.readSettings(), api.getSelected(), host.readSettings()[settingsKey]?.apiModel),
   };
   return api;
 }
 
 export function createModelClient({ host, sourceProvider, onBusyChange = () => {} }) {
   return {
-    async complete({ system, messages, maxTokens = 1800 }) {
+    async complete({ system, messages }) {
       onBusyChange(true);
       try {
         const config = sourceProvider.resolve();
-        const body = { chat_completion_source: 'openai', reverse_proxy: config.url, proxy_password: config.key, model: config.model, messages: [{ role: 'system', content: system }, ...messages], stream: false, temperature: 0.8, max_tokens: maxTokens };
-        for (const key of config.excludeParams) if (['temperature', 'max_tokens'].includes(key)) delete body[key];
+        const body = { chat_completion_source: 'openai', reverse_proxy: config.url, proxy_password: config.key, model: config.model, messages: [{ role: 'system', content: prependProcessingPrompt(system, getSharedProcessingPrompt(host.readSettings())) }, ...messages], stream: false, temperature: 0.8 };
+        if (config.excludeParams.includes('temperature')) delete body.temperature;
         let response;
         try { response = await host.request('/api/backends/chat-completions/generate', { method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(Math.max(1, Number(config.timeoutSec) || 180) * 1000) }); }
         catch (error) { throw new Error(error.name === 'TimeoutError' ? '生成等待超时，请稍后重试。' : '生成请求未能连接，请检查酒馆和接口连接后重试。'); }
@@ -127,14 +169,9 @@ function extract(value, kind) {
 }
 
 export function parsePayload(text, kind, { allowEmpty = false, indexed = false } = {}) {
-  const source = String(text).trim();
-  const candidates = [source, ...[...source.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(x => x[1])];
-  const first = source.indexOf('{');
-  const last = source.lastIndexOf('}');
-  if (first >= 0 && last > first) candidates.push(source.slice(first, last + 1));
   let items;
-  for (const candidate of candidates) {
-    try { items = extract(JSON.parse(candidate), kind); } catch { continue; }
+  for (const candidate of modelJsonValues(text)) {
+    items = extract(candidate, kind);
     if (items) break;
   }
   const valid = (items || []).flatMap(item => {
@@ -170,14 +207,9 @@ export function parsePayload(text, kind, { allowEmpty = false, indexed = false }
 }
 
 export function parseJsonObject(text) {
-  const source = String(text).trim(), first = source.indexOf('{'), last = source.lastIndexOf('}');
-  const fenced = [...source.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map(match => match[1]);
-  for (const candidate of [source, ...fenced, source.slice(first, last + 1)]) {
-    try {
-      let value = JSON.parse(candidate);
-      for (const key of ['data', 'result', 'answer']) if (value?.[key] && typeof value[key] === 'object') value = value[key];
-      if (value && typeof value === 'object') return value;
-    } catch { /* 正式JSON可被代码块或说明文字包裹。 */ }
+  for (let value of modelJsonValues(text)) {
+    for (const key of ['data', 'result', 'answer']) if (value?.[key] && typeof value[key] === 'object') value = value[key];
+    if (value && typeof value === 'object') return value;
   }
   throw new Error('回答中的JSON无法读取，请重新生成。');
 }

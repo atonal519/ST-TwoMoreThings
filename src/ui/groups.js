@@ -14,7 +14,7 @@ export function renderGroupProfile(state, { ui, busy }) {
       <h1>${ui.groupEditId ? '编辑群聊' : '创建群聊'}</h1>
     </header>
     <form class="group-form">
-      ${avatarEditor({ ...draft, name: draft.name || '群聊' })}
+      ${avatarEditor({ ...draft, name: draft.name || '群聊' }, { open: ui.avatarMenuOpen, busy: busy.has('avatar') || busy.has('group-profile') })}
       <label class="field-label" for="group-name">群名</label>
       <input id="group-name" name="name" value="${escape(draft.name)}" required>
       <label class="field-label" for="group-avatar">头像地址</label>

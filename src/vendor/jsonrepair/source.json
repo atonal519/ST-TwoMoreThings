@@ -1,0 +1,29 @@
+{
+  "name": "jsonrepair",
+  "version": "3.15.0",
+  "integrity": "sha512-wy8OTjwsJwQRnQJkKnMJJ9vcytRdBPAgIF/Hy6+s1dAj42BHMKiyL8JzEieIl3JY7idt8eyHwBWTO8mh/+mtwA==",
+  "source": "https://github.com/josdejong/jsonrepair/tree/v3.15.0",
+  "tarball": "https://registry.npmjs.org/jsonrepair/-/jsonrepair-3.15.0.tgz",
+  "files": {
+    "package/lib/esm/regular/jsonrepair.js": {
+      "bytes": 25669,
+      "sha256": "19370f52c7eaccc013d5b5225d47dab4c7aea123b9dfc30a61db78370ede7900"
+    },
+    "package/lib/esm/utils/JSONRepairError.js": {
+      "bytes": 208,
+      "sha256": "760bbdf77243afe6da53aad48520423c2b3da2e15838ca89cb118e87067ef130"
+    },
+    "package/lib/esm/utils/stringUtils.js": {
+      "bytes": 8199,
+      "sha256": "e05e8b6b57759290acaf9268f84ff248bdf51e3d71816178be7f49ef0774f736"
+    },
+    "package/package.json": {
+      "bytes": 2978,
+      "sha256": "9e366a13dddb4ff27a97135c862c6cdbe2791e1f467d423f0c0512f81c1439ba"
+    },
+    "package/LICENSE.md": {
+      "bytes": 740,
+      "sha256": "fd50f5abb7eeb614c8d1293b9f239a5238d7536e3a9a9a8929a082c82d12b3fd"
+    }
+  }
+}

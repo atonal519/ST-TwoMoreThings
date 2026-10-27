@@ -15,7 +15,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
   };
   const chinese = { title: '街角书店', author: '读者', content: '书店周末开放阅读区。', comments: [{ author: '路人', text: '好耶！' }, { author: '邻居', text: '👍' }] };
   const h = createHarness({ hostKind, messages: main, metadata: { foreign: { keep: true } },
-    settings: { qianqianjie: { apiUrl: 'https://example.invalid', apiKey: 'mock-key', apiModel: 'mock-model' } },
+    settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'mock-key', model: 'mock-model' }] } },
     completion: { choices: [{ message: { content: JSON.stringify({ posts: [translated, chinese] }) } }] },
   });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
@@ -31,7 +31,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
   await service.refresh();
   assert.equal(h.modelRequests.length, 1);
   const sent = JSON.parse(h.modelRequests[0].body.messages.find(message => message.role === 'user').content);
-  assert.deepEqual(Object.keys(sent).sort(), ['clock', 'setting', 'storyBackground', 'worldbook']);
+  assert.deepEqual(Object.keys(sent).sort(), ['clock', 'defaultLanguage', 'phoneContext', 'setting', 'storyBackground', 'worldbook']);
   assert.equal(sent.clock.time, '18:00');
   assert.equal(sent.storyBackground[0].text, '广场开放周末集市。');
   for (const privateText of ['私有用户姓名', '私有用户网名', '不应发给论坛的私聊']) assert.equal(JSON.stringify(sent).includes(privateText), false);
@@ -47,6 +47,9 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
   assert.deepEqual(createPhoneStore({ target }).read().forum.posts, posts, 'reopening uses the persisted bilingual fields');
   assert.deepEqual(service.getPost(id), posts[0]);
   assert.equal(h.modelRequests.length, 1, 'reading original and translation needs no translation request');
+  assert.ok(h.modelRequests[0].body.messages[0].content.includes('两者均省略译文字段'));
+  assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"titleTranslation":'));
+  assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"contentTranslation":'));
   assert.equal(h.metadataSaves, saves + 1);
   assert.deepEqual(store.read(), { ...before, forum: { posts } });
   assert.deepEqual(h.persistedMetadata, { foreign: { keep: true }, pocketPhone: store.read() });
@@ -56,7 +59,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
 
 test('refresh replaces the batch; reading posts is free and preserves main messages', async () => {
   const main = [{ mes: '在街上散步。', is_user: false }];
-  const h = createHarness({ messages: main, settings: { qianqianjie: { apiUrl: 'https://example.invalid', apiKey: 'key', apiModel: 'm' } }, completion: { choices: [{ message: { content: '{"posts":[{"title":"晚风","author":"路人甲","content":"今晚很凉快","comments":[{"author":"路人乙","text":"适合散步"}]},{"title":"小店","author":"路人丙","content":"新开了一家面馆"}]}' } }] } });
+  const h = createHarness({ messages: main, settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'key', model: 'm' }] } }, completion: { choices: [{ message: { content: '{"posts":[{"title":"晚风","author":"路人甲","content":"今晚很凉快","comments":[{"author":"路人乙","text":"适合散步"}]},{"title":"小店","author":"路人丙","content":"新开了一家面馆"}]}' } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   await store.replaceForum([{ id: 'old', title: '旧帖' }]);
   const service = createForumService({ store, contextReader: createContextReader({ target, store }), modelClient: createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) }) });

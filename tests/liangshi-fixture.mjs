@@ -1,0 +1,5 @@
+export function liangshiFeed(promotions = 2) {
+  const topics = [{ name: '城市电影夜', description: '河边放映' }, { name: '街角展览', description: '旧物故事' }, { name: '下班以后', description: '普通日常' }];
+  return { accounts: [{ key: 'a', name: '林舟', handle: 'lin', expression: '爱用连续表情', language: '中文', followed: true }, { key: 'b', name: '街角路人', handle: 'street', language: '日语' }, { key: 'org', name: '城市文化馆', handle: 'culture', kind: 'institution' }], topics,
+    posts: [...Array.from({ length: 13 }, (_, index) => ({ key: `p${index}`, authorKey: index % 2 ? 'b' : 'a', text: index === 1 ? '今日は休み。' : `第${index + 1}条城市见闻😂😭`, ...(index === 1 ? { translation: '今天休息。' } : {}), ...(index < 6 ? { topic: topics[index % 3].name } : {}), ...(index < 2 ? { quoteKey: `p${index + 5}` } : {}), publishedAt: '2031年4月8日 09:20', likes: index + 8, commentCount: 15, repostCount: 10, comments: index === 0 ? [{ authorKey: 'b', text: 'いいね。', translation: '真好。' }] : [] })), ...Array.from({ length: promotions }, (_, index) => ({ key: `ad${index}`, authorKey: 'org', text: `城市活动推广${index + 1}`, promoted: true, topic: topics[index].name }))] };
+}

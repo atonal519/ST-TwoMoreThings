@@ -146,3 +146,12 @@ test('a past photo description can be drawn manually without adding or changing 
   await service.generate('a', 'old');
   assert.deepEqual(store.read().conversations.a, [{ ...saved, image: { ...saved.image, path: path('redrawn'), seed: 5 } }]);
 });
+
+test('Liangshi replacement removes only retired images and missing files clear all current App references', async () => {
+  const h = createHarness(), removed = [], store = createPhoneStore({ target: h.host.captureChat(), removeImages: async values => removed.push(...values) });
+  await store.upsertContacts([{ id: 'a', name: '甲' }]); await store.appendMessage('a', photo('shared', path('shared')));
+  await store.updateLiangshi(() => ({ accounts: [], topics: [], posts: [{ id: 'retired', image: { description: '旧图', path: path('retired') } }, { id: 'shared', image: { description: '共享图', path: path('shared'), seed: 2 } }] }));
+  h.saveFailure = new Error('offline'); await assert.rejects(store.updateLiangshi(current => ({ ...current, posts: [] }), { cleanImages: true }), /保存失败/); assert.deepEqual(removed, []);
+  h.saveFailure = null; await store.updateLiangshi(current => ({ ...current, posts: current.posts.filter(post => post.id === 'shared') }), { cleanImages: true }); assert.deepEqual(removed, [path('retired')]);
+  await store.clearImagePaths([path('shared')]); assert.deepEqual(store.read().liangshi.posts[0].image, { description: '共享图' }); assert.deepEqual(store.read().conversations.a[0].image, { description: '照片shared' });
+});

@@ -1,14 +1,13 @@
-export function createPluginUpdatesView({ updates, dialog, documentRef = globalThis.document, renderMarkdown, successText = '两三事已更新，请刷新酒馆后使用', notifyUser = notification => globalThis.toastr?.[notification.kind]?.(notification.text) } = {}) {
+export function createPluginUpdatesView({ updates, dialog, documentRef = globalThis.document, renderMarkdown, successText = '两三事已更新，请刷新酒馆后使用', notifyUser = () => {} } = {}) {
   const element = (tag, className = '', text = '') => { const node = documentRef.createElement(tag); node.className = className; node.textContent = text; return node; };
   const controls = element('div', 'pp-update-controls');
   const status = element('button', 'pp-update-status'); status.type = 'button';
   controls.append(status);
-  const feedback = element('p', 'settings-result error'); feedback.setAttribute('role', 'status');
   const noticeButton = element('button', 'pp-update-notice-button', '查看公告'); noticeButton.type = 'button';
   const sync = state => {
     status.textContent = ({ unchecked: '检查更新', checking: '检查中', available: '可更新', stable: '稳定版本', updating: '更新中', error: '检查失败' })[state.status];
     status.dataset.state = state.status; const busy = ['checking', 'updating'].includes(state.status); status.disabled = busy;
-    feedback.textContent = state.error ?? ''; feedback.hidden = !state.error;
+    if (state.status === 'error' && state.error) notifyUser({ kind: 'error', text: state.error });
   };
   sync(updates.getState()); const unsubscribe = updates.subscribe(sync);
   const openNotice = async available => {
@@ -25,5 +24,5 @@ export function createPluginUpdatesView({ updates, dialog, documentRef = globalT
   };
   status.addEventListener('click', () => updates.getState().status === 'available' ? openNotice(true) : updates.check());
   noticeButton.addEventListener('click', () => openNotice(false));
-  return Object.freeze({ controls, feedback, noticeButton, dispose: unsubscribe });
+  return Object.freeze({ controls, noticeButton, dispose: unsubscribe });
 }

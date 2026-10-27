@@ -22,9 +22,6 @@ const state = {
   forum: { posts: createPosts(false) },
 };
 const previewQuery = new URLSearchParams(location.search);
-if (previewQuery.get('todos') === '1') {
-  state.todos = [{ id: 'todo-preview', status: 'candidate', title: '在旧书店见面', startAt: '大陆历1686年10月5日 18:00', endAt: '', participantIds: ['@user', 'lin'], sourceConversationId: 'lin', sourceMessageIds: ['m4'] }];
-}
 if (previewQuery.get('group') === '1') {
   state.groups = [{ id: 'preview-friends', name: '书店碰头小组', memberIds: ['lin', 'zhou'], userIsMember: true }];
   state.conversations['preview-friends'] = [];

@@ -10,6 +10,7 @@ Yesicon 标明图标数据来自 Iconify；下列 Solar 条目的 SVG 使用其 
 
 | 本地名称 | Yesicon 条目 | 用途说明 |
 | --- | --- | --- |
+| `liangshi` | [`solar:hashtag-square-broken`](https://yesicon.app/solar/hashtag-square-broken) | 两事微博 |
 | `social` | [`solar:camera-square-broken`](https://yesicon.app/solar/camera-square-broken) |  |
 | `heart` | [`solar:heart-broken`](https://yesicon.app/solar/heart-broken) |  |
 | `heart-active` | [`solar:heart-bold`](https://yesicon.app/solar/heart-bold) | 点赞后的红色实心状态；其余心形使用 Broken |
@@ -20,7 +21,6 @@ Yesicon 标明图标数据来自 Iconify；下列 Solar 条目的 SVG 使用其 
 | `wifi` | [`solar:wi-fi-broken`](https://yesicon.app/solar/wi-fi-broken) |  |
 | `battery` | [`solar:battery-full-broken`](https://yesicon.app/solar/battery-full-broken) |  |
 | `calendar` | [`solar:calendar-date-broken`](https://yesicon.app/solar/calendar-date-broken) |  |
-| `todos` | [`solar:checklist-minimalistic-broken`](https://yesicon.app/solar/checklist-minimalistic-broken) |  |
 | `smile` | [`solar:smile-circle-broken`](https://yesicon.app/solar/smile-circle-broken) |  |
 | `location` | [`solar:map-point-broken`](https://yesicon.app/solar/map-point-broken) |  |
 | `transfer` | [`solar:transfer-horizontal-broken`](https://yesicon.app/solar/transfer-horizontal-broken) |  |

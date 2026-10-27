@@ -1,11 +1,11 @@
-import { action, avatar, empty, escape, icon, pageHeading, renderEmojiText, renderMentionText } from './shared.js';
+import { action, avatar, empty, escape, icon, pageHeading, renderEmojiText, renderMentionText, translationForDisplay } from './shared.js';
 import { displayName } from '../profiles.js';
 import { partitionHistory } from '../timeline.js';
 import { messageText } from '../content.js';
 import { renderAttachments, renderCardActions, renderCardBody } from './cards.js';
 import { chatBackgroundStyle } from '../backgrounds.js';
-import { renderTodoCandidate } from './todos.js';
 import { replyContext } from '../replies.js';
+import { isUserIdentity } from '../identities.js';
 
 export function renderInbox(state, { ui, busy }) {
   const groups = state.groups || [];
@@ -64,7 +64,7 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
   const grouped = `${hasPrev ? ' grouped-top' : ''}${hasNext ? ' grouped-bottom' : ''}${previous && !hasPrev ? ' group-start' : ''}`;
   const chosen = selected === message.id;
   const bubbleAttributes = message.type === 'image'
-    ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" ${busy.has(`image:${message.id}`) ? 'disabled' : ''}`
+    ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" aria-busy="${busy.has(`image:${message.id}`)}" ${busy.has(`image:${message.id}`) ? 'disabled' : ''}`
     : `data-message="${escape(message.id)}" aria-label="短信：${escape(messageText(message))}" aria-expanded="${chosen}"`;
   const timestamp = message.timeLabel
     ? `<div class="message-foot"><time title="${escape([message.storyDate, message.storyWeekday, message.timeLabel].filter(Boolean).join(' '))}" datetime="${escape(message.createdAt || '')}">${escape(message.timeLabel)}</time></div>`
@@ -74,8 +74,9 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
   const messageAvatar = isGroup && !mine && sender?.id ? `<button type="button" class="mention-avatar" data-mention-id="${escape(sender.id)}" aria-label="提及${escape(displayName(sender))}">${avatar(sender, true)}</button>` : avatar(mine ? { tone: 'lilac', ...user } : contact, true);
   const reply = isGroup ? replyContext(message, state.conversations?.[conversationId] || []) : undefined;
   const replyName = reply && !reply.missing ? displayName(reply.role === 'user' ? user : state.contacts.find(person => person.id === reply.speakerId) || { name: '已移除联系人' }) : '';
-  const replyBlock = reply ? `<div class="message-reply${reply.missing ? ' is-missing' : ''}"><small>引用${replyName ? ` ${escape(replyName)}` : ''}</small><span>${reply.missing ? '原消息已删除' : renderMentionText(reply.messageText, groupPeople)}</span>${reply.translation ? `<span class="message-translation" lang="zh-CN">${renderMentionText(reply.translation, groupPeople)}</span>` : ''}</div>` : '';
-  const body = !message.type ? `<span class="message-original">${renderMentionText(message.text, groupPeople)}</span>${message.translation ? `<span class="message-translation" lang="zh-CN">${renderMentionText(message.translation, groupPeople)}</span>` : ''}` : renderCardBody(message, busy.has(`image:${message.id}`));
+  const replyTranslation = reply && translationForDisplay(reply.messageText, reply.translation), translation = translationForDisplay(message.text, message.translation);
+  const replyBlock = reply ? `<div class="message-reply${reply.missing ? ' is-missing' : ''}"><small>引用${replyName ? ` ${escape(replyName)}` : ''}</small><span>${reply.missing ? '原消息已删除' : renderMentionText(reply.messageText, groupPeople)}</span>${replyTranslation ? `<span class="message-translation" lang="zh-CN">${renderMentionText(replyTranslation, groupPeople)}</span>` : ''}</div>` : '';
+  const body = !message.type ? `<span class="message-original">${renderMentionText(message.text, groupPeople)}</span>${translation ? `<span class="message-translation" lang="zh-CN">${renderMentionText(translation, groupPeople)}</span>` : ''}` : renderCardBody(message, busy.has(`image:${message.id}`));
   return `<div class="message-row ${mine ? 'is-mine' : 'is-theirs'}${chosen ? ' is-selected' : ''}${!hasNext && message.timeLabel ? ' has-time' : ''}${grouped}">
     ${messageAvatar}
     <div class="message-body">
@@ -89,7 +90,6 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
           </div>` : ''}
         </div>
         ${renderCardActions(message, { readOnly, busy })}
-        ${(state?.todos || []).filter(todo => ['candidate', 'open'].includes(todo.status) && todo.sourceConversationId === conversationId && todo.sourceMessageIds?.[0] === message.id).map(todo => renderTodoCandidate(todo, state, ui, busy)).join('')}
         ${timestamp}
       </div>
     </div>
@@ -103,6 +103,7 @@ export function renderChat(state, { ui, busy }) {
   const { current: history, past } = partitionHistory(state.conversations[contact.id] || [], ui.batch);
   const visible = history.slice(-ui.visibleMessages);
   const generating = busy.has(`continue:${contact.id}`), saving = busy.has(`send:${contact.id}`);
+  const cannotReply = isGroup ? !contact.memberIds.some(id => !isUserIdentity(state, id)) : isUserIdentity(state, contact.id);
   const messageView = {
     contact, user: state.userProfile || { name: ui.defaultUser }, selected: ui.selectedMessage, state, ui, conversationId: contact.id,
     deleting: busy.has(`delete:${contact.id}`), isGroup, busy,
@@ -142,13 +143,13 @@ export function renderChat(state, { ui, busy }) {
   </section>` : '';
   const composer = observer ? `<div class="composer observer-composer">
     <span>旁观群聊</span>
-    ${action('continue', '继续', 'refresh', 'continue-button', generating)}
+    ${action('continue', '继续', 'refresh', 'continue-button', generating || cannotReply)}
   </div>` : `<form class="composer">
     <div class="composer-input">
       ${action('attachments', '添加消息', 'plus', 'icon-button attachment-button')}
       <label class="sr-only" for="sms-draft">短信内容</label>
       <textarea id="sms-draft" name="message" rows="1" aria-label="短信内容">${escape(ui.drafts.get(contact.id) || '')}</textarea>
-      ${action('continue', '继续', 'refresh', 'continue-button', generating || saving)}
+      ${action('continue', '继续', 'refresh', 'continue-button', generating || saving || cannotReply)}
       ${action('send', '发送', 'send', 'send-button', saving)}
     </div>
   </form>

@@ -1,3 +1,4 @@
+import { readLiangshiFeed, readLiangshiFollowingFeed, readLiangshiTopic } from '../liangshi.js';
 import { messageText } from '../content.js';
 import { displayName } from '../profiles.js';
 import { getSocialAuthor, readSocialPosts } from '../social.js';
@@ -59,6 +60,19 @@ function forumNotice(state) {
   return noticeButton('forum', undefined, '论坛有新内容', preview(post.title || post.content), icon('forum'));
 }
 
+function liangshiNotice(state, id, following = false) {
+  const post = id ? state.liangshi?.posts?.find(item => item.id === id) : (following ? readLiangshiFollowingFeed(state.liangshi) : readLiangshiFeed(state.liangshi))[0];
+  if (!post) return '';
+  const author = state.liangshi.accounts.find(item => item.id === post.authorId);
+  return noticeButton(id ? 'liangshi-post' : following ? 'liangshi-following' : 'liangshi-feed', id, id ? '微博有新讨论' : following ? '关注微博已更新' : '两事广场已更新', preview(post.text), author ? avatar(author, true) : icon('liangshi'));
+}
+
+function liangshiHotNotice(state, id) {
+  const topic = id ? readLiangshiTopic(state.liangshi, id) : state.liangshi?.topics?.[0];
+  if (!topic) return '';
+  return noticeButton(id ? 'liangshi-topic' : 'liangshi-hot', id, id ? '话题微博已更新' : '两事热榜已更新', preview(topic.name), icon('liangshi'));
+}
+
 export function renderPhoneNotice(state, notice) {
   if (!notice || !state) return '';
   switch (notice.kind) {
@@ -67,6 +81,11 @@ export function renderPhoneNotice(state, notice) {
     case 'social-feed': return socialFeedNotice(state);
     case 'social-author': return notice.id ? socialAuthorNotice(state, notice.id) : '';
     case 'forum': return forumNotice(state);
+    case 'liangshi-feed': return liangshiNotice(state);
+    case 'liangshi-following': return liangshiNotice(state, undefined, true);
+    case 'liangshi-hot': return liangshiHotNotice(state);
+    case 'liangshi-topic': return notice.id ? liangshiHotNotice(state, notice.id) : '';
+    case 'liangshi-post': return notice.id ? liangshiNotice(state, notice.id) : '';
     default: return '';
   }
 }

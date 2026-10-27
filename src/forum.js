@@ -8,7 +8,7 @@ export function createForumService({ store, contextReader, modelClient }) {
       const context = await contextReader.readForForum();
       const reply = await modelClient.complete({
         system: FORUM_PROMPT,
-        messages: [{ role: 'user', content: JSON.stringify(context) }], maxTokens: 3500,
+        messages: [{ role: 'user', content: JSON.stringify(context) }],
       });
       const posts = parsePayload(reply, 'forum').map(x => ({ ...x, id: globalThis.crypto.randomUUID() }));
       await store.replaceForum(posts);

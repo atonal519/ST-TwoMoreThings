@@ -6,7 +6,7 @@ import { createApiSettings, createModelClient } from '../src/api.js';
 import { createContextReader } from '../src/context.js';
 
 test('one directory request adds contacts and groups together without resetting existing profiles/history', async () => {
-  const h = createHarness({ settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test', apiModel: 'm' } }, completion: { choices: [{ message: { content: JSON.stringify({ contacts: [{ sourceId: 'lin', name: '林舟', expression: '不可覆盖' }, { sourceId: 'qqj:q2', name: '周予', expression: '短句' }], groups: [{ name: '朋友', memberIds: ['lin', 'qqj:q2'], userIsMember: true }] }) } }] } });
+  const h = createHarness({ settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } }, completion: { choices: [{ message: { content: JSON.stringify({ contacts: [{ sourceId: 'lin', name: '林舟', expression: '不可覆盖' }, { sourceId: 'qqj:q2', name: '周予', expression: '短句' }], groups: [{ name: '朋友', memberIds: ['lin', 'qqj:q2'], userIsMember: true }] }) } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   await store.upsertContacts([{ id: 'lin', name: '林舟', expression: '已有线上方式' }]);
   await store.appendMessage('lin', { id: 'keep', text: '已有历史' });
@@ -32,7 +32,7 @@ test('one directory request adds contacts and groups together without resetting 
 });
 
 test('without QQJ, directory reads card/worldbook and permits an empty result without resetting the save', async () => {
-  const h = createHarness({ settings: { qianqianjie: { apiUrl: 'https://example.invalid/v1', apiKey: 'test', apiModel: 'm' } }, completion: { choices: [{ message: { content: '{"contacts":[{"name":"周予","expression":"简短直接"}],"groups":[]}' } }] } });
+  const h = createHarness({ settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } }, completion: { choices: [{ message: { content: '{"contacts":[{"name":"周予","expression":"简短直接"}],"groups":[]}' } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   const { createDirectoryService } = await import('../src/directory.js');
   const service = createDirectoryService({ store, contextReader: createContextReader({ target, store, qqjBridgeProvider: () => null }), modelClient: createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) }) });

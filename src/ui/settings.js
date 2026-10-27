@@ -1,14 +1,25 @@
-import { renderModelPicker } from './models.js';
+import { renderModelPicker, renderSourcePicker } from './models.js';
 import { homeImage } from './home.js';
 import { action, avatar, escape, icon, pageHeading, refKey } from './shared.js';
 import { displayName } from '../profiles.js';
 import { renderBackgroundPicker } from './backgrounds.js';
 import { VERSION } from '../version.js';
 
+export function renderStorySmsInstall(ui, busy, control) {
+  const state = ui.storySmsStatus?.state;
+  const checking = busy.has('story-sms-status'), installing = busy.has('story-sms-install');
+  return `<div class="compact-switch-row" data-story-sms-install><span>楼内信息注入</span>
+    <button type="button" class="switch-button" data-action="install-story-sms" ${checking || installing || state === 'installed' || !control.isEnabled() ? 'disabled' : ''}>${checking ? '读取中' : installing ? '注入中' : state === 'installed' ? '已注入' : state === 'outdated' ? '更新' : '注入'}</button></div>`;
+}
+
+export function renderSettingsVersion(mode, updates) {
+  return `<small class="app-version"><span class="app-version-label"><span>两三事 ${VERSION}</span> · <span>${mode === 'embedded' ? '随卡版' : '插件版'}</span></span>${updates ? '<span data-update-notice></span>' : ''}</small>`;
+}
+
 export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, updates }) {
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
   const current = sources.find(source => refKey(source.ref) === refKey(selected));
-  const manual = ui.manual || !sources.length, preferences = entries.read();
+  const manual = ui.manual || !sources.length || selected?.kind === 'none', preferences = entries.read();
   const instanceLabel = mode === 'embedded' ? '随卡版' : '插件版';
   const drawer = (key, title, content) => `<section class="settings-drawer">
     <button type="button" class="settings-drawer-toggle" data-drawer="${key}" aria-expanded="${ui.drawers[key]}">
@@ -23,23 +34,19 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
       <span></span>
     </span>
   </label>`;
-  const connectionDetails = manual ? `<form class="api-form">
+  const connectionDetails = manual || current ? `<form class="api-form">
+    ${manual ? '' : '<p class="setting-note">地址和密钥共享，模型单独保存在两三事。</p>'}
     <label class="field-label" for="api-url">接口地址</label>
     <input id="api-url" name="url" type="url" placeholder="https://…/v1" value="${escape(ui.apiDraft.url || '')}" required>
     <label class="field-label" for="api-key">密钥</label>
-    <input id="api-key" name="key" type="password" placeholder="输入 API 密钥" value="${escape(ui.apiDraft.key || '')}" autocomplete="off" required>
+    <input id="api-key" name="key" type="password" placeholder="${manual ? '输入 API 密钥' : '已保存，留空保持不变'}" value="${escape(ui.apiDraft.key || '')}" autocomplete="off" ${manual ? 'required' : ''}>
     ${renderModelPicker(ui, busy)}
-    <button type="submit" class="save-button" ${busy.has('api') ? 'disabled' : ''}>保存</button>
-  </form>` : current ? `<div class="connection-summary">
-    <span class="connection-dot"></span>
-    <strong>${escape(current.model || '尚未选择模型')}</strong>
-  </div>` : '';
+    <div class="api-actions"><button type="submit" class="save-button" ${busy.has('api') ? 'disabled' : ''}>保存</button>
+      ${action('api-save-as', '另存为', '', 'quiet-button', busy.has('api'))}
+      ${action('api-delete', '删除', '', 'quiet-button danger', busy.has('api') || manual || !current)}</div>
+  </form>` : '';
   const connection = `<label class="field-label" for="api-source">使用的配置</label>
-    <select id="api-source" aria-label="使用的配置">
-      ${!manual && !current ? '<option value="" selected disabled>请选择现有连接</option>' : ''}
-      <option value="manual" ${manual ? 'selected' : ''}>自行填写</option>
-      ${sources.map(source => `<option value="${escape(refKey(source.ref))}" ${!manual && refKey(source.ref) === refKey(selected) ? 'selected' : ''}>${escape(source.label)}</option>`).join('')}
-    </select>
+    ${renderSourcePicker(ui, sources, selected)}
     ${connectionDetails}`;
   const appearanceContent = `<label class="field-label" for="phone-theme">主题</label>
     <select id="phone-theme" aria-label="外观主题">
@@ -76,30 +83,30 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
       <span></span>
     </span>
   </label>
-  <small class="field-label">短材料由主楼一起判断；超过3000字才额外生成摘要。</small>
+  ${renderStorySmsInstall(ui, busy, control)}
+  <label class="compact-switch-row" for="default-language"><span>默认语言</span>
+    <select id="default-language" class="default-language-select" aria-label="默认语言" ${busy.has('default-language') ? 'disabled' : ''}>
+      ${[['', '自动'], ['中文', '汉语'], ['英语', '英语'], ['粤语', '粤语'], ['日语', '日语'], ['韩语', '韩语']].map(([value, label]) => `<option value="${value}" ${(state.defaultLanguage || '') === value ? 'selected' : ''}>${label}</option>`).join('')}
+    </select>
+  </label>
   <label class="compact-switch-row" for="image-provider">
     <span>生图设置</span>
     <select id="image-provider" class="image-provider-select" aria-label="生图设置" ${busy.has('image-provider') ? 'disabled' : ''}>
       <option value="baibai" ${imageProviders?.getSelected() !== 'chatu8' ? 'selected' : ''}>柏宝绘</option>
       <option value="chatu8" ${imageProviders?.getSelected() === 'chatu8' ? 'selected' : ''}>智绘姬</option>
     </select>
-  </label>
-  <div class="compact-switch-row settings-export-row">
-    <span>导出酒馆助手脚本</span>
-    <button type="button" class="switch-button" data-action="authoring" aria-label="导出酒馆助手脚本" ${control.isEnabled() ? '' : 'disabled'}>导出</button>
-  </div>`;
+  </label>`;
   return `${pageHeading('设置')}
     <div class="master-switch-row">
-    <label class="compact-switch-row master-switch">
-      <span>启用两三事</span>
-      <span class="switch">
+    <label for="phone-enabled">启用两三事</label>
+    <div class="master-switch-actions">
+      ${updates ? '<div data-update-controls></div>' : ''}
+      <label class="switch">
         <input id="phone-enabled" type="checkbox" role="switch" aria-label="启用两三事" ${control.isEnabled() ? 'checked' : ''} ${busy.has('enabled') ? 'disabled' : ''}>
         <span></span>
-      </span>
-    </label>
-    ${updates ? '<div data-update-controls></div>' : ''}
+      </label>
     </div>
-    ${updates ? '<div data-update-feedback></div>' : ''}
+    </div>
     ${control.isEnabled() ? '' : `<p class="setting-note">${instanceLabel}已在当前角色卡停用，重新开启后可使用其他页面。</p>`}
     <section class="settings-section">
       <button type="button" class="my-profile" data-action="edit-user" aria-label="编辑我的资料" ${control.isEnabled() ? '' : 'disabled'}>
@@ -114,5 +121,8 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
     ${drawer('connection', '连接设置', connection)}
     ${drawer('appearance', '外观设置', appearanceContent)}
     ${drawer('content', '内容设置', content)}
-    <small class="app-version"><span class="app-version-label"><span>两三事 ${VERSION}</span> · <span>${instanceLabel}</span></span>${updates ? '<span data-update-notice></span>' : ''}</small>`;
+    <div class="compact-switch-row settings-export-row">
+      <span>导出酒馆助手脚本</span>
+      <button type="button" class="switch-button" data-action="authoring" aria-label="导出酒馆助手脚本" ${control.isEnabled() ? '' : 'disabled'}>导出</button>
+    </div>`;
 }

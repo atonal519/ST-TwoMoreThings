@@ -8,7 +8,7 @@ import { createHarness } from './harness.mjs';
 import { createContextReader } from '../src/context.js';
 import { createApiSettings } from '../src/api.js';
 
-test('background presets and local images survive a portable card round trip without social records', async () => {
+test('background presets and local images survive a portable card round trip without social or Liangshi records', async () => {
   const h = createHarness(), store = createPhoneStore({ target: h.host.captureChat() });
   await store.upsertContacts([{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }]);
   const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true });
@@ -22,6 +22,7 @@ test('background presets and local images survive a portable card round trip wit
     npcs: [{ id: 'npc:private', name: '私有路人', description: '不随卡复制' }],
     feedIds: ['private-post'], expandedAuthors: ['lin'],
   }));
+  await store.updateLiangshi(() => ({ accounts: [{ id: 'liangshi-account', name: '这批微博作者' }], posts: [{ id: 'liangshi-post', text: '不随卡导出的微博', comments: [{ text: '不随卡导出的评论' }] }], topics: [{ name: '本批话题' }], promoCountdown: 2 }));
   const before = structuredClone(store.read()), saves = h.metadataSaves, reads = [];
   const authoring = createAuthoringService({ store, host: h.host, baseUrl: 'http://localhost/', fetchImage: async url => {
     reads.push(url);
@@ -35,8 +36,9 @@ test('background presets and local images survive a portable card round trip wit
   assert.equal(preset.groups[0].background, 'data:image/webp;base64,AQID');
   assert.deepEqual(preset.wallpapers, { day: 'builtin:glass-lake', night: 'data:image/webp;base64,AQID' });
   assert.equal('social' in preset, false);
+  assert.equal('liangshi' in preset, false);
   const serialized = JSON.stringify(script);
-  for (const privateValue of ['private-post', '这条动态不能随卡导出', '/images/private.png', 'npc:private', '私有路人']) assert.equal(serialized.includes(privateValue), false);
+  for (const privateValue of ['private-post', '这条动态不能随卡导出', '/images/private.png', 'npc:private', '私有路人', 'liangshi-account', 'liangshi-post', '不随卡导出的微博', '不随卡导出的评论', '本批话题']) assert.equal(serialized.includes(privateValue), false);
   const imported = stateFromPreset(preset);
   const reader = createHarness(), readerStore = createPhoneStore({ target: reader.host.captureChat(), initialState: imported });
   assert.deepEqual(readerStore.read().contacts.map(person => person.background), ['color:sage', 'data:image/webp;base64,AQID']);
@@ -44,6 +46,7 @@ test('background presets and local images survive a portable card round trip wit
   assert.deepEqual(readerStore.read().groups[0].memberIds, readerStore.read().contacts.map(person => person.id));
   assert.deepEqual(readerStore.read().wallpapers, preset.wallpapers);
   assert.equal(readerStore.read().social, undefined);
+  assert.equal(readerStore.read().liangshi, undefined);
   assert.deepEqual(readerStore.read().conversations, {});
   assert.equal(reader.metadataSaves, 0, 'loading author defaults does not write a reader archive');
   assert.deepEqual(store.read(), before);
@@ -155,4 +158,16 @@ test('an unavailable local picture gives an actionable export error', async () =
   await store.setWallpaper('day', '/user/images/missing.png');
   const authoring = createAuthoringService({ store, host: h.host, fetchImage: async () => { throw new TypeError('Failed to fetch'); } });
   await assert.rejects(authoring.exportScript(), /图片打包失败.*重新上传/);
+});
+
+test('phone default language survives preset export and old presets remain automatic without resetting existing archives', async () => {
+  const h = createHarness(), store = createPhoneStore({ target: h.host.captureChat() });
+  await store.setDefaultLanguage('粤语');
+  const { script } = await createAuthoringService({ store, host: h.host }).exportScript();
+  const preset = script.data.twoMoreThings;
+  assert.equal(preset.defaultLanguage, '粤语'); assert.equal(stateFromPreset(preset).defaultLanguage, '粤语');
+  const old = { ...preset }; delete old.defaultLanguage;
+  assert.equal(stateFromPreset(old).defaultLanguage, '');
+  const existing = createHarness({ metadata: { pocketPhone: { contacts: [], groups: [], conversations: {}, defaultLanguage: '中文' } } });
+  assert.equal(createPhoneStore({ target: existing.host.captureChat(), initialState: stateFromPreset(preset) }).read().defaultLanguage, '中文');
 });

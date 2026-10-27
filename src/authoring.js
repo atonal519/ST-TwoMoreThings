@@ -1,8 +1,9 @@
 import { cleanBackground } from './backgrounds.js';
 import { readRelease, releaseUrlForCore, STABLE_CORE_URL } from './release.js';
+import { phoneUrl } from './paths.js';
 
 export const REMOTE_CORE_URL = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js';
-export const LOCAL_CORE_URL = new URL('../embed.js', import.meta.url).href;
+export const LOCAL_CORE_URL = phoneUrl('embed.js');
 
 const string = value => typeof value === 'string' ? value : '';
 const profile = person => Object.fromEntries(['name', 'nickname', 'avatar', 'expression', 'language', 'personality', 'tone', 'background'].filter(key => typeof person?.[key] === 'string').map(key => [key, person[key]]));
@@ -20,13 +21,15 @@ export function readCardPreset(character) {
 
 export function stateFromPreset(preset) {
   if (preset?.schemaVersion !== 1) throw new Error('卡内手机配置版本不支持，请让作者更新随卡包。');
+  if ((preset.contacts || []).some(person => Object.hasOwn(person, 'identityOwnerId') && typeof person.identityOwnerId !== 'string')) throw new Error('卡内手机的账号所属人物格式不正确。');
   // 新包保留头像的人工归属；未记归属的旧包继续保护原头像。
-  const contacts = (preset.contacts || []).map(person => ({ ...profile(person), background: cleanBackground(person.background, true), id: string(person.id), source: { kind: 'card' }, edited: true, manualFields: ['name', 'nickname', 'expression', 'language', ...(!Array.isArray(person.manualFields) || person.manualFields.includes('avatar') ? ['avatar'] : [])] }));
+  const contacts = (preset.contacts || []).map(person => ({ ...profile(person), ...(person.identityOwnerId ? { identityOwnerId: string(person.identityOwnerId) } : {}), background: cleanBackground(person.background, true), id: string(person.id), source: { kind: 'card' }, edited: true, manualFields: ['name', 'nickname', 'expression', 'language', 'identityOwnerId', ...(!Array.isArray(person.manualFields) || person.manualFields.includes('avatar') ? ['avatar'] : [])] }));
   const ids = new Set(contacts.map(person => person.id));
   if (ids.size !== contacts.length || contacts.some(person => !person.id || !person.name?.trim())) throw new Error('卡内手机的联系人缺少姓名或编号重复，请让作者重新导出。');
+  if (contacts.some(person => person.identityOwnerId && (person.identityOwnerId === person.id || person.identityOwnerId !== '@user' && (!ids.has(person.identityOwnerId) || contacts.find(owner => owner.id === person.identityOwnerId)?.identityOwnerId)))) throw new Error('卡内手机的账号所属人物无法对应，请让作者重新导出。');
   const groups = (preset.groups || []).map(group => ({ id: string(group.id), name: string(group.name), avatar: string(group.avatar), background: cleanBackground(group.background, true), memberIds: [...new Set(group.memberIds || [])], userIsMember: group.userIsMember !== false }));
   if (new Set(groups.map(group => group.id)).size !== groups.length || groups.some(group => !group.id || !group.name.trim() || ids.has(group.id) || group.memberIds.some(id => !ids.has(id)))) throw new Error('卡内手机的群聊资料或成员无法对应，请让作者重新导出。');
-  return { schemaVersion: 1, contacts, groups, conversations: {}, forum: { posts: [] }, injectEnabled: preset.injectEnabled === true, theme: preset.theme === 'night' ? 'night' : 'day',
+  return { schemaVersion: 1, contacts, groups, conversations: {}, forum: { posts: [] }, injectEnabled: preset.injectEnabled === true, defaultLanguage: string(preset.defaultLanguage).trim(), theme: preset.theme === 'night' ? 'night' : 'day',
     wallpapers: { day: cleanBackground(preset.wallpapers?.day), night: cleanBackground(preset.wallpapers?.night) },
     ...(['stacked', 'rounded'].includes(preset.lockStyle) ? { lockStyle: preset.lockStyle } : {}),
     ...(preset.userProfile ? { userProfile: profile(preset.userProfile) } : {}),
@@ -92,11 +95,11 @@ export function createAuthoringService({ store, host, readEntries = () => host.r
         return images.get(source);
       };
       const ids = new Map(state.contacts.map((person, index) => [person.id, `card:contact-${index + 1}`]));
-      const contacts = await Promise.all(state.contacts.map(async person => ({ ...profile(person), id: ids.get(person.id), avatar: await portable(person.avatar), background: await portable(person.background), manualFields: (person.manualFields || (person.edited ? ['avatar'] : [])).includes('avatar') ? ['avatar'] : [] })));
+      const contacts = await Promise.all(state.contacts.map(async person => ({ ...profile(person), id: ids.get(person.id), ...(person.identityOwnerId ? { identityOwnerId: person.identityOwnerId === '@user' ? '@user' : ids.get(person.identityOwnerId) || person.identityOwnerId } : {}), avatar: await portable(person.avatar), background: await portable(person.background), manualFields: (person.manualFields || (person.edited ? ['avatar'] : [])).includes('avatar') ? ['avatar'] : [] })));
       const groups = await Promise.all((state.groups || []).map(async (group, index) => ({ id: `card:group-${index + 1}`, name: group.name, avatar: await portable(group.avatar), background: await portable(group.background), memberIds: group.memberIds.map(id => ids.get(id)), userIsMember: group.userIsMember })));
       const userProfile = state.userProfile ? { ...profile(state.userProfile), avatar: await portable(state.userProfile.avatar) } : undefined;
       const preferences = readEntries();
-      const preset = { schemaVersion: 1, theme: state.theme === 'night' ? 'night' : 'day', injectEnabled: state.injectEnabled === true, contacts, groups, entries: { fabShow: preferences.fabShow !== false, qrShow: preferences.qrShow === true },
+      const preset = { schemaVersion: 1, theme: state.theme === 'night' ? 'night' : 'day', injectEnabled: state.injectEnabled === true, defaultLanguage: state.defaultLanguage || '', contacts, groups, entries: { fabShow: preferences.fabShow !== false, qrShow: preferences.qrShow === true },
         ...(['stacked', 'rounded'].includes(state.lockStyle) ? { lockStyle: state.lockStyle } : {}),
         wallpapers: { day: await portable(state.wallpapers?.day), night: await portable(state.wallpapers?.night) }, ...(userProfile ? { userProfile } : {}),
       };

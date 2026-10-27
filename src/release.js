@@ -1,9 +1,9 @@
-export const RELEASE_URL = 'https://raw.githubusercontent.com/atonal519/ST-TwoMoreThings/main/release.json';
+export const RELEASE_URL = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@latest/release.json';
 export const STABLE_CORE_URL = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@56a6614198bd177f967a9406f7b6f425f9a810af/embed.js';
-export const UPDATE_NOTICE_PATH = 'docs/updates-0.3.9.md';
+export const UPDATE_NOTICE_PATH = 'docs/updates-0.4.0.md';
 
 // 导出启动器会嵌入此函数；保持自包含，公共请求不携带酒馆请求头或凭证。
-export async function readRelease({ url = 'https://raw.githubusercontent.com/atonal519/ST-TwoMoreThings/main/release.json', fetchImpl = globalThis.fetch, timeoutMs = 5000 } = {}) {
+export async function readRelease({ url = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@latest/release.json', fetchImpl = globalThis.fetch, timeoutMs = 5000 } = {}) {
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetchImpl(url, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
@@ -19,7 +19,7 @@ export async function readRelease({ url = 'https://raw.githubusercontent.com/ato
 
 export function releaseUrlForCore(coreUrl) {
   const url = new URL(coreUrl), match = url.hostname.endsWith('.jsdelivr.net') && url.pathname.match(/^\/gh\/([^/]+)\/([^/@]+)@[^/]+\//);
-  return match ? `https://raw.githubusercontent.com/${match[1]}/${match[2]}/main/release.json` : new URL('./release.json', url).href;
+  return match ? `${url.origin}/gh/${match[1]}/${match[2]}@latest/release.json` : new URL('./release.json', url).href;
 }
 
 export function releaseCoreUrl(release, coreUrl = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js') {

@@ -1,6 +1,14 @@
 import { avatarSource } from './profiles.js';
 import { isCameoAvatar } from './cameo-avatar.js';
 
+// 编辑器只投影预览，不把借用的千千结图片写回原始草稿。
+export function readContactAvatarDraft(draft, current, bridge) {
+  if (draft.automaticAvatar === false || draft.automaticAvatar !== true && draft.avatar !== (current?.avatar || '')) return draft;
+  const person = { ...current, ...draft };
+  if (draft.automaticAvatar === true) person.manualFields = (current?.manualFields || []).filter(key => key !== 'avatar');
+  return readContactAvatars([person], bridge)[0];
+}
+
 // 千千结仍拥有头像；这里只为当前画面补充，不把图片复制进手机档案或作者包。
 export function readContactAvatars(contacts, bridge) {
   if (!bridge?.getPeopleAvatars) return contacts;

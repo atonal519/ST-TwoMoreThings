@@ -25,7 +25,7 @@ try {
       const style = document.createElement('style'); style.textContent = ':host{font-family:PocketPreviewCJK,sans-serif}'; document.querySelector('.pocket-phone').shadowRoot.append(style);
       previewHarness.metadata.pocketPhone.theme = theme; previewHarness.app.open();
     }, { css: readFileSync('/tmp/mobile-plugin-reference-research/preview-fonts.css', 'utf8').replaceAll('Nowar Rounded TW Wc', 'PocketPreviewCJK'), theme: width === 390 ? 'night' : 'day' });
-    await page.evaluate(async () => { await document.fonts.load('14px PocketPreviewCJK', '短信通知回复待办林舟'); await document.fonts.ready; });
+    await page.evaluate(async () => { await document.fonts.load('14px PocketPreviewCJK', '短信通知回复林舟'); await document.fonts.ready; });
     await openApp(page, 'ainstgram');
     await page.getByRole('button', { name: '刷新动态', exact: true }).click();
     await page.locator('.social-post').first().waitFor();
@@ -48,10 +48,10 @@ try {
     await article.getByText('先发出来，我去逛别的。', { exact: true }).waitFor();
     assert.equal(await article.locator('textarea').inputValue(), '', 'published comment clears its draft before the model finishes');
     assert.equal(await article.getByText('看见你的留言啦。', { exact: true }).count(), 0);
-    await openApp(page, '待办');
+    await openApp(page, '日历');
     await release();
     await page.locator('.phone-top-notice').filter({ hasText: '回复了你' }).waitFor();
-    assert.equal(await page.locator('.view-todos').isVisible(), true, 'reply completion does not navigate away from the current app');
+    assert.equal(await page.locator('.view-calendar').isVisible(), true, 'reply completion does not navigate away from the current app');
     assert.equal(await page.evaluate(() => previewHarness.requests.length), calls + 1, 'posting and notifying use only the original model request');
     await page.locator('.phone-shell').screenshot({ path: `${output}/${host}-${width}-reply-push.png` });
     await page.locator('[data-action="open-phone-notice"]').click();
@@ -121,13 +121,13 @@ try {
     const feedCalls = await hold(null);
     await page.getByRole('button', { name: '刷新动态', exact: true }).click();
     await page.waitForFunction(count => previewHarness.requests.length === count + 1, feedCalls);
-    await openApp(page, '待办');
+    await openApp(page, '日历');
     await release();
     await page.locator('.phone-top-notice').filter({ hasText: 'ainstgram已更新' }).waitFor();
     const mainBox = await page.locator('.phone-main').boundingBox(), banner = await page.locator('.phone-top-notice').boundingBox(), shell = await page.locator('.phone-shell').boundingBox();
     assert.ok(banner.x >= shell.x && banner.x + banner.width <= shell.x + shell.width && banner.y < mainBox.y + 40, 'push stays at the top inside the phone');
     await page.locator('[data-action="dismiss-phone-notice"]').click();
-    assert.equal(await page.locator('.view-todos').isVisible(), true);
+    assert.equal(await page.locator('.view-calendar').isVisible(), true);
     assert.equal(await page.locator('.phone-top-notice').count(), 0);
     await openApp(page, 'ainstgram');
     await page.locator('.social-author').first().click();

@@ -1,8 +1,9 @@
 import { blobEmojiData } from './emoji-data.js';
+import { phoneUrl } from './paths.js';
 
 // 大贴纸和行内表情引用同一份 Blob 图片；消息仍保存原文字，不保存图片副本。
 export const blobEmojis = blobEmojiData.map(([code, label, emoji, aliases]) => ({
-  code, label, emoji, aliases, src: new URL(`../assets/stickers/blob-${code}.svg`, import.meta.url).href,
+  code, label, emoji, aliases, src: phoneUrl(`assets/stickers/blob-${code}.svg`),
 }));
 const byCode = new Map(blobEmojis.map(item => [item.code, item]));
 const byGlyph = new Map(blobEmojis.map(item => [item.emoji.replaceAll('\ufe0f', ''), item]));
