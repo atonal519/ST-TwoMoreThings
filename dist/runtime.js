@@ -285,7 +285,7 @@ function ee(e, t) {
 }
 //#endregion
 //#region src/release.js
-var te = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@56a6614198bd177f967a9406f7b6f425f9a810af/embed.js", P = "docs/updates-0.4.0.md";
+var te = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@f3a5c271882925d8e379dac6ab69da225aebd30f/embed.js", P = "docs/updates-0.4.1.md";
 async function ne({ url: e = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@latest/release.json", fetchImpl: t = globalThis.fetch, timeoutMs: n = 5e3 } = {}) {
 	let r = new AbortController(), i = setTimeout(() => r.abort(), n);
 	try {
@@ -382,20 +382,20 @@ function le(e) {
 async function ue(e, t, n, r, i) {
 	let a = document.getElementById(e);
 	try {
-		let e = !1, o;
+		let e = !1, o, s = "";
 		if (n) try {
 			o = await i({ url: r }), t = t.replace("@main/", `@${o.sha}/`);
-		} catch {
-			t = n, e = !0;
+		} catch (r) {
+			t = n, e = !0, s = r.message;
 		}
-		let { mountEmbedded: s } = await import(t).catch(() => {
+		let { mountEmbedded: c } = await import(t).catch(() => {
 			throw Error("卡内手机核心加载失败，请检查网络后重新加载脚本。");
-		}), c = s({
+		}), l = c({
 			preset: a.preset,
 			release: o,
-			updateError: e ? "未能检查手机更新，请稍后手动检查。" : ""
+			updateError: s
 		});
-		a.owner.addEventListener("pagehide", () => c.dispose(), { once: !0 }), e && globalThis.toastr?.warning("未能检查手机更新，已加载稳定发布版本。稍后重新加载脚本可再次检查更新。");
+		a.owner.addEventListener("pagehide", () => l.dispose(), { once: !0 }), e && globalThis.toastr?.warning("未能检查手机更新，已加载稳定发布版本。稍后重新加载脚本可再次检查更新。");
 	} catch (e) {
 		globalThis.toastr?.error(e.message || "卡内手机加载失败，请重新加载脚本。"), console.error("两三事随卡加载失败", e);
 	} finally {
@@ -10522,7 +10522,7 @@ function Zs({ value: e = "", theme: t, busy: n, chat: r = !1, preview: i, defaul
 }
 //#endregion
 //#region src/version.js
-var Qs = "0.4.0";
+var Qs = "0.4.1";
 //#endregion
 //#region src/ui/settings.js
 function $s(e, t, n) {

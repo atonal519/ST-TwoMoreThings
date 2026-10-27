@@ -42,18 +42,20 @@ async function loadEmbedded(nodeId, coreUrl, stableCoreUrl, releaseUrl, readRele
   try {
     let updateUnavailable = false;
     let release;
+    let updateError = '';
     if (stableCoreUrl) {
       try {
         release = await readRelease({ url: releaseUrl });
         // 固定整套相对依赖的提交地址，避免 main 的长期缓存或混用新旧模块。
         coreUrl = coreUrl.replace('@main/', `@${release.sha}/`);
-      } catch {
+      } catch (error) {
         coreUrl = stableCoreUrl;
         updateUnavailable = true;
+        updateError = error.message;
       }
     }
     const { mountEmbedded } = await import(coreUrl).catch(() => { throw new Error('卡内手机核心加载失败，请检查网络后重新加载脚本。'); });
-    const app = mountEmbedded({ preset: node.preset, release, updateError: updateUnavailable ? '未能检查手机更新，请稍后手动检查。' : '' });
+    const app = mountEmbedded({ preset: node.preset, release, updateError });
     node.owner.addEventListener('pagehide', () => app.dispose(), { once: true });
     if (updateUnavailable) globalThis.toastr?.warning('未能检查手机更新，已加载稳定发布版本。稍后重新加载脚本可再次检查更新。');
   } catch (error) {

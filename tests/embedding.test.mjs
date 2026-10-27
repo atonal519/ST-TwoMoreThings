@@ -7,6 +7,43 @@ import { createPhoneControl } from '../src/control.js';
 import { createHarness } from './harness.mjs';
 import { createContextReader } from '../src/context.js';
 import { createApiSettings } from '../src/api.js';
+import { readRelease, STABLE_CORE_URL } from '../src/release.js';
+
+test('exported bootstrap retains mapped manifest errors and an update-capable published fallback', async () => {
+  const h = createHarness(), store = createPhoneStore({ target: h.host.captureChat() });
+  const { script } = await createAuthoringService({ store, host: h.host }).exportScript();
+  let node;
+  const doc = { createElement: () => (node = { remove() {}, owner: null }), getElementById: () => node, head: { append() {} } };
+  const owner = { parent: { document: doc }, addEventListener() {} };
+  Function('window', 'getVariables', script.content)(owner, () => script.data);
+  const ending = node.textContent.indexOf('\n})(');
+  assert.ok(ending > 0);
+  const load = Function(`return (${node.textContent.slice(1, ending + 2)})`)();
+  const previous = Object.fromEntries(['document', 'toastr', '__fallbackCaptured'].map(key => [key, { own: Object.hasOwn(globalThis, key), value: globalThis[key] }]));
+  const moduleUrl = entry => 'data:text/javascript,' + encodeURIComponent(`export function mountEmbedded(options){globalThis.__fallbackCaptured.push({entry:${JSON.stringify(entry)},options});return {dispose(){}}}`);
+  const cases = [
+    { name: 'timeout', message: '检查更新超时，请稍后再试。', response: (_url, { signal }) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })) },
+    { name: 'invalid', message: '发布版本信息不完整，请稍后再检查更新。', response: async () => Response.json({ version: '0.4.0', sha: 'invalid' }) },
+    { name: 'http', message: '暂时无法读取发布版本，请检查网络或稍后再试。', response: async () => new Response(null, { status: 503 }) },
+    { name: 'primary', message: '', response: async () => Response.json({ version: '0.4.0', sha: 'f3a5c271882925d8e379dac6ab69da225aebd30f' }) },
+  ];
+  try {
+    globalThis.document = doc; globalThis.toastr = { warning() {}, error() {} }; globalThis.__fallbackCaptured = [];
+    for (const item of cases) {
+      let reads = 0;
+      await load(node.id, moduleUrl('primary'), moduleUrl('fallback'), 'https://manifest.invalid/release.json', options => readRelease({ ...options, timeoutMs: 5, fetchImpl: (...args) => { reads++; return item.response(...args); } }));
+      const captured = globalThis.__fallbackCaptured.at(-1);
+      assert.equal(reads, 1, item.name);
+      assert.equal(captured.entry, item.name === 'primary' ? 'primary' : 'fallback');
+      assert.equal(captured.options.updateError, item.message, item.name);
+      assert.equal(captured.options.preset, node.preset);
+    }
+    assert.equal(STABLE_CORE_URL, 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@f3a5c271882925d8e379dac6ab69da225aebd30f/embed.js');
+    assert.ok(script.content.includes(STABLE_CORE_URL));
+  } finally {
+    for (const [key, saved] of Object.entries(previous)) { if (saved.own) globalThis[key] = saved.value; else delete globalThis[key]; }
+  }
+});
 
 test('background presets and local images survive a portable card round trip without social or Liangshi records', async () => {
   const h = createHarness(), store = createPhoneStore({ target: h.host.captureChat() });
