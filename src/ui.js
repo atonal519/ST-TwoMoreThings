@@ -3,7 +3,7 @@ import { renderHome } from './ui/home.js';
 import { createPhoneClock } from './ui/status.js';
 import { renderFeedback, renderShell } from './ui/shell.js';
 import { renderDesktop } from './ui/desktop.js';
-import { renderInbox, renderChat, renderChatMenu, renderInboxMenu, renderMessageMenu } from './ui/messages.js';
+import { renderInbox, renderChat, renderChatMenu, renderInboxMenu } from './ui/messages.js';
 import { renderForum, renderPost } from './ui/forum.js';
 import { forumComments } from './forum.js';
 import { renderSettings, renderSettingsVersion, renderStorySmsInstall } from './ui/settings.js';
@@ -29,6 +29,7 @@ import { findBlobEmoji } from './emojis.js';
 import { readContactAvatars, readContactAvatarDraft } from './contact-avatars.js';
 import { createCameoAvatar, isCameoAvatar } from './cameo-avatar.js';
 import { displayName } from './profiles.js';
+import { partitionHistory } from './timeline.js';
 import { renderPhoneNotice } from './ui/notifications.js';
 import { readSocialPosts } from './social.js';
 import { createPluginUpdatesView } from './ui/plugin-updates-view.js';
@@ -523,9 +524,16 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.view = 'group-profile'; ui.chatMenu = false; ui.inboxMenu = false; setFeedback(null); render();
   }
   function closeActionMenu() { actionMenu.close(true); }
+  function closeMessageActions() {
+    ui.selectedMessage = '';
+    // 只移除浮起操作，保留输入节点和焦点，让下一次点击直接开始打字。
+    root.querySelectorAll('.message-actions').forEach(node => node.remove());
+    root.querySelectorAll('.is-selected').forEach(node => node.classList.remove('is-selected'));
+    root.querySelectorAll('[data-message][aria-expanded="true"]').forEach(node => node.setAttribute('aria-expanded', 'false'));
+  }
   function closeLiangshiMenu() { closeActionMenu(); ui.liangshiMenu = ''; }
   function openActionMenu(title, content, triggerSelector) {
-    selects.close(); closeSources(); closeModels();
+    selects.close(); closeSources(); closeModels(); closeMessageActions();
     actionMenu.open({ title, content, triggerSelector, route: renderedRoute });
   }
   function closeModels() {
@@ -546,6 +554,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   function dismissMenus(event) {
     selects.dismiss(event);
     actionMenu.dismiss(event);
+    if (ui.selectedMessage && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.bubble, .card-more, .message-actions'))) closeMessageActions();
     if (ui.identityOwnersOpen && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.identity-picker'))) closeIdentityOptions();
     if (event) {
       const path = event.composedPath();
@@ -639,6 +648,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (event.key === 'Escape') {
       event.stopPropagation();
       if (ui.avatarMenuOpen) { dismissMenus(); root.querySelector('.avatar-menu-toggle')?.focus({ preventScroll: true }); }
+      else if (ui.selectedMessage) {
+        const trigger = root.querySelector(`[data-message="${CSS.escape(ui.selectedMessage)}"]`);
+        closeMessageActions(); trigger?.focus({ preventScroll: true });
+      }
       else if (ui.photo) closePhoto();
       else if (ui.notice) dismissPhoneNotice();
       else close();
@@ -734,12 +747,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (button.dataset.message) {
       const messageId = button.dataset.message, wasOpen = ui.selectedMessage === messageId;
       closeActionMenu();
-      if (!wasOpen) {
-        ui.selectedMessage = messageId;
-        button.closest('.message-row')?.classList.add('is-selected');
-        const selector = `${button.classList.contains('card-more') ? '.card-more' : '.bubble'}[data-message="${CSS.escape(messageId)}"]`;
-        openActionMenu('短信操作', () => renderMessageMenu(store.read(), { ui, busy }), selector);
-      }
+      ui.chatMenu = false; ui.selectedMessage = wasOpen ? '' : messageId;
+      render();
       return;
     }
     if (button.dataset.post) { ui.forumScroll = { ...listPosition(button), tag: ui.forumTag }; ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
@@ -1009,6 +1018,17 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'confirm-clear': {
         const anchor = ui.batch;
         void perform(`clear:${id}`, () => store.clearConversation(id, anchor), () => { ui.confirmClear = false; ui.selectedMessage = ''; ui.drafts.delete(id); onContextChange(); }); break;
+      }
+      case 'delete-history': {
+        const state = store.read(), group = partitionHistory(state.conversations[id] || [], ui.batch).past.find(item => item.key === button.dataset.historyKey);
+        if (!group) break;
+        const person = ui.view === 'group-chat' ? state.groups.find(item => item.id === id) : state.contacts.find(item => item.id === id);
+        const content = doc.createElement('p');
+        content.textContent = `${group.label}，共 ${group.messages.length} 条消息。删除“${displayName(person)}”的这一整段历史及不再使用的生成图片；其他历史、当前消息和草稿保留。`;
+        void dialog.custom({ title: '删除这段历史', content, confirmText: '确认删除', cancelText: '取消', danger: true, dismissOnBackdrop: true, submit: () => true }).then(confirmed => {
+          if (confirmed) void perform(`delete-history:${id}`, () => store.clearConversation(id, { key: group.key }), () => { ui.selectedMessage = ''; onContextChange(); });
+        });
+        break;
       }
       case 'delete-message': {
         const messageId = button.dataset.messageTarget;

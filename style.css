@@ -224,6 +224,10 @@ h3 { font-size: 14px; font-weight: 600; }
 .history-fold::before, .history-fold::after { content: ''; height: 1px; flex: 1; background: var(--pp-divider-soft); }
 .past-batch { display: flex; flex-direction: column; gap: 3px; padding-bottom: 12px; }
 .past-batch .message-date, .current-batch-label { text-align: center; overflow-wrap: anywhere; }
+.message-date > .history-batch-heading { display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 0; }
+.history-batch-heading > span { min-width: 0; }
+.history-batch-delete { flex: 0 0 24px; width: 24px; height: 26px; min-height: 26px; }
+.history-batch-delete svg { width: 14px; height: 14px; }
 /* 复用溯之的气泡、连续消息和输入区布局；颜色由小手机主题提供。 */
 .message-row { display: flex; flex-shrink: 0; gap: 8px; position: relative; width: 100%; }
 .message-row.is-mine { flex-direction: row-reverse; }
@@ -247,6 +251,11 @@ h3 { font-size: 14px; font-weight: 600; }
 .is-mine .bubble:hover:not(:disabled) { color: var(--pp-message-user-text); }
 .message-original { display: block; }
 .message-translation { display: block; font-size: 12px; line-height: 1.65; opacity: .78; margin-top: 6px; padding-top: 5px; border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+.message-actions { position: absolute; left: calc(100% + 4px); top: 50%; transform: translateY(-50%); z-index: 2; display: grid; width: 54px; padding: 3px; border: 1px solid var(--pp-divider-soft); border-radius: 9px; background: var(--pp-surface); box-shadow: var(--pp-elevation-soft); }
+.is-mine .message-actions { left: auto; right: calc(100% + 4px); }
+.message-action { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 26px; padding: 4px 2px; border-radius: 5px; font-size: 10px; line-height: 16px; white-space: nowrap; }
+.message-action svg { width: 14px; height: 14px; }
+.message-action:hover:not(:disabled) { background: var(--pp-pale); }
 .message-row:not(.grouped-bottom) .bubble::after { content: ''; position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--pp-surface); border: 1px solid var(--pp-divider-soft); bottom: -9px; left: 4px; }
 .message-row.is-mine:not(.grouped-bottom) .bubble::after { background: var(--pp-message-user); border-color: var(--pp-message-user); left: auto; right: 4px; }
 .message-reply { display: grid; gap: 2px; margin: -2px -2px 6px; padding: 4px 6px; border-left: 2px solid var(--pp-bronze); border-radius: 5px; color: var(--pp-ink); font-size: 11px; font-weight: 400; text-align: left; background: var(--pp-surface-soft); }

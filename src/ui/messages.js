@@ -66,15 +66,6 @@ export function renderInboxMenu(busy) {
   return `${action('organize', busy.has('directory') ? '整理中…' : '整理通讯录', '', 'menu-item', busy.has('directory'))}${action('add-contact', '添加联系人', '', 'menu-item')}${action('add-group', '创建群聊', '', 'menu-item')}`;
 }
 
-export function renderMessageMenu(state, { ui, busy }) {
-  const isGroup = ui.view === 'group-chat', id = isGroup ? ui.groupId : ui.contactId;
-  const messages = state.conversations[id] || [], message = messages.find(row => row.id === ui.selectedMessage);
-  if (!message) return '';
-  const current = partitionHistory(messages, ui.batch).current.some(row => row.id === message.id);
-  const target = `data-message-target="${escape(message.id)}"`;
-  return `${isGroup && current ? `<button type="button" class="menu-item" data-action="reply-message" ${target}>${icon('message-reply')}<span>引用</span></button>` : ''}<button type="button" class="menu-item danger" data-action="delete-message" ${target} aria-label="删除这条短信" ${busy.has(`delete:${id}`) ? 'disabled' : ''}>${icon('message-delete')}<span>删除</span></button>`;
-}
-
 function renderMessage(message, previous, next, { contact, user, selected, deleting, isGroup, busy, readOnly = false, state, ui, conversationId }) {
   const mine = message.role === 'user';
   const party = item => item && (item.speakerId || item.role);
@@ -83,7 +74,7 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
   const chosen = selected === message.id;
   const bubbleAttributes = message.type === 'image'
     ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" aria-busy="${busy.has(`image:${message.id}`)}" ${busy.has(`image:${message.id}`) ? 'disabled' : ''}`
-    : `data-message="${escape(message.id)}" aria-label="短信：${escape(messageText(message))}" aria-haspopup="menu" aria-expanded="${chosen}"`;
+    : `data-message="${escape(message.id)}" aria-label="短信：${escape(messageText(message))}" aria-expanded="${chosen}"`;
   const timestamp = message.timeLabel
     ? `<div class="message-foot"><time title="${escape([message.storyDate, message.storyWeekday, message.timeLabel].filter(Boolean).join(' '))}" datetime="${escape(message.createdAt || '')}">${escape(message.timeLabel)}</time></div>`
     : '';
@@ -102,9 +93,12 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
         ${isGroup && !mine && !hasPrev ? `<span class="message-sender">${escape(displayName(sender || contact))}</span>` : ''}
         <div class="bubble-line">
           <button type="button" class="bubble ${message.type ? `${message.type}-message` : ''}" ${bubbleAttributes}>${replyBlock}${body}</button>
-
+          ${chosen ? `<div class="message-actions" role="group" aria-label="短信操作">
+            ${isGroup && !readOnly ? `<button type="button" class="message-action message-reply-action" data-action="reply-message" data-message-target="${escape(message.id)}">${icon('message-reply')}<span>引用</span></button>` : ''}
+            <button type="button" class="message-action message-delete danger" data-action="delete-message" data-message-target="${escape(message.id)}" aria-label="删除这条短信" ${deleting ? 'disabled' : ''}>${icon('message-delete')}<span>删除</span></button>
+          </div>` : ''}
         </div>
-        ${renderCardActions(message, { readOnly, busy })}
+        ${renderCardActions(message, { readOnly, busy, selected: chosen })}
         ${timestamp}
       </div>
     </div>
@@ -139,7 +133,7 @@ export function renderChat(state, { ui, busy }) {
     const group = past[index], items = group.messages.slice(-remaining);
     remaining -= items.length;
     historySections.unshift(`<section class="past-batch" aria-label="历史聊天，只读">
-      <div class="message-date"><span>${escape(group.label)}</span></div>
+      <div class="message-date"><span class="history-batch-heading"><span>${escape(group.label)}</span><button type="button" class="icon-button history-batch-delete danger" data-action="delete-history" data-history-key="${escape(group.key)}" aria-label="删除这段历史" title="删除这段历史" ${busy.has(`delete-history:${contact.id}`) ? 'disabled' : ''}>${icon('message-delete')}</button></span></div>
       ${renderList(items, true)}
     </section>`);
   }

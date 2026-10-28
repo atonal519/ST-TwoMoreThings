@@ -217,7 +217,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.id !== messageId) } }), true);
     },
     clearConversation(id, anchor) {
-      return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => message.batch?.key !== anchor.key) } }), true);
+      return update(state => ({ ...state, conversations: { ...state.conversations, [id]: (state.conversations[id] || []).filter(message => (message.batch?.key ?? 'legacy') !== anchor.key) } }), true);
     },
     async saveContact(id, draft) {
       const profile = { ...cleanProfile(draft, true), ...('background' in draft ? { background: cleanBackground(draft.background, true) } : {}) };

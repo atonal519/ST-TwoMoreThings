@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { mkdirSync, readFileSync } from 'node:fs';
 
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
 const output = '/home/admin/sillytavern/data/codex-private/tmt-todos';
@@ -13,18 +12,13 @@ try {
     page.setDefaultTimeout(5000);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.route('**/__font/*', route => {
-      const name = basename(new URL(route.request().url()).pathname), candidate = '/tmp/mobile-plugin-reference-research/preview-fonts/' + name;
-      return route.fulfill({ path: existsSync(candidate) ? candidate : '/tmp/myriad-home-design-20261016/' + name, contentType: 'font/woff2' });
-    });
     await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${host}&group=1&clock=story`);
     await page.locator('.phone-shell').waitFor();
-    const fontCss = readFileSync('/tmp/mobile-plugin-reference-research/preview-fonts.css', 'utf8').replaceAll('Nowar Rounded TW Wc', 'PocketPreviewCJK');
-    await page.evaluate(({ css, theme }) => {
-      const face = document.createElement('style'); face.textContent = css; document.head.append(face);
+    await page.evaluate(async ({ fontData, theme }) => {
+      const face = new FontFace('PocketPreviewCJK', `url(data:font/otf;base64,${fontData})`); await face.load(); document.fonts.add(face);
       const style = document.createElement('style'); style.textContent = ':host{font-family:PocketPreviewCJK,sans-serif}'; document.querySelector('.pocket-phone').shadowRoot.append(style);
       previewHarness.metadata.pocketPhone.theme = theme; previewHarness.app.open();
-    }, { css: fontCss, theme });
+    }, { fontData: readFileSync('/tmp/st-tools-browser-libs/noto-sans-cjk-sc-regular.otf').toString('base64'), theme });
     await page.evaluate(async () => { await document.fonts.load('14px PocketPreviewCJK', '短信引用林舟收到'); await document.fonts.ready; });
     await page.getByRole('button', { name: '进入桌面', exact: true }).click();
     await page.getByRole('button', { name: '短信', exact: true }).click();

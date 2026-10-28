@@ -2,6 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHarness } from './harness.mjs';
 import { createPhoneStore } from '../src/store.js';
+import { readTimeline, partitionHistory } from '../src/timeline.js';
+
+test('timeline labels use the host zero-based AI message index', () => {
+  const first = { is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' };
+  assert.equal(readTimeline([first]).label, '2026-10-18 · 18:00 · 主楼 #0');
+  assert.equal(readTimeline([first, { is_user: true, mes: '继续' }, first]).label, '2026-10-18 · 18:00 · 主楼 #2');
+});
+
+test('past labels correct only the trailing floor from a valid batch key without changing saved records', () => {
+  const rows = [
+    { id: 'old', batch: { key: '[6,"旧历二年九月","18:00"]', label: '旧历二年九月 · 18:00 · 主楼 #7' } },
+    { id: 'unknown', batch: { key: 'old-format', label: '过去 · 主楼 #7' } },
+    { id: 'before', batch: { key: '[-1]', label: '正文开始前' } },
+  ];
+  const saved = structuredClone(rows);
+  assert.deepEqual(partitionHistory(rows, { key: '[8]' }).past.map(group => group.label), [
+    '旧历二年九月 · 18:00 · 主楼 #6', '过去 · 主楼 #7', '正文开始前',
+  ]);
+  assert.deepEqual(rows, saved);
+});
 
 test('same story time on two AI floors still separates history; clear only removes current messages', async () => {
   const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }], settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } } });

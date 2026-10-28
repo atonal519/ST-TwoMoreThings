@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderChatMenu, renderMessageMenu, renderInboxMenu } from '../src/ui/messages.js';
+import { renderChat, renderChatMenu, renderInboxMenu } from '../src/ui/messages.js';
 import { renderLiangshiOwnMenu } from '../src/ui/liangshi.js';
 
 const disabled = (markup, action) => /\sdisabled(?:[\s=>]|$)/.test(markup.match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>`))?.[0] || '');
@@ -31,16 +31,16 @@ test('own Weibo menu keeps all shared busy keys including nested image tasks', (
 });
 
 
-test('message operation menus keep stable targets, current group reply eligibility and conversation busy limits', () => {
+test('message side actions keep stable targets, current group reply eligibility and conversation busy limits', () => {
   const messages = [{ id: 'current', batch: { key: 'floor:3' }, storyFloor: 3, storyDate: '2031年4月8日', text: '当前消息' }, { id: 'past', batch: { key: 'floor:1' }, storyFloor: 1, storyDate: '2031年4月7日', text: '历史消息' }];
-  const state = { conversations: { friends: messages, lin: messages } };
-  const ui = { view: 'group-chat', groupId: 'friends', selectedMessage: 'current', batch: { key: 'floor:3', floor: 3 } };
-  const current = renderMessageMenu(state, { ui, busy: new Set(['delete:friends']) });
+  const state = { contacts: [{ id: 'lin', name: '林舟' }], groups: [{ id: 'friends', name: '朋友群', memberIds: ['lin'], userIsMember: true }], conversations: { friends: messages, lin: messages } };
+  const ui = { view: 'group-chat', groupId: 'friends', selectedMessage: 'current', batch: { key: 'floor:3', floor: 3 }, visibleMessages: 60, visibleHistory: 60, historyOpen: true, drafts: new Map() };
+  const current = renderChat(state, { ui, busy: new Set(['delete:friends']) });
   assert.ok(current.includes('data-message-target="current"')); assert.equal(disabled(current, 'delete-message'), true);
   assert.ok(current.includes('reply-message'));
-  const history = renderMessageMenu(state, { ui: { ...ui, selectedMessage: 'past' }, busy: new Set() });
+  const history = renderChat(state, { ui: { ...ui, selectedMessage: 'past' }, busy: new Set() });
   assert.ok(!history.includes('reply-message')); assert.ok(history.includes('data-message-target="past"'));
-  assert.ok(!renderMessageMenu(state, { ui: { ...ui, view: 'chat', contactId: 'lin' }, busy: new Set() }).includes('reply-message'));
+  assert.ok(!renderChat(state, { ui: { ...ui, view: 'chat', contactId: 'lin' }, busy: new Set() }).includes('reply-message'));
   assert.equal(disabled(renderInboxMenu(new Set(['directory'])), 'organize'), true);
   assert.equal(disabled(renderInboxMenu(new Set(['other'])), 'organize'), false);
 });

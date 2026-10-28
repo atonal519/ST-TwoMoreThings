@@ -8,18 +8,22 @@ try {
   await page.goto('http://127.0.0.1:8917/tests/preview.html');
   await openApp(page, '短信');
   await page.getByRole('button', { name: /林舟/ }).click();
+  await page.waitForFunction(() => previewHarness.metadataSaves > 0);
+  const operations = await page.evaluate(() => previewHarness.requests.length + previewHarness.metadataSaves);
   await page.getByRole('button', { name: '聊天选项', exact: true }).click();
   await page.getByRole('textbox', { name: '短信内容' }).click();
-  assert.equal(await page.locator('.chat-menu').count(), 0, '点击输入框应关闭更多菜单');
+  assert.equal(await page.getByRole('menu', { name: '聊天选项', exact: true }).count(), 0, '点击输入框应关闭更多菜单');
   await page.keyboard.type('菜单关闭后直接输入');
   assert.equal(await page.getByRole('textbox', { name: '短信内容' }).inputValue(), '菜单关闭后直接输入');
   await page.getByRole('button', { name: '聊天选项', exact: true }).click();
   await page.mouse.click(15, 15);
-  assert.equal(await page.locator('.chat-menu').count(), 0, '点击手机外的空白也应关闭菜单');
+  assert.equal(await page.getByRole('menu', { name: '聊天选项', exact: true }).count(), 0, '点击手机外的空白也应关闭菜单');
   await page.locator('.bubble').first().click();
+  assert.equal(await page.locator('.message-actions').count(), 1, '短信操作在气泡侧边浮起');
+  assert.equal(await page.getByRole('menu', { name: '短信操作', exact: true }).count(), 0);
   await page.getByRole('textbox', { name: '短信内容' }).click();
   assert.equal(await page.getByRole('button', { name: '删除这条短信', exact: true }).count(), 0);
   assert.equal(await page.locator('.message-actions').count(), 0, '点击输入框收起整个消息菜单');
-  assert.equal(await page.evaluate(() => previewHarness.requests.length + previewHarness.metadataSaves), 0);
+  assert.equal(await page.evaluate(() => previewHarness.requests.length + previewHarness.metadataSaves), operations, '菜单操作不增加保存或请求，首次头像初始化单独计数');
   console.log('Outside-click dismissal preserves typing and does not request or save.');
 } finally { await browser.close(); }

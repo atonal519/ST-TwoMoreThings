@@ -28,14 +28,14 @@ export function renderCardBody(message, generating = false) {
   return renderBilingual(message.text, message.translation);
 }
 
-export function renderCardActions(message, { readOnly, busy }) {
+export function renderCardActions(message, { readOnly, busy, selected = false }) {
   const transfer = message.transfer;
   const actions = message.type === 'transfer' && !readOnly && transfer.recipientId === '@user' && transfer.status === 'pending'
     ? `<button type="button" data-transfer-id="${escape(message.id)}" data-transfer-status="accepted" ${busy.has(`transfer:${message.id}`) ? 'disabled' : ''}>收下</button>
       <button type="button" data-transfer-id="${escape(message.id)}" data-transfer-status="returned" ${busy.has(`transfer:${message.id}`) ? 'disabled' : ''}>退回</button>`
     : '';
   const more = message.type === 'image'
-    ? `<button type="button" class="icon-button card-more" aria-haspopup="menu" aria-expanded="false" data-message="${escape(message.id)}" aria-label="图片消息操作">${icon('more')}</button>`
+    ? `<button type="button" class="icon-button card-more" aria-expanded="${selected}" data-message="${escape(message.id)}" aria-label="图片消息操作">${icon('more')}</button>`
     : '';
   return actions || more ? `<div class="card-actions">${actions}${more}</div>` : '';
 }

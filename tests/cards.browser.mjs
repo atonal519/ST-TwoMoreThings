@@ -1,8 +1,8 @@
 import { openApp } from './navigation.mjs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { readFileSync, mkdirSync, existsSync } from 'node:fs';
-import { resolve, extname, basename } from 'node:path';
+import { readFileSync, mkdirSync } from 'node:fs';
+import { resolve, extname } from 'node:path';
 const { chromium } = createRequire('/tmp/st-tools-browser/package.json')('playwright');
 const root = resolve(import.meta.dirname, '..');
 const output = '/tmp/mobile-plugin-reference-research/cards-round'; mkdirSync(output, { recursive: true });
@@ -13,15 +13,13 @@ try {
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.route('http://127.0.0.1:8917/**', route => {
       const pathname = new URL(route.request().url()).pathname;
-      if (pathname.startsWith('/__font/')) { const name = basename(pathname), candidate = '/tmp/mobile-plugin-reference-research/preview-fonts/' + name; return route.fulfill({ path: existsSync(candidate) ? candidate : '/tmp/myriad-home-design-20261016/' + name, contentType: 'font/woff2' }); }
       const path = resolve(root, '.' + pathname);
       const types = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.ttf': 'font/ttf', '.json': 'application/json' };
       return route.fulfill({ body: readFileSync(path), contentType: types[extname(path)] || 'text/plain' });
     });
     await page.goto(`http://127.0.0.1:8917/tests/preview.html?host=${kind}&clock=story`);
     await page.locator('.phone-shell').waitFor();
-    const fontCss = readFileSync('/tmp/mobile-plugin-reference-research/preview-fonts.css', 'utf8').replaceAll('Nowar Rounded TW Wc', 'PocketPreviewCJK');
-    await page.evaluate(css => { const face = document.createElement('style'); face.textContent = css; document.head.append(face); const style = document.createElement('style'); style.textContent = ':host{font-family:PocketPreviewCJK,sans-serif}'; document.querySelector('.pocket-phone').shadowRoot.append(style); }, fontCss);
+    await page.evaluate(async fontData => { const face = new FontFace('PocketPreviewCJK', `url(data:font/otf;base64,${fontData})`); await face.load(); document.fonts.add(face); const style = document.createElement('style'); style.textContent = ':host{font-family:PocketPreviewCJK,sans-serif}'; document.querySelector('.pocket-phone').shadowRoot.append(style); }, readFileSync('/tmp/st-tools-browser-libs/noto-sans-cjk-sc-regular.otf').toString('base64'));
     await page.evaluate(async () => { await document.fonts.load('15px PocketPreviewCJK', '两三事短信表情定位转账生成图片锁屏设置林舟'); await document.fonts.ready; });
     await openApp(page, '短信');
     await page.getByRole('button', { name: /林舟/ }).click();

@@ -1,6 +1,6 @@
 export const RELEASE_URL = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@latest/release.json';
 export const STABLE_CORE_URL = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@f3a5c271882925d8e379dac6ab69da225aebd30f/embed.js';
-export const UPDATE_NOTICE_PATH = 'docs/updates-0.4.3.md';
+export const UPDATE_NOTICE_PATH = 'docs/updates-0.4.4.md';
 
 // 导出启动器会嵌入此函数；保持自包含，公共请求不携带酒馆请求头或凭证。
 export async function readRelease({ url = 'https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@latest/release.json', fetchImpl = globalThis.fetch, timeoutMs = 5000 } = {}) {
