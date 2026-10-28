@@ -64,7 +64,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
     const failed = error => host.reportError(`主楼短信未能同步。${error.message || '请检查酒馆连接。'}`);
     try {
       if (createPhoneControl({ host, target }).isEnabled()) {
-        const synced = syncStorySms({ target, store });
+        const synced = syncStorySms({ target, store, wrapperSettingsProvider });
         if (synced) return synced.then(() => currentPhone?.refreshTime()).catch(failed);
       }
       currentPhone?.refreshTime();

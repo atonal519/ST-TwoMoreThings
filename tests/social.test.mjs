@@ -567,3 +567,14 @@ test('toggleLike reports a missing post without saving or calling the model', as
   assert.equal(h.metadataSaves, before);
   assert.equal(h.modelRequests.length, 0);
 });
+
+
+test('author history request retains recorded ISO seconds and timezone after UI formatting', async () => {
+  const { h, store, service } = await setup(1);
+  await service.refresh();
+  const post = store.read().social.posts[0], raw = '2026-10-19T14:10:59.999+08:00';
+  await store.updateSocial(social => ({ ...social, posts: social.posts.map(row => row.id === post.id ? { ...row, publishedAt: raw } : row) }));
+  await service.generateAuthor(post.authorId);
+  assert.equal(JSON.parse(h.modelRequests[1].body.messages[1].content).historyBefore, raw);
+  assert.equal(store.read().social.posts.find(row => row.id === post.id).publishedAt, raw);
+});

@@ -58,3 +58,13 @@ test('close and destruction cancel pending frames; reopening attaches the curren
   next.scrollTop = 50; h.resize(180); h.scroll.dispose(); h.flush();
   assert.equal(next.scrollTop, 50); assert.equal(h.frames.size, 0);
 });
+
+
+test('same-route editor redraw attaches the new feed without forcing a reading jump', () => {
+  const h = setup(); h.scroll.attach(); h.focus(); h.flush();
+  const next = { clientHeight: 500, scrollHeight: 2800, scrollTop: 140 };
+  h.root.feed = next; h.scroll.attach({ followFocus: false }); h.flush();
+  assert.equal(next.scrollTop, 140, 'ordinary redraw preserves the restored reading position');
+  h.resize(220); h.flush(); assert.equal(next.scrollTop, 2800, 'a real keyboard shrink still follows');
+  h.scroll.dispose();
+});

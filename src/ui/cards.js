@@ -35,7 +35,7 @@ export function renderCardActions(message, { readOnly, busy }) {
       <button type="button" data-transfer-id="${escape(message.id)}" data-transfer-status="returned" ${busy.has(`transfer:${message.id}`) ? 'disabled' : ''}>退回</button>`
     : '';
   const more = message.type === 'image'
-    ? `<button type="button" class="icon-button card-more" data-message="${escape(message.id)}" aria-label="图片消息操作">${icon('more')}</button>`
+    ? `<button type="button" class="icon-button card-more" aria-haspopup="menu" aria-expanded="false" data-message="${escape(message.id)}" aria-label="图片消息操作">${icon('more')}</button>`
     : '';
   return actions || more ? `<div class="card-actions">${actions}${more}</div>` : '';
 }
@@ -79,7 +79,7 @@ export function renderAttachments(state, ui, busy, contact, isGroup) {
   } else {
     const recipient = isGroup ? `<label class="attachment-field">
       <span>收款人</span>
-      <select name="recipientId" aria-label="收款人" required>
+      <select id="transfer-recipient" name="recipientId" aria-label="收款人" required>
         <option value="">选择群成员</option>
         ${contact.memberIds.map(id => state.contacts.find(person => person.id === id)).filter(Boolean).map(person => `<option value="${escape(person.id)}" ${draft.recipientId === person.id ? 'selected' : ''}>${escape(displayName(person))}</option>`).join('')}
       </select>

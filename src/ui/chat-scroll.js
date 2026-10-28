@@ -34,12 +34,13 @@ export function createChatScroll(root) {
   function focus(event) { if (isInput(event.target)) follow(); }
   root.addEventListener('focusin', focus);
   return {
-    attach() {
+    attach({ followFocus = true } = {}) {
       const next = root.querySelector('.message-feed, .view-social, .view-social-profile, .view-post, .view-liangshi');
       if (next === feed) return;
       stop(); feed = next;
-      if (feed) { height = feed.clientHeight; observer.observe(feed); follow(); }
+      if (feed) { height = feed.clientHeight; observer.observe(feed); if (followFocus) follow(); }
     },
+    revealEditor() { if (root.activeElement?.id !== 'sms-draft') follow(); },
     stop,
     dispose() { stop(); root.removeEventListener('focusin', focus); },
   };

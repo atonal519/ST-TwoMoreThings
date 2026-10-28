@@ -9,14 +9,7 @@ import { isUserIdentity } from '../identities.js';
 
 export function renderInbox(state, { ui, busy }) {
   const groups = state.groups || [];
-  const options = `<div class="inbox-options">
-    ${action('inbox-menu', '通讯录操作', 'plus', 'icon-button')}
-    ${ui.inboxMenu ? `<div class="chat-menu">
-      ${action('organize', busy.has('directory') ? '整理中…' : '整理通讯录', '', 'menu-item', busy.has('directory'))}
-      ${action('add-contact', '添加联系人', '', 'menu-item')}
-      ${action('add-group', '创建群聊', '', 'menu-item')}
-    </div>` : ''}
-  </div>`;
+  const options = `<div class="inbox-options"><button type="button" class="icon-button" data-action="inbox-menu" aria-label="通讯录操作" aria-haspopup="menu" aria-expanded="${ui.inboxMenu}">${icon('plus')}</button></div>`;
   const groupRows = groups.map(group => {
     const last = state.conversations[group.id]?.at(-1), sender = state.contacts.find(person => person.id === last?.speakerId);
     const preview = last
@@ -57,6 +50,31 @@ export function renderInbox(state, { ui, busy }) {
     ${!state.contacts.length ? empty('还没有联系人') : ''}`;
 }
 
+export function renderChatMenu(state, { ui, busy }) {
+  const isGroup = ui.view === 'group-chat', id = isGroup ? ui.groupId : ui.contactId;
+  const generating = busy.has(`continue:${id}`), saving = busy.has(`send:${id}`);
+  return `<div class="phone-menu-actions">
+    ${action(isGroup ? 'edit-group' : 'profile', isGroup ? '编辑群聊' : '编辑联系人', '', 'menu-item')}
+    <div class="phone-menu-danger">
+      ${action('clear-chat', '清空聊天', '', 'menu-item danger', generating || saving)}
+      ${action(isGroup ? 'remove-group' : 'remove-contact', isGroup ? '删除群聊' : '删除联系人', '', 'menu-item danger')}
+    </div>
+  </div>`;
+}
+
+export function renderInboxMenu(busy) {
+  return `${action('organize', busy.has('directory') ? '整理中…' : '整理通讯录', '', 'menu-item', busy.has('directory'))}${action('add-contact', '添加联系人', '', 'menu-item')}${action('add-group', '创建群聊', '', 'menu-item')}`;
+}
+
+export function renderMessageMenu(state, { ui, busy }) {
+  const isGroup = ui.view === 'group-chat', id = isGroup ? ui.groupId : ui.contactId;
+  const messages = state.conversations[id] || [], message = messages.find(row => row.id === ui.selectedMessage);
+  if (!message) return '';
+  const current = partitionHistory(messages, ui.batch).current.some(row => row.id === message.id);
+  const target = `data-message-target="${escape(message.id)}"`;
+  return `${isGroup && current ? `<button type="button" class="menu-item" data-action="reply-message" ${target}>${icon('message-reply')}<span>引用</span></button>` : ''}<button type="button" class="menu-item danger" data-action="delete-message" ${target} aria-label="删除这条短信" ${busy.has(`delete:${id}`) ? 'disabled' : ''}>${icon('message-delete')}<span>删除</span></button>`;
+}
+
 function renderMessage(message, previous, next, { contact, user, selected, deleting, isGroup, busy, readOnly = false, state, ui, conversationId }) {
   const mine = message.role === 'user';
   const party = item => item && (item.speakerId || item.role);
@@ -65,7 +83,7 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
   const chosen = selected === message.id;
   const bubbleAttributes = message.type === 'image'
     ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" aria-busy="${busy.has(`image:${message.id}`)}" ${busy.has(`image:${message.id}`) ? 'disabled' : ''}`
-    : `data-message="${escape(message.id)}" aria-label="短信：${escape(messageText(message))}" aria-expanded="${chosen}"`;
+    : `data-message="${escape(message.id)}" aria-label="短信：${escape(messageText(message))}" aria-haspopup="menu" aria-expanded="${chosen}"`;
   const timestamp = message.timeLabel
     ? `<div class="message-foot"><time title="${escape([message.storyDate, message.storyWeekday, message.timeLabel].filter(Boolean).join(' '))}" datetime="${escape(message.createdAt || '')}">${escape(message.timeLabel)}</time></div>`
     : '';
@@ -84,10 +102,7 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
         ${isGroup && !mine && !hasPrev ? `<span class="message-sender">${escape(displayName(sender || contact))}</span>` : ''}
         <div class="bubble-line">
           <button type="button" class="bubble ${message.type ? `${message.type}-message` : ''}" ${bubbleAttributes}>${replyBlock}${body}</button>
-          ${chosen ? `<div class="message-actions" role="group" aria-label="短信操作">
-            ${isGroup && !readOnly ? action('reply-message', '引用', 'message-reply', 'message-action message-reply-action') : ''}
-            <button type="button" class="message-action message-delete danger" data-action="delete-message" aria-label="删除这条短信" ${deleting ? 'disabled' : ''}>${icon('message-delete')}<span>删除</span></button>
-          </div>` : ''}
+
         </div>
         ${renderCardActions(message, { readOnly, busy })}
         ${timestamp}
@@ -129,11 +144,6 @@ export function renderChat(state, { ui, busy }) {
     </section>`);
   }
   const pastCount = past.reduce((sum, group) => sum + group.messages.length, 0);
-  const chatMenu = ui.chatMenu ? `<div class="chat-menu">
-    ${action(profileAction, isGroup ? '编辑群聊' : '编辑联系人', '', 'menu-item')}
-    ${action('clear-chat', '清空聊天', '', 'menu-item danger', generating || saving)}
-    ${action(isGroup ? 'remove-group' : 'remove-contact', isGroup ? '删除群聊' : '删除联系人', '', 'menu-item danger')}
-  </div>` : '';
   const clearConfirmation = ui.confirmClear ? `<section class="clear-confirm" role="alert">
     <p>清空当前主楼时间点之后的消息及草稿，同时删除相关生成图片；过去的记录保留。</p>
     <div>
@@ -162,8 +172,7 @@ export function renderChat(state, { ui, busy }) {
         ${isGroup ? `<small>${contact.memberIds.length + Number(contact.userIsMember)} 位成员${observer ? ' · 旁观' : ''}</small>` : ''}
       </button>
       <div class="chat-options">
-        ${action('chat-menu', '聊天选项', 'more', 'icon-button')}
-        ${chatMenu}
+        <button type="button" class="icon-button" data-action="chat-menu" aria-label="聊天选项" aria-haspopup="menu" aria-expanded="${ui.chatMenu}">${icon('more')}</button>
       </div>
     </header>
     ${clearConfirmation}

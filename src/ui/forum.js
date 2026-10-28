@@ -1,4 +1,4 @@
-import { readForumTags } from '../forum-tags.js';
+import { readForumTags, forumFilterTags } from '../forum-tags.js';
 import { action, empty, escape, icon, pageHeading, renderBilingual, renderContentImage } from './shared.js';
 import { forumComments } from '../forum.js';
 import { imageSource } from '../image-files.js';
@@ -14,7 +14,7 @@ export function forumVoteCounts(id) {
 
 export function renderForum(state, { ui = {}, busy }) {
   const posts = state.forum?.posts || [];
-  const tags = [...new Set(posts.flatMap(readForumTags))];
+  const tags = forumFilterTags(posts);
   if (!tags.includes(ui.forumTag)) ui.forumTag = '';
   const selected = ui.forumTag ? posts.filter(post => readForumTags(post).includes(ui.forumTag)) : posts;
   const cards = selected.map((post, index) => `<button type="button" class="forum-card" data-post="${escape(post.id)}">
@@ -64,7 +64,7 @@ export function renderPost(state, { ui, busy = new Set() }) {
     </article>
     <section class="comments"><h2>回帖 <span>${rows.length}</span></h2>${comments}</section>
     <div class="ls-more-area">${action('forum-more',loading ? '加载中…' : '加载更多','','ls-more-button',loading)}</div>
-    <form class="forum-comment-form" data-forum-post="${escape(post.id)}"><label class="field-label" for="forum-comment-text">${escape(selected ? targetLabel(selected) : `回复主帖《${post.title}》`)}</label>
+    <form class="forum-comment-form" data-forum-post="${escape(post.id)}" data-reply-to="${escape(draft.replyToId || '')}"><label class="field-label" for="forum-comment-text">${escape(selected ? targetLabel(selected) : `回复主帖《${post.title}》`)}</label>
       ${selected ? `<div class="forum-reply-context"><span class="forum-quote-text">${escape(excerpt(readable(selected)))}</span></div>` : ''}
       <textarea id="forum-comment-text" name="comment" rows="3" placeholder="说说你的想法…" required>${escape(draft.text)}</textarea>
       <div class="forum-comment-actions">${selected ? action('forum-reply-cancel','取消回复','','quiet-button') : ''}<button type="submit" class="save-button" ${busy.has(`forum-comment:${post.id}`) ? 'disabled' : ''}>发布回帖</button></div>

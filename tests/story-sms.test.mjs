@@ -129,3 +129,60 @@ test('a failed projection save keeps the original archive and its raw narrative 
   assert.deepEqual(s.target.metadata, before); assert.equal(s.h.metadataSaves, 0);
   assert.ok(s.target.messages[0].mes.includes('[tmt|朋友甲|朋友甲]'));
 });
+
+const draftWrappers = { keepTags: 'content,titlebar', extraTags: '[[...]],think,thinking,snow,sidestory,bbi_image,[draft]...[/draft],draft' };
+const repeatedSms = '[tmt|朋友甲|我]完整原话，保留  两格与换行。\n收到。[/tmt]';
+const draftStory = `<content><draft>${repeatedSms}</draft><draft>${repeatedSms}</draft><draft>${repeatedSms}</draft>正式叙事。${repeatedSms}</content>`;
+function wrappedStory(raw, wrappers = draftWrappers) {
+  const h = createHarness({ messages: [{ is_user: false, mes: raw }] });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  return { h, target, store, wrapperSettingsProvider: () => wrappers };
+}
+
+test('three draft SMS copies are excluded while the formal copy keeps its original raw block index', async () => {
+  const s = wrappedStory(draftStory);
+  await syncStorySms(s);
+  const state = s.store.read(), person = state.contacts.find(row => row.name === '朋友甲'), rows = state.conversations[person.id];
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source.block, 3); assert.equal(rows[0].id, 'story:0:3');
+  assert.equal(rows[0].text, '完整原话，保留  两格与换行。\n收到。'); assert.equal(rows[0].role, 'user'); assert.equal(rows[0].speakerId, '@user');
+  assert.equal(s.target.messages[0].mes, draftStory); assert.equal(s.h.metadataSaves, 1); assert.equal(s.h.modelRequests.length, 0);
+  const reader = createContextReader({ target: s.target, store: s.store, qqjBridgeProvider: () => null, wrapperSettingsProvider: s.wrapperSettingsProvider });
+  assert.deepEqual((await reader.readForContact(person.id)).story.map(row => row.text), ['正式叙事。']);
+});
+
+test('SMS import follows shared XML keep, literal draft exclusion and default plain-body rules', async () => {
+  const cases = [
+    { raw: `[DRAFT]<content>${repeatedSms}</content>[/DRAFT]<content>${repeatedSms}</content>`, expected: [1] },
+    { raw: `<think><content>${repeatedSms}</content>${repeatedSms}</think><titlebar>${repeatedSms}</titlebar>`, expected: [0, 2] },
+    { raw: `[[${repeatedSms}]]${repeatedSms}`, expected: [1] },
+    { raw: repeatedSms, wrappers: {}, expected: [0] },
+  ];
+  for (const { raw, wrappers = draftWrappers, expected } of cases) {
+    const s = wrappedStory(raw, wrappers); await syncStorySms(s);
+    assert.deepEqual(Object.values(s.store.read().conversations).flat().map(row => row.source.block), expected);
+    assert.equal(s.target.messages[0].mes, raw); assert.equal(s.h.metadataSaves, 1);
+  }
+});
+
+test('genuinely repeated formal SMS stays distinct, while floor gating and manual deletion stay unchanged', async () => {
+  const raw = `<content>${repeatedSms}${repeatedSms}</content>`, s = wrappedStory(raw);
+  await syncStorySms(s);
+  const person = s.store.read().contacts.find(row => row.name === '朋友甲');
+  assert.deepEqual(s.store.read().conversations[person.id].map(row => row.source.block), [0, 1]);
+  await syncStorySms(s); assert.equal(s.h.metadataSaves, 1);
+  await s.store.deleteMessage(person.id, 'story:0:0'); const saves = s.h.metadataSaves;
+  assert.equal(await syncStorySms(s), false); assert.equal(s.h.metadataSaves, saves);
+  s.target.messages.push({ is_user: false, mes: `<content>${repeatedSms}</content>` }); await syncStorySms(s);
+  assert.deepEqual(s.store.read().conversations[person.id].map(row => [row.source.floor, row.source.block]), [[0, 1], [1, 0]]);
+});
+
+test('excluded-only or no SMS body performs no import or save and failed formal import leaves state intact', async () => {
+  for (const raw of [`<draft>${repeatedSms}</draft>`, '[DRAFT]<content>无短信</content>[/DRAFT]', '<content>纯正文。</content>']) {
+    const s = wrappedStory(raw); let imports = 0;
+    const store = { read: s.store.read, importStorySms() { imports++; throw new Error('unexpected import'); } };
+    assert.equal(await syncStorySms({ ...s, store }), false); assert.equal(imports, 0); assert.equal(s.h.metadataSaves, 0);
+  }
+  const s = wrappedStory(draftStory), before = structuredClone(s.target.metadata); s.h.saveFailure = new Error('save unavailable');
+  await assert.rejects(syncStorySms(s), /手机内容保存失败/); assert.deepEqual(s.target.metadata, before); assert.equal(s.target.messages[0].mes, draftStory); assert.equal(s.h.modelRequests.length, 0);
+});

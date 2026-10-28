@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { publicationValue, publicationLabel, hasPublicationDate, sortSocialPosts } from '../src/social-time.js';
+import { publicationValue, publicationLabel, formatPublicationTime, hasPublicationDate, sortSocialPosts } from '../src/social-time.js';
+import { renderLiangshi } from '../src/ui/liangshi.js';
 
 test('publication input accepts the single field, explicit aliases and split date/time without interpreting prose', () => {
   for (const key of ['publishedAt', 'published_at', 'postedAt', 'publishTime']) {
@@ -86,4 +87,37 @@ test('sorting accepts adjoining Chinese date/time and year-first slash dates wit
   assert.deepEqual(sortSocialPosts(posts).map(post => post.id), ['slash', 'adjoining', 'hyphen', 'ambiguous', 'short-ambiguous']);
   assert.equal(publicationLabel(posts[0]), '大陆历1686年10月3日19:05');
   assert.equal(publicationLabel(posts[1]), '1686/10/4 09:30');
+});
+
+
+test('Weibo renders publication dates for reading while retaining the original stored time and edited marker', () => {
+  const post = { id: 'own', authorId: 'self', userAuthored: true, text: '测试正文', publishedAt: '2027-03-22T18:32:00', editedAt: '2027-03-22T18:33:00', comments: [], reposts: [] };
+  const state = { userProfile: {}, liangshi: { accounts: [{ id: 'self', ownerId: '@user', name: '我' }], userPostIds: ['own'], feedIds: [], posts: [post] } };
+  const before = structuredClone(state);
+  const html = renderLiangshi(state, { ui: { defaultUser: '我', liangshiPage: { kind: 'feed', tab: 'mine' }, liangshiExpanded: new Set() }, busy: new Set() });
+  assert.ok(html.includes('2027-03-22 18:32 · 已编辑'), 'UI exposes a readable publication date and minute');
+  assert.ok(!html.includes('2027-03-22T18:32:00'));
+  assert.deepEqual(state, before);
+});
+
+
+test('publication display uses recorded date and minute without inventing missing fields or changing its era', () => {
+  for (const [raw, displayed] of [
+    ['2027-03-22T18:32:00', '2027-03-22 18:32'],
+    ['2027-03-22T18:32:59.999Z', '2027-03-22 18:32'],
+    ['2027-03-22T18:32:59+08:00', '2027-03-22 18:32'],
+    ['2027-03-22T18:32:00-0500', '2027-03-22 18:32'],
+    ['2027-3-2', '2027-03-02'],
+    ['大陆历1686年2月30日19:05', '大陆历1686-02-30 19:05'],
+    ['1686/10/4 09:30', '1686-10-04 09:30'],
+    ['09:30', '09:30'], ['10/04/26', '10/04/26'], ['去年夏天', '去年夏天'], ['过去', '过去'], ['', ''],
+    ['2027-03-22T25:32:00', '2027-03-22T25:32:00'],
+  ]) assert.equal(formatPublicationTime(raw), displayed, raw);
+  assert.equal(formatPublicationTime(publicationLabel({ publishedAt: '', storyDate: '2027年3月22日', createdAt: '2099-01-01T00:00:00Z' })), '过去');
+  const posts = [{ id: 'second', publishedAt: '2027-03-22T18:32:02+08:00' }, { id: 'first', publishedAt: '2027-03-22T18:32:01Z' }];
+  const before = structuredClone(posts);
+  assert.deepEqual(posts.map(post => formatPublicationTime(publicationLabel(post))), ['2027-03-22 18:32', '2027-03-22 18:32']);
+  assert.deepEqual(sortSocialPosts(posts).map(post => post.id), ['second', 'first']);
+  assert.equal(publicationLabel(posts[0]), '2027-03-22T18:32:02+08:00', 'model history input keeps its original seconds and timezone');
+  assert.deepEqual(posts, before);
 });

@@ -20,6 +20,16 @@ export function publicationLabel(post) {
   return savedPublication(post) || '过去';
 }
 
+// Display the recorded wall-clock fields; storage, sorting and model inputs keep
+// their original timestamp, including seconds and any time-zone suffix.
+export function formatPublicationTime(value) {
+  const label = text(value), parts = publicationParts({ publishedAt: label });
+  if (!parts) return label;
+  const prefix = /^[^\d]*/u.exec(label)[0], [year, month, day, hour, minute, , hasTime] = parts;
+  const pad = number => String(number).padStart(2, '0');
+  return `${prefix}${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}${hasTime ? ` ${pad(hour)}:${pad(minute)}` : ''}`;
+}
+
 function publicationParts(post) {
   const value = savedPublication(post);
   const match = /^[^\d]*?(\d{1,6})(?:[-/](\d{1,2})[-/](\d{1,2})|年(\d{1,2})月(\d{1,2})日)(?:(?:[ T]+|(?<=日))(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/u.exec(value);

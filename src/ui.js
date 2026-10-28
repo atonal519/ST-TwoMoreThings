@@ -1,9 +1,9 @@
-import { avatar, refKey } from './ui/shared.js';
+import { avatar, refKey, renderAvatarMenu } from './ui/shared.js';
 import { renderHome } from './ui/home.js';
 import { createPhoneClock } from './ui/status.js';
 import { renderFeedback, renderShell } from './ui/shell.js';
 import { renderDesktop } from './ui/desktop.js';
-import { renderInbox, renderChat } from './ui/messages.js';
+import { renderInbox, renderChat, renderChatMenu, renderInboxMenu, renderMessageMenu } from './ui/messages.js';
 import { renderForum, renderPost } from './ui/forum.js';
 import { forumComments } from './forum.js';
 import { renderSettings, renderSettingsVersion, renderStorySmsInstall } from './ui/settings.js';
@@ -33,6 +33,9 @@ import { renderPhoneNotice } from './ui/notifications.js';
 import { readSocialPosts } from './social.js';
 import { createPluginUpdatesView } from './ui/plugin-updates-view.js';
 import { createPhoneDialog } from './ui/dialog.js';
+import { createEditingRenderer } from './ui/editing.js';
+import { createPhoneSelects } from './ui/selects.js';
+import { createPhoneActionMenu } from './ui/action-menu.js';
 import { MEMORY_CONFLICT_CODE } from './memory-sources.js';
 import { phoneUrl } from './paths.js';
 
@@ -52,7 +55,6 @@ const pages = {
   chat: renderChat,
   'group-chat': renderChat,
   'group-profile': renderGroupProfile,
-  'delete-confirm': renderDeletion,
   forum: renderForum,
   post: renderPost,
   settings: renderSettings,
@@ -89,6 +91,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const windowControls = createPhoneWindow(surface);
   const chatScroll = createChatScroll(root);
   const dialog = createPhoneDialog({ mount: surface, documentRef: doc });
+  const editing = createEditingRenderer(surface);
+  const selects = createPhoneSelects({ root, beforeOpen: () => { closeSources(); closeModels(); } });
   // 这里只持有未保存的页面状态；联系人和消息始终从 store 读取。
   const ui = {
     view: 'home', feedback: null, defaultUser, conflict: control.hasConflict?.(doc) === true,
@@ -97,20 +101,25 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     historyOpen: false, visibleHistory: 60,
     inboxMenu: false, chatMenu: false, selectedMessage: '', confirmClear: false,
     editor: '', editId: '', profileDraft: {},
-    groupEditId: '', groupDraft: {}, deletion: null,
+    groupEditId: '', groupDraft: {},
     groupMembersOpen: false,
     socialAuthorId: '', socialPastOpen: false, socialLimit: 30, socialScroll: 0,
     socialCommentOpen: new Set(), socialDrafts: new Map(), notice: null,
     forumDrafts: new Map(), forumVotes: new Map(), forumScroll: 0, forumTag: '',
     liangshiPage: { kind: 'feed', tab: 'square' }, liangshiTrail: [], liangshiExpanded: new Set(), liangshiDraft: null, liangshiMenu: '', liangshiReplyDrafts: new Map(),
-    drawers: { connection: true, appearance: false, content: false },
+    drawers: { connection: false, appearance: false, content: false },
     manual: false, apiDraft: apiSettings.readDraft?.() || {}, models: [], modelSearch: '', modelsOpen: false, sourcesOpen: false,
     attachment: '', attachmentDraft: {}, stickerPack: 'emoji', photo: null,
     calendarOffset: 0, calendarDay: null,
     replyToId: '',
   };
+  const actionMenu = createPhoneActionMenu({ root, onClose: () => {
+    ui.chatMenu = false; ui.liangshiMenu = ''; ui.inboxMenu = false; ui.avatarMenuOpen = false; ui.selectedMessage = '';
+    root.querySelectorAll('.is-selected').forEach(node => node.classList.remove('is-selected'));
+    root.querySelectorAll('[data-message][aria-expanded="true"]').forEach(node => node.setAttribute('aria-expanded', 'false'));
+  } });
   const busy = new Set();
-  let renderedRoute = '';
+  let renderedRoute = '', apiEditor = 0, renderedApiEditor = 0, photoReturn = null;
   if (!control.isEnabled()) ui.view = 'settings';
   const clock = createPhoneClock({ root, element, readTime });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
@@ -223,34 +232,19 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   // 导航、草稿、事件与服务调用由控制器统一持有，页面只负责展示。
   function render({ bottom = false } = {}) {
     if (!element.isConnected) return;
-    const route = JSON.stringify([ui.view, ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'post' ? ui.postId : ui.view === 'social-profile' ? ui.socialAuthorId : inChat() ? conversationId() : '']);
+    const route = JSON.stringify([ui.view, ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'post' ? ui.postId : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
     const sameRoute = route === renderedRoute;
+    if (!sameRoute) actionMenu.close();
+    const sameEditor = sameRoute && (ui.view !== 'settings' || renderedApiEditor === apiEditor);
+    renderedApiEditor = apiEditor;
     renderedRoute = route;
     const currentLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
     if (currentLockImage) {
       lockImageNode = currentLockImage;
       lockImageSrc = currentLockImage.getAttribute('src') || '';
     }
-    const previousDraft = sameRoute ? root.querySelector('#sms-draft') : null;
-    const selection = previousDraft && { text: previousDraft.value, start: previousDraft.selectionStart, end: previousDraft.selectionEnd };
-    const activeSocialComment = sameRoute && root.activeElement?.matches?.('.social-comment-form textarea') ? root.activeElement : null;
-    const socialSelection = activeSocialComment && {
-      postId: activeSocialComment.closest('.social-comment-form')?.dataset.socialCommentForm,
-      text: activeSocialComment.value,
-      start: activeSocialComment.selectionStart,
-      end: activeSocialComment.selectionEnd,
-    };
-    const forumInput = sameRoute && root.activeElement?.closest?.('.forum-comment-form') ? root.activeElement : null;
-    const forumSelection = forumInput && { postId: forumInput.closest('.forum-comment-form').dataset.forumPost, text: forumInput.value, start: forumInput.selectionStart, end: forumInput.selectionEnd };
-    const composing = sameRoute && root.activeElement?.closest?.('.ls-compose-form') ? root.activeElement : null;
-    const composeSelection = composing && { name: composing.name, start: composing.selectionStart, end: composing.selectionEnd };
-    const replying = sameRoute && root.activeElement?.closest?.('.ls-reply-form') ? root.activeElement : null;
-    const replySelection = replying && { postId: replying.closest('.ls-reply-form').dataset.liangshiReplyForm, text: replying.value, start: replying.selectionStart, end: replying.selectionEnd };
+    const mainScroll = sameRoute ? root.querySelector('.phone-main')?.scrollTop : undefined;
     const scrollTop = sameRoute && inChat() ? root.querySelector('.message-feed')?.scrollTop : undefined;
-    const forumScroll = sameRoute && ['forum','post'].includes(ui.view) ? root.querySelector(`.phone-main.view-${ui.view}`)?.scrollTop : undefined;
-    const settingsScroll = sameRoute ? root.querySelector('.view-settings')?.scrollTop : undefined;
-    const socialScroll = sameRoute && ['social', 'social-profile'].includes(ui.view) ? root.querySelector(`.view-${ui.view}`)?.scrollTop : undefined;
-    const liangshiScroll = sameRoute && ui.view === 'liangshi' ? root.querySelector('.view-liangshi')?.scrollTop : undefined;
     let state = store.read();
     const enabled = control.isEnabled();
     element.dataset.enabled = String(enabled);
@@ -270,7 +264,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     const calendarMonth = ui.view === 'calendar'
       ? calendar.month(ui.calendarOffset)
       : ui.view === 'desktop' ? calendar.month(0) : null;
-    surface.innerHTML = renderShell({
+    editing.render(renderShell({
       content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates,
         profileAvatar: ui.view === 'contact-profile' ? readContactAvatarDraft(ui.profileDraft, store.read().contacts.find(person => person.id === ui.editId), qqjBridgeProvider?.()) : undefined }),
       view: ui.view, enabled, weather,
@@ -278,13 +272,14 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       conflict: ui.conflict, mode, conflictBusy: busy.has('conflict'),
       lockStyle: state.lockStyle,
       settingsVersion: ui.view === 'settings' ? renderSettingsVersion(mode, updates) : '',
-    });
+    }), sameEditor);
+    selects.mount(route, busy);
     if (updatesView && ui.view === 'settings') {
       root.querySelector('[data-update-controls]')?.append(updatesView.controls);
       root.querySelector('[data-update-notice]')?.append(updatesView.noticeButton);
     }
-    dialog.attach();
     if (!ui.conflict && enabled) surface.insertAdjacentHTML('beforeend', renderPhoneNotice(state, ui.notice));
+    dialog.attach();
     const nextLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
     if (lockImageNode && nextLockImage && lockImageSrc === nextLockImage.getAttribute('src')) {
       lockImageNode.alt = nextLockImage.alt;
@@ -301,36 +296,21 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     clock.refresh();
     revealClassicArtwork();
     resizeDraft();
-    const draft = root.querySelector('#sms-draft');
-    if (selection && draft?.value === selection.text) draft.setSelectionRange(selection.start, selection.end);
-    if (socialSelection) {
-      const textarea = root.querySelector(`[data-social-comment-form="${CSS.escape(socialSelection.postId)}"] textarea`);
-      if (textarea?.value === socialSelection.text) {
-        textarea.setSelectionRange(socialSelection.start, socialSelection.end);
-        textarea.focus({ preventScroll: true });
-      }
-    }
-    if (forumSelection) { const input = root.querySelector(`[data-forum-post="${CSS.escape(forumSelection.postId)}"] textarea`); if (input?.value === forumSelection.text) { input.focus({ preventScroll: true }); input.setSelectionRange(forumSelection.start, forumSelection.end); } }
-    if (composeSelection) {
-      const input = root.querySelector(`.ls-compose-form [name="${composeSelection.name}"]`);
-      if (input) { input.focus({ preventScroll: true }); input.setSelectionRange(composeSelection.start, composeSelection.end); }
-    }
-    if (replySelection) {
-      const input = root.querySelector(`[data-liangshi-reply-form="${CSS.escape(replySelection.postId)}"] textarea`);
-      if (input?.value === replySelection.text) { input.focus({ preventScroll: true }); input.setSelectionRange(replySelection.start, replySelection.end); }
-    }
-    chatScroll.attach();
-    if (forumScroll !== undefined && ['forum','post'].includes(ui.view)) root.querySelector('.phone-main').scrollTop = forumScroll;
-    if (settingsScroll !== undefined && ui.view === 'settings') root.querySelector('.view-settings').scrollTop = settingsScroll;
-    if (socialScroll !== undefined && ['social', 'social-profile'].includes(ui.view)) root.querySelector('.phone-main').scrollTop = socialScroll;
-    if (liangshiScroll !== undefined && ui.view === 'liangshi') root.querySelector('.phone-main').scrollTop = liangshiScroll;
+    chatScroll.attach({ followFocus: !sameRoute || bottom });
     if (bottom) {
       const feed = root.querySelector('.message-feed');
       if (feed) feed.scrollTop = feed.scrollHeight;
     } else if (scrollTop !== undefined) root.querySelector('.message-feed').scrollTop = scrollTop;
-    placeLiangshiMenu();
+    if (mainScroll !== undefined) root.querySelector('.phone-main').scrollTop = mainScroll;
+    actionMenu.update(route);
+    chatScroll.revealEditor();
     syncParticles();
     avatarCropper?.attach();
+    if (ui.photo) {
+      const viewer = root.querySelector('.photo-viewer');
+      for (const child of surface.children) child.inert = child !== viewer;
+      root.querySelector('[data-action="close-photo"]')?.focus({ preventScroll: true });
+    }
   }
   async function perform(key, task, after) {
     if (busy.has(key)) return;
@@ -349,7 +329,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         try { await store.markRead(conversationId()); }
         catch { setFeedback({ error: true, text: '消息的已读状态保存失败，请检查酒馆连接。' }); }
       }
-      busy.delete(key); render({ bottom: inChat() && (key === 'profile' || key === 'group-profile' || key.startsWith('send:') || key.startsWith('continue:')) });
+      busy.delete(key); render({ bottom: inChat() && (key === 'profile' || key === 'group-profile' || key === `send:${conversationId()}` || key === `continue:${conversationId()}`) });
     }
   }
   async function recoverImages(paths) {
@@ -395,12 +375,21 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   function imageError(event) {
     if (event.target.matches?.('img[data-phone-image]')) void recoverImages([event.target.dataset.phoneImage]);
   }
-  async function viewPhoto(readImage) {
+  async function viewPhoto(readImage, trigger) {
+    const route = renderedRoute, position = listPosition(trigger), feedScroll = root.querySelector('.message-feed')?.scrollTop;
+    const selector = trigger && [...trigger.attributes].filter(attribute => attribute.name.startsWith('data-')).map(({ name, value }) => `[${name}="${CSS.escape(value)}"]`).join('');
     const image = readImage();
     if (!image?.path) return;
     if (await recoverImages([image.path]) === null) return;
     const current = readImage();
-    if (current?.path) { ui.photo = current; render(); }
+    if (current?.path && route === renderedRoute) { photoReturn = { route, position, feedScroll, selector }; ui.photo = current; render(); }
+  }
+  function closePhoto() {
+    const previous = photoReturn; photoReturn = null; ui.photo = null; render();
+    if (previous?.route !== renderedRoute) return;
+    restoreListPosition(previous.position);
+    const feed = root.querySelector('.message-feed'); if (feed && previous.feedScroll !== undefined) feed.scrollTop = previous.feedScroll;
+    if (previous.selector) root.querySelector(previous.selector)?.focus({ preventScroll: true });
   }
   function discardLiangshiDraft() {
     ui.liangshiDraft = null;
@@ -429,6 +418,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   }
   // 沿千千结fill/clearModels：重进连接页或换配置时重填，模型点选仍为草稿。
   function fillApiDraft(manual = false) {
+    apiEditor++;
     ui.manual = manual; ui.apiDraft = apiSettings.readDraft(manual ? null : apiSettings.getSelected());
     ui.models = []; ui.modelSearch = ''; ui.modelsOpen = false; ui.sourcesOpen = false;
   }
@@ -521,10 +511,6 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         parent = 'settings';
         break;
       case 'authoring': parent = 'settings'; break;
-      case 'delete-confirm':
-        parent = ui.deletion.from;
-        ui.deletion = null;
-        break;
     }
     if (parent === 'forum') ui.forumTag = ui.forumScroll?.tag || '';
     showPage(parent, { bottom: ['chat', 'group-chat'].includes(parent) });
@@ -536,22 +522,12 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.groupMembersOpen = !id;
     ui.view = 'group-profile'; ui.chatMenu = false; ui.inboxMenu = false; setFeedback(null); render();
   }
-  function closeLiangshiMenu() {
-    ui.liangshiMenu = '';
-    root.querySelector('.ls-own-menu')?.remove();
-    for (const trigger of root.querySelectorAll('[data-action="liangshi-menu"]')) trigger.setAttribute('aria-expanded', 'false');
+  function closeActionMenu() { actionMenu.close(true); }
+  function closeLiangshiMenu() { closeActionMenu(); ui.liangshiMenu = ''; }
+  function openActionMenu(title, content, triggerSelector) {
+    selects.close(); closeSources(); closeModels();
+    actionMenu.open({ title, content, triggerSelector, route: renderedRoute });
   }
-  function placeLiangshiMenu() {
-    if (!ui.liangshiMenu) return;
-    const menu = root.querySelector('.ls-own-menu'), trigger = root.querySelector(`[data-action="liangshi-menu"][data-liangshi-id="${CSS.escape(ui.liangshiMenu)}"]`);
-    if (!menu || !trigger) { closeLiangshiMenu(); return; }
-    // The shell owns the popup so the scrolling post/photo cannot clip its actions.
-    surface.append(menu);
-    const shell = surface.getBoundingClientRect(), button = trigger.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(button.right - shell.left - menu.offsetWidth, surface.clientWidth - menu.offsetWidth - 8))}px`;
-    menu.style.top = `${Math.max(8, Math.min(button.top - shell.top - menu.offsetHeight - 4, surface.clientHeight - menu.offsetHeight - 8))}px`;
-  }
-  const scrollLiangshiMenu = event => { if (event.target.matches?.('.view-liangshi')) closeLiangshiMenu(); };
   function closeModels() {
     ui.modelsOpen = false;
     root.querySelector('.model-picker .model-popup')?.remove();
@@ -559,7 +535,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   }
   function closeSources() {
     ui.sourcesOpen = false;
-    root.querySelector('.source-popup')?.remove();
+    root.querySelector('.source-picker > .source-popup')?.remove();
     root.querySelector('#api-source')?.setAttribute('aria-expanded', 'false');
   }
   function openSources(direction = 1) {
@@ -568,13 +544,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     (options.find(option => option.getAttribute('aria-selected') === 'true') || (direction > 0 ? options[0] : options.at(-1)))?.focus();
   }
   function dismissMenus(event) {
+    selects.dismiss(event);
+    actionMenu.dismiss(event);
     if (ui.identityOwnersOpen && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.identity-picker'))) closeIdentityOptions();
-    if (ui.liangshiMenu && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.ls-own-actions, .ls-own-menu'))) closeLiangshiMenu();
-    if (ui.avatarMenuOpen && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.avatar-controls'))) {
-      ui.avatarMenuOpen = false;
-      root.querySelector('.avatar-menu')?.remove();
-      root.querySelector('.avatar-menu-toggle')?.setAttribute('aria-expanded', 'false');
-    }
     if (event) {
       const path = event.composedPath();
       for (const form of root.querySelectorAll('.social-comment-form')) {
@@ -589,18 +561,12 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         root.querySelector(`[data-action="social-comment-toggle"][data-social-post="${CSS.escape(postId)}"]`)?.setAttribute('aria-expanded', 'false');
       }
     }
-    if (ui.attachment && event && !event.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.attachment-panel, .attachment-button'))) {
+    if (ui.attachment && event && !event.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.attachment-panel, .attachment-button, .phone-action-popup, .phone-select-popup'))) {
       ui.attachment = ''; root.querySelector('.attachment-panel')?.remove();
     }
     if (ui.modelsOpen && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.api-form'))) closeModels();
     if (ui.sourcesOpen && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.source-picker'))) closeSources();
-    if (!ui.chatMenu && !ui.inboxMenu && !ui.selectedMessage) return;
-    if (event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.chat-options, .inbox-options, .bubble, .message-actions'))) return;
-    ui.chatMenu = false; ui.inboxMenu = false; ui.selectedMessage = '';
-    // 仅移除弹出操作，保留输入节点和焦点，让下一次点击直接开始打字。
-    root.querySelectorAll('.chat-menu, .message-actions').forEach(node => node.remove());
-    root.querySelectorAll('.is-selected').forEach(node => node.classList.remove('is-selected'));
-    root.querySelectorAll('.bubble[aria-expanded="true"]').forEach(node => node.setAttribute('aria-expanded', 'false'));
+
   }
   function closeIdentityOptions() {
     ui.identityOwnersOpen = false;
@@ -621,6 +587,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.view = `${kind}-profile`; ui.chatMenu = false; ui.inboxMenu = false; setFeedback(null); render();
   }
   function keydown(event) {
+    if (actionMenu.keydown(event) || selects.keydown(event)) return;
     if (ui.identityOwnersOpen || event.target.id === 'identity-owner') {
       if (event.key === 'Escape' && ui.identityOwnersOpen) { event.preventDefault(); event.stopPropagation(); closeIdentityOptions(); root.querySelector('#identity-owner')?.focus({ preventScroll: true }); return; }
       if (['ArrowDown', 'ArrowUp'].includes(event.key) && (event.target.id === 'identity-owner' || event.target.closest('.identity-popup'))) {
@@ -639,10 +606,6 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
       }
       return;
-    }
-    if (ui.liangshiMenu && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); const trigger = root.querySelector('[data-action="liangshi-menu"][aria-expanded="true"]'); closeLiangshiMenu(); trigger?.focus(); return; }
-    if (event.target.closest('.ls-own-menu') && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
-      event.preventDefault(); const items = [...root.querySelectorAll('.ls-own-menu button:not(:disabled)')], index = items.indexOf(event.target); items[(index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus(); return;
     }
     const sourceOption = event.target.closest('[data-api-source]'), sourceTrigger = event.target.id === 'api-source';
     if (sourceTrigger || ui.sourcesOpen && (sourceOption || event.key === 'Escape')) {
@@ -672,10 +635,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       if (event.target.id === 'model-search' && event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); options[0]?.click(); return; }
       if (modelOption && ['Enter', ' '].includes(event.key)) event.stopPropagation();
     }
+    if (ui.photo && event.key === 'Tab') { event.preventDefault(); event.stopPropagation(); root.querySelector('[data-action="close-photo"]')?.focus({ preventScroll: true }); return; }
     if (event.key === 'Escape') {
       event.stopPropagation();
       if (ui.avatarMenuOpen) { dismissMenus(); root.querySelector('.avatar-menu-toggle')?.focus({ preventScroll: true }); }
-      else if (ui.photo) { ui.photo = null; render(); }
+      else if (ui.photo) closePhoto();
       else if (ui.notice) dismissPhoneNotice();
       else close();
     } else if (event.target.matches('input, textarea, select') || event.target.isContentEditable) {
@@ -684,6 +648,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
   }
   function click(event) {
+    if (selects.click(event)) return;
     if (event.target.closest('button[data-action="dismiss"]')) { setFeedback(null); return; }
     if (ui.conflict) {
       const button = event.target.closest('button');
@@ -696,9 +661,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     const selection = root.getSelection?.() || doc.getSelection();
     // 拖选正文后松开鼠标保留选区，点击导航或消息菜单会重绘正文。
     if (content && selection && !selection.isCollapsed && selection.containsNode(content, true)) return;
-    if (event.target.matches('.photo-viewer')) { ui.photo = null; render(); return; }
+    if (event.target.matches('.photo-viewer')) { closePhoto(); return; }
     const button = event.target.closest('button');
     if (button?.disabled) return;
+    if (button?.closest('.phone-action-popup')) closeActionMenu();
     if (button?.dataset.apiSource) {
       const value = button.dataset.apiSource; closeSources();
       if (value === 'manual') { fillApiDraft(true); render(); return; }
@@ -765,7 +731,17 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (button.dataset.contact || button.dataset.group) {
       openConversation(button.dataset.group || button.dataset.contact, Boolean(button.dataset.group)); return;
     }
-    if (button.dataset.message) { ui.chatMenu = false; ui.selectedMessage = ui.selectedMessage === button.dataset.message ? '' : button.dataset.message; render(); return; }
+    if (button.dataset.message) {
+      const messageId = button.dataset.message, wasOpen = ui.selectedMessage === messageId;
+      closeActionMenu();
+      if (!wasOpen) {
+        ui.selectedMessage = messageId;
+        button.closest('.message-row')?.classList.add('is-selected');
+        const selector = `${button.classList.contains('card-more') ? '.card-more' : '.bubble'}[data-message="${CSS.escape(messageId)}"]`;
+        openActionMenu('短信操作', () => renderMessageMenu(store.read(), { ui, busy }), selector);
+      }
+      return;
+    }
     if (button.dataset.post) { ui.forumScroll = { ...listPosition(button), tag: ui.forumTag }; ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
@@ -799,10 +775,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         const id = button.dataset.liangshiId;
         if (ui.liangshiMenu === id) closeLiangshiMenu();
         else {
-          closeLiangshiMenu(); ui.liangshiMenu = id;
-          button.setAttribute('aria-expanded', 'true');
-          surface.insertAdjacentHTML('beforeend', renderLiangshiOwnMenu(liangshi.getPost(id), busy)); placeLiangshiMenu();
-          (root.querySelector('.ls-own-menu button:not(:disabled)') || button).focus({ preventScroll: true });
+          closeActionMenu(); ui.liangshiMenu = id; button.setAttribute('aria-expanded', 'true');
+          openActionMenu('本人微博操作', () => { const post = liangshi.getPost(id); return post ? renderLiangshiOwnMenu(post, busy) : ''; }, `[data-action="liangshi-menu"][data-liangshi-id="${CSS.escape(id)}"]`);
         }
         break;
       }
@@ -826,7 +800,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
       case 'liangshi-delete': {
         const postId = button.dataset.liangshiId, content = doc.createElement('p'); closeLiangshiMenu(); content.textContent = '删除这条本人微博？';
-        void dialog.custom({ title: '删除微博', content, confirmText: '删除', cancelText: '取消', submit: () => true }).then(confirmed => {
+        void dialog.custom({ title: '删除微博', content, confirmText: '删除', cancelText: '取消', danger: true, submit: () => true }).then(confirmed => {
           if (confirmed) void perform(`liangshi-delete:${postId}`, () => liangshi.deleteUser(postId), () => {
             if (ui.notice?.kind === 'liangshi-post' && ui.notice.id === postId) dismissPhoneNotice();
             if (ui.view === 'liangshi' && ui.liangshiPage.kind === 'post' && ui.liangshiPage.id === postId) { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'mine' }, false); }
@@ -862,7 +836,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'liangshi-image': {
         const postId = button.dataset.liangshiImage, id = button.dataset.liangshiRow, collection = button.dataset.liangshiCollection || 'comments';
         const readImage = () => { const post = store.read().liangshi?.posts.find(post => post.id === postId); return id && post ? liangshiInteractions(post, collection).find(row => row.id === id)?.image : post?.image; };
-        if (readImage()?.path) void viewPhoto(readImage);
+        if (readImage()?.path) void viewPhoto(readImage, button);
         else void perform(`liangshi-image:${postId}${id ? `:${id}` : ''}`, () => images.generateLiangshi(postId, { collection, id }));
         break;
       }
@@ -910,7 +884,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'social-earlier': ui.socialLimit += 30; render(); break;
       case 'social-image': {
         const postId = button.dataset.socialImage, readImage = () => store.read().social?.posts.find(item => item.id === postId)?.image;
-        if (readImage()?.path) void viewPhoto(readImage);
+        if (readImage()?.path) void viewPhoto(readImage, button);
         else void perform(`social-image:${postId}`, () => images.generatePost(postId));
         break;
       }
@@ -940,10 +914,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'choose-location': ui.attachment = 'location'; ui.attachmentDraft = {}; render(); break;
       case 'choose-transfer': ui.attachment = 'transfer'; ui.attachmentDraft = { currency: 'CNY' }; render(); break;
       case 'close-attachment': ui.attachment = ''; render(); break;
-      case 'close-photo': ui.photo = null; render(); break;
+      case 'close-photo': closePhoto(); break;
       case 'photo': {
         const message = store.read().conversations[id]?.find(item => item.id === button.dataset.photo);
-        if (message?.image.path) void viewPhoto(() => store.read().conversations[id]?.find(item => item.id === button.dataset.photo)?.image);
+        if (message?.image.path) void viewPhoto(() => store.read().conversations[id]?.find(item => item.id === button.dataset.photo)?.image, button);
         else void perform(`image:${button.dataset.photo}`, () => images.generate(id, button.dataset.photo));
         break;
       }
@@ -970,45 +944,53 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
       case 'forum-more': { const id = ui.postId; void perform(`forum-more:${id}`, () => forum.loadMore(id), result => { if (result === null) setFeedback({ text: '暂时没有新的回帖。' }); }); break; }
       case 'forum-tag': ui.forumTag = button.dataset.forumTag; render(); root.querySelector('.phone-main').scrollTop = 0; break;
-      case 'forum-image': { const id = ui.postId, commentId = button.dataset.forumComment, readImage = () => { const post = store.read().forum?.posts.find(post => post.id === id); return commentId && post ? forumComments(post).find(row => row.id === commentId)?.image : post?.image; }; if (readImage()?.path) void viewPhoto(readImage); else void perform(`forum-image:${id}${commentId ? `:${commentId}` : ''}`, () => images.generateForum(id, commentId)); break; }
+      case 'forum-image': { const id = ui.postId, commentId = button.dataset.forumComment, readImage = () => { const post = store.read().forum?.posts.find(post => post.id === id); return commentId && post ? forumComments(post).find(row => row.id === commentId)?.image : post?.image; }; if (readImage()?.path) void viewPhoto(readImage, button); else void perform(`forum-image:${id}${commentId ? `:${commentId}` : ''}`, () => images.generateForum(id, commentId)); break; }
       case 'back-inbox':
       case 'back-forum': goBack(); break;
       case 'profile': editProfile('contact', id); break;
       case 'edit-user': editProfile('user'); break;
       case 'add-contact': editProfile('contact'); break;
-      case 'inbox-menu': ui.inboxMenu = !ui.inboxMenu; render(); break;
+      case 'inbox-menu': {
+        const wasOpen = ui.inboxMenu; closeActionMenu();
+        if (!wasOpen) { ui.inboxMenu = true; openActionMenu('通讯录操作', () => renderInboxMenu(busy), '[data-action="inbox-menu"]'); }
+        break;
+      }
       case 'add-group': editGroup(); break;
       case 'edit-group': editGroup(ui.groupId); break;
       case 'back-group': goBack(); break;
       case 'organize': ui.inboxMenu = false; void perform('directory', () => directory.organize(), result => { setFeedback({ text: result.contacts.length || result.groups.length ? `新增 ${result.contacts.length} 位联系人、${result.groups.length} 个群聊。` : '没有需要新增的联系人或群聊。' }); onContextChange(); }); break;
       case 'remove-contact':
       case 'remove-group': {
+        if (busy.has('remove')) break;
         const group = button.dataset.action === 'remove-group';
         const key = group ? ui.view === 'group-profile' ? ui.groupEditId : ui.groupId : ui.view === 'contact-profile' ? ui.editId : ui.contactId;
         const person = (group ? store.read().groups || [] : store.read().contacts).find(item => item.id === key);
-        ui.deletion = { kind: group ? 'group' : 'contact', id: key, name: person.name, from: ui.view };
-        ui.chatMenu = false; ui.view = 'delete-confirm'; render(); break;
-      }
-      case 'cancel-delete': goBack(); break;
-      case 'confirm-delete': {
-        const item = ui.deletion;
-        void perform('remove', () => item.kind === 'group' ? store.deleteGroup(item.id) : store.deleteContact(item.id), () => { ui.drafts.delete(item.id); ui.selectedMessage = ''; ui.profileDraft = {}; ui.groupDraft = {}; ui.deletion = null; ui.view = 'inbox'; onContextChange(); });
+        const item = { kind: group ? 'group' : 'contact', id: key, name: person.name }, content = doc.createElement('div');
+        content.innerHTML = renderDeletion(item);
+        void dialog.custom({ title: `删除${group ? '群聊' : '联系人'}`, content, confirmText: '确认删除', cancelText: '取消', danger: true, dismissOnBackdrop: true, submit: () => true }).then(confirmed => {
+          if (confirmed) void perform('remove', () => item.kind === 'group' ? store.deleteGroup(item.id) : store.deleteContact(item.id), () => { ui.drafts.delete(item.id); ui.selectedMessage = ''; ui.profileDraft = {}; ui.groupDraft = {}; ui.view = 'inbox'; onContextChange(); });
+        });
         break;
       }
       case 'back-profile': goBack(); break;
       case 'identity-menu': if (ui.identityOwnersOpen) closeIdentityOptions(); else openIdentityOptions(); break;
-      case 'avatar-menu': ui.avatarMenuOpen = !ui.avatarMenuOpen; render(); root.querySelector('.avatar-menu-toggle')?.focus({ preventScroll: true }); break;
+      case 'avatar-menu': {
+        const wasOpen = ui.avatarMenuOpen; closeActionMenu();
+        if (!wasOpen) { ui.avatarMenuOpen = true; openActionMenu('头像操作', () => renderAvatarMenu(root.querySelector('.avatar-menu-toggle')?.dataset.avatarCanRestore === 'true'), '.avatar-menu-toggle'); }
+        break;
+      }
+      case 'upload-avatar': root.querySelector('.avatar-picker input[type="file"]')?.click(); break;
       case 'remove-avatar': {
         ui.avatarMenuOpen = false;
         const draft = ui.view === 'group-profile' ? ui.groupDraft : ui.profileDraft;
         draft.avatar = ''; if (ui.editor === 'contact' && ui.view === 'contact-profile') draft.automaticAvatar = false;
-        render(); break;
+        render(); root.querySelector('.avatar-menu-toggle')?.focus({ preventScroll: true }); break;
       }
       case 'restore-avatar': {
         ui.avatarMenuOpen = false;
         const draft = ui.profileDraft, current = store.read().contacts.find(person => person.id === ui.editId);
         draft.avatar = isCameoAvatar(draft.avatar) ? draft.avatar : isCameoAvatar(current?.avatar) ? current.avatar : createCameoAvatar();
-        draft.automaticAvatar = true; render(); break;
+        draft.automaticAvatar = true; render(); root.querySelector('.avatar-menu-toggle')?.focus({ preventScroll: true }); break;
       }
       case 'refine-style': {
         const draft = ui.profileDraft, original = draft.expression, contactId = ui.editId;
@@ -1018,7 +1000,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         });
         break;
       }
-      case 'chat-menu': ui.chatMenu = !ui.chatMenu; ui.selectedMessage = ''; render(); break;
+      case 'chat-menu':
+        if (ui.chatMenu) closeActionMenu();
+        else { closeActionMenu(); ui.chatMenu = true; ui.selectedMessage = ''; openActionMenu('聊天选项', () => renderChatMenu(store.read(), { ui, busy }), '[data-action="chat-menu"]'); }
+        break;
       case 'clear-chat': ui.confirmClear = true; ui.chatMenu = false; render(); break;
       case 'cancel-clear': ui.confirmClear = false; render(); break;
       case 'confirm-clear': {
@@ -1026,12 +1011,12 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         void perform(`clear:${id}`, () => store.clearConversation(id, anchor), () => { ui.confirmClear = false; ui.selectedMessage = ''; ui.drafts.delete(id); onContextChange(); }); break;
       }
       case 'delete-message': {
-        const messageId = ui.selectedMessage;
+        const messageId = button.dataset.messageTarget;
         void perform(`delete:${id}`, () => store.deleteMessage(id, messageId), () => { ui.selectedMessage = ''; onContextChange(); }); break;
       }
       case 'reply-message': {
         if (ui.view !== 'group-chat') break;
-        ui.replyToId = ui.selectedMessage; ui.selectedMessage = ''; render(); root.querySelector('#sms-draft')?.focus({ preventScroll: true }); break;
+        ui.replyToId = button.dataset.messageTarget; ui.selectedMessage = ''; render(); root.querySelector('#sms-draft')?.focus({ preventScroll: true }); break;
       }
       case 'cancel-reply': ui.replyToId = ''; render(); root.querySelector('#sms-draft')?.focus({ preventScroll: true }); break;
       case 'earlier': ui.visibleMessages += 60; render(); break;
@@ -1066,7 +1051,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         const ref = apiSettings.getSelected(), source = apiSettings.listSources().find(item => refKey(item.ref) === refKey(ref));
         if (!source || manualApi()) break;
         const content = doc.createElement('p'); content.textContent = `删除「${source.label}」？这是共享预设，使用它的其他插件也会失去这条连接；两三事将改为未配置。`;
-        void dialog.custom({ title: '删除 API 预设', content, confirmText: '删除', cancelText: '取消', submit: () => true }).then(confirmed => {
+        void dialog.custom({ title: '删除 API 预设', content, confirmText: '删除', cancelText: '取消', danger: true, submit: () => true }).then(confirmed => {
           if (confirmed) void perform('api', () => apiSettings.deletePreset(ref), () => { fillApiDraft(true); setFeedback({ text: '预设已删除。' }); });
         });
         break;
@@ -1251,7 +1236,6 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   root.addEventListener('toggle', rememberMembersFold, true);
   root.addEventListener('error', imageError, true);
   root.addEventListener('scroll', readVisibleSocialReplies, true);
-  root.addEventListener('scroll', scrollLiangshiMenu, true);
   doc.addEventListener('pointerdown', dismissMenus, true);
   render();
   fillDefaultAvatars();
@@ -1291,13 +1275,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     },
     dispose() {
       setFeedback(null);
-      dialog.dispose(); updatesView?.dispose();
+      selects.close(); actionMenu.close(); dialog.dispose(); updatesView?.dispose();
       dismissPhoneNotice();
       avatarCropper?.close();
       unsubscribeAppearance();
       clock.stop();
       particles?.dispose();
-      chatScroll.dispose();
+      chatScroll.dispose(); editing.dispose();
       windowControls.dispose();
       lockImageNode = null;
       lockImageSrc = '';
@@ -1311,7 +1295,6 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       root.removeEventListener('toggle', rememberMembersFold, true);
       root.removeEventListener('error', imageError, true);
       root.removeEventListener('scroll', readVisibleSocialReplies, true);
-      root.removeEventListener('scroll', scrollLiangshiMenu, true);
       element.remove(); fontStyle.remove();
     },
   };

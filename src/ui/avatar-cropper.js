@@ -13,7 +13,7 @@ export function avatarCropLayout({ naturalWidth, naturalHeight, frameSize, zoom 
 export function mountAvatarCropper(surface, file) {
   const doc = surface.ownerDocument, win = doc.defaultView;
   const overlay = doc.createElement('div');
-  overlay.className = 'phone-dialog-backdrop avatar-crop-backdrop';
+  overlay.className = 'phone-dialog-backdrop avatar-crop-backdrop'; overlay.dataset.phoneOverlay = '';
   overlay.innerHTML = `<section class="phone-dialog avatar-crop-dialog" role="dialog" aria-modal="true" aria-label="调整头像">
     <h2>调整头像</h2>
     <div class="avatar-crop-frame"><img alt="头像裁剪预览" draggable="false"></div>
@@ -40,7 +40,7 @@ export function mountAvatarCropper(surface, file) {
     if (closed) return;
     // 控制器可重绘表单，裁剪弹窗保留同一节点、原图和拖动位置。
     for (const child of surface.children) if (child !== overlay) child.inert = true;
-    surface.append(overlay);
+    if (overlay.parentNode !== surface) surface.append(overlay);
     if (!overlay.contains(surface.getRootNode().activeElement)) overlay.querySelector('[data-crop="cancel"]').focus({ preventScroll: true });
   }
   function finish(value, error) {

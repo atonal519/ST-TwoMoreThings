@@ -1,7 +1,7 @@
 import { action, avatar, empty, escape, icon, renderBilingual } from './shared.js';
 import { displayName } from '../profiles.js';
 import { getSocialAuthor, readSocialPosts, readSocialFeed } from '../social.js';
-import { publicationLabel } from '../social-time.js';
+import { publicationLabel, formatPublicationTime } from '../social-time.js';
 import { imageSource } from '../image-files.js';
 
 function renderPost(post, state, busy, ui) {
@@ -18,7 +18,7 @@ function renderPost(post, state, busy, ui) {
   const commentOpen = ui.socialCommentOpen.has(post.id);
   const draft = ui.socialDrafts.get(post.id) || '';
   const commentBusy = busy.has(`social-comment:${post.id}`);
-  const date = publicationLabel(post);
+  const date = formatPublicationTime(publicationLabel(post));
   const userLiked = Boolean(post.userLiked);
   const likes = (Number(post.likes) || 0) + Number(userLiked);
   return `<article class="social-post" data-social-post="${escape(post.id)}">

@@ -1,6 +1,7 @@
 import { action, avatar, empty, escape, icon, renderBilingual, renderContentImage } from './shared.js';
 import { getLiangshiContact, liangshiStatistics, liangshiReplyState, readLiangshiFeed, readLiangshiFollowingFeed, readLiangshiUserPosts, readLiangshiTopics, readLiangshiTopic, isLiangshiFollowingPost, isLiangshiUserPost, liangshiInteractions } from '../liangshi.js';
 import { imageSource } from '../image-files.js';
+import { formatPublicationTime } from '../social-time.js';
 
 const truncate = (value, limit) => Array.from(value || '').length > limit ? Array.from(value).slice(0, limit).join('') + '…' : value || '';
 const totalLabel = value => value >= 1e8 ? `${+(value / 1e8).toFixed(1)}亿` : value >= 1e4 ? `${+(value / 1e4).toFixed(1)}万` : String(value);
@@ -8,7 +9,7 @@ const follow = (account, state, following) => account.ownerId === '@user' ? '' :
 
 export function renderLiangshiOwnMenu(post, busy) {
   const id = post.id, state = liangshiReplyState(post), disabled = ['liangshi-more', 'liangshi-replies', 'liangshi-image', 'liangshi-delete', 'liangshi-reply'].some(key => busy.has(`${key}:${id}`)) || [...busy].some(key => key.startsWith(`liangshi-image:${id}:`));
-  return `<div class="ls-own-menu" role="menu" aria-label="本人微博操作"><button type="button" role="menuitem" data-action="liangshi-generate-replies" data-liangshi-id="${escape(id)}" ${disabled || !state.pending.length ? 'disabled' : ''}>生成回应</button><button type="button" role="menuitem" data-action="liangshi-regenerate-replies" data-liangshi-id="${escape(id)}" ${disabled || !state.last?.inputIds?.length ? 'disabled' : ''}>重新生成</button><button type="button" role="menuitem" data-action="liangshi-edit" data-liangshi-id="${escape(id)}" ${disabled ? 'disabled' : ''}>编辑微博</button><button type="button" class="danger" role="menuitem" data-action="liangshi-delete" data-liangshi-id="${escape(id)}" ${disabled ? 'disabled' : ''}>删除微博</button></div>`;
+  return `<div class="phone-menu-actions"><button type="button" data-action="liangshi-generate-replies" data-liangshi-id="${escape(id)}" ${disabled || !state.pending.length ? 'disabled' : ''}>生成回应</button><button type="button" data-action="liangshi-regenerate-replies" data-liangshi-id="${escape(id)}" ${disabled || !state.last?.inputIds?.length ? 'disabled' : ''}>重新生成</button><button type="button" data-action="liangshi-edit" data-liangshi-id="${escape(id)}" ${disabled ? 'disabled' : ''}>编辑微博</button><div class="phone-menu-danger"><button type="button" class="danger" data-action="liangshi-delete" data-liangshi-id="${escape(id)}" ${disabled ? 'disabled' : ''}>删除微博</button></div></div>`;
 }
 
 export function renderLiangshi(state, { ui, busy }) {
@@ -39,14 +40,13 @@ export function renderLiangshi(state, { ui, busy }) {
       ${post.image.path ? `<img data-phone-image="${escape(post.image.path)}" src="${escape(imageSource(post.image.path))}" alt="${escape(post.image.description)}" loading="lazy" draggable="false">`
       : `<span class="ls-photo-placeholder${generating ? ' is-generating' : ''}">${icon(generating ? 'refresh' : 'image')}<span${generating ? ' role="status"' : ''}>${generating ? '生成中…' : escape(post.image.description)}</span>${generating ? '' : '<small>点击生成图片</small>'}</span>`}
     </button>` : '';
-    return `<article class="ls-post" data-liangshi-id="${escape(post.id)}">${author(account, (post.publishedAt || '') + (post.editedAt ? ' · 已编辑' : ''))}${post.promoted ? '<span class="ls-ad-label">推广</span>' : ''}
+    return `<article class="ls-post" data-liangshi-id="${escape(post.id)}">${author(account, formatPublicationTime(post.publishedAt) + (post.editedAt ? ' · 已编辑' : ''))}${post.promoted ? '<span class="ls-ad-label">推广</span>' : ''}
       <p class="ls-copy" data-liangshi-open="${escape(post.id)}">${bilingual(expanded || !long ? post.text : truncate(post.text, 120), expanded || !long ? post.translation : truncate(post.translation, 120))}</p>
       ${photo}
       ${long && !detail ? `<button type="button" class="ls-expand" data-action="liangshi-expand" data-liangshi-id="${escape(post.id)}">${expanded ? '收起' : '展开全文'}</button>` : ''}
       ${post.quoteId ? quote(posts.get(post.quoteId)) : ''}
       <div class="ls-post-footer">${detail ? '' : `<div class="ls-stats"><button type="button" data-liangshi-open="${escape(post.id)}" data-liangshi-section="reposts" aria-label="查看转发">${icon('repost')}${totalLabel(totals.repostCount)}</button><button type="button" data-liangshi-open="${escape(post.id)}" data-liangshi-section="comments" aria-label="查看评论">${icon('comment')}${totalLabel(totals.commentCount)}</button>${like(post)}</div>`}
-      ${post.userAuthored && account.ownerId === '@user' ? `<div class="ls-own-actions"><button type="button" class="ls-own-toggle" data-action="liangshi-menu" data-liangshi-id="${escape(post.id)}" aria-label="微博操作" aria-haspopup="menu" aria-expanded="${ui.liangshiMenu === post.id}">${icon('more')}</button>
-        ${ui.liangshiMenu === post.id ? renderLiangshiOwnMenu(post, busy) : ''}</div>` : ''}</div></article>`;
+      ${post.userAuthored && account.ownerId === '@user' ? `<div class="ls-own-actions"><button type="button" class="ls-own-toggle" data-action="liangshi-menu" data-liangshi-id="${escape(post.id)}" aria-label="微博操作" aria-haspopup="menu" aria-expanded="${ui.liangshiMenu === post.id}">${icon('more')}</button></div>` : ''}</div></article>`;
   }
   const comment = (row, post) => {
     const account = accounts.get(row.authorId); if (!account) return '';
@@ -54,7 +54,7 @@ export function renderLiangshi(state, { ui, busy }) {
     const writing = busy.has(`liangshi-reply:${post.id}`), selected = own && draft?.replyToId === row.id;
     return `<div class="ls-comment" data-liangshi-comment="${escape(row.id)}">${avatar(account)}<div class="ls-comment-body"><b>${escape(account.name)}</b>${row.replyToId ? `<small class="ls-reply-target">回复 @${escape(target?.name || '原评论作者')}</small>` : ''}${row.text ? `<p>${bilingual(row.text, row.translation)}</p>` : ''}${renderContentImage(row.image, { action: 'liangshi-image', data: { 'liangshi-image': post.id, 'liangshi-row': row.id, 'liangshi-collection': 'comments' }, busy: busy.has(`liangshi-image:${post.id}:${row.id}`), label: '微博评论图片' })}
       ${own ? `<button type="button" class="ls-reply-button" data-action="liangshi-reply" data-liangshi-id="${escape(post.id)}" data-liangshi-comment="${escape(row.id)}" aria-label="回复${escape(account.name)}">回复</button>` : ''}
-      ${selected ? `<form class="ls-reply-form" data-liangshi-reply-form="${escape(post.id)}"><label class="field-label" for="ls-reply-text">回复 @${escape(account.name)}</label><textarea id="ls-reply-text" name="reply" rows="3" placeholder="写下回复…" required>${escape(draft.text)}</textarea><div class="ls-reply-actions"><button type="button" class="quiet-button" data-action="liangshi-reply-cancel" data-liangshi-id="${escape(post.id)}">取消</button><button type="submit" class="save-button" ${writing ? 'disabled' : ''}>${writing ? '发布中…' : '发布回复'}</button></div></form>` : ''}</div></div>`;
+      ${selected ? `<form class="ls-reply-form" data-liangshi-reply-form="${escape(post.id)}" data-reply-to="${escape(draft.replyToId)}"><label class="field-label" for="ls-reply-text">回复 @${escape(account.name)}</label><textarea id="ls-reply-text" name="reply" rows="3" placeholder="写下回复…" required>${escape(draft.text)}</textarea><div class="ls-reply-actions"><button type="button" class="quiet-button" data-action="liangshi-reply-cancel" data-liangshi-id="${escape(post.id)}">取消</button><button type="submit" class="save-button" ${writing ? 'disabled' : ''}>${writing ? '发布中…' : '发布回复'}</button></div></form>` : ''}</div></div>`;
   };
   const repost = (row, post) => {
     const account = accounts.get(row.authorId); if (!account) return '';

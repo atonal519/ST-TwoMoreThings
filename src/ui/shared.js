@@ -88,14 +88,14 @@ export function avatar(contact, small = false) {
 }
 export function avatarEditor(person, { open = false, canRestore = false, busy = false } = {}) {
   return `<div class="avatar-editor"><div class="profile-avatar">${avatar(person)}</div><div class="avatar-controls">
-    <button type="button" class="icon-button avatar-menu-toggle" data-action="avatar-menu" aria-label="头像操作" aria-expanded="${open}" ${busy ? 'disabled' : ''}>${icon('more')}</button>
-    ${open ? `<div class="avatar-menu" role="group" aria-label="头像操作菜单">
-      <label class="avatar-picker avatar-menu-item">上传<input type="file" accept="image/*" aria-label="选择头像图片"></label>
-      <button type="button" class="avatar-menu-item" data-action="remove-avatar" aria-label="移除头像">移除</button>
-      ${canRestore ? '<button type="button" class="avatar-menu-item" data-action="restore-avatar" aria-label="恢复自动头像">恢复</button>' : ''}
-    </div>` : ''}
+    <button type="button" class="icon-button avatar-menu-toggle" data-action="avatar-menu" data-avatar-can-restore="${Boolean(canRestore)}" aria-label="头像操作" aria-haspopup="menu" aria-expanded="${open}" ${busy ? 'disabled' : ''}>${icon('more')}</button>
+    <label class="avatar-picker" hidden><input type="file" accept="image/*" aria-label="选择头像图片"></label>
   </div></div>`;
 }
+export function renderAvatarMenu(canRestore) {
+  return `<button type="button" class="menu-item" data-action="upload-avatar">上传</button><button type="button" class="menu-item" data-action="remove-avatar" aria-label="移除头像">移除</button>${canRestore ? '<button type="button" class="menu-item" data-action="restore-avatar" aria-label="恢复自动头像">恢复</button>' : ''}`;
+}
+
 export function action(name, label, iconName, className = '', disabled = false) {
   return `<button type="button" class="${className}" data-action="${name}" aria-label="${label}" ${disabled ? 'disabled' : ''}>${iconName ? icon(iconName) : ''}<span>${label}</span></button>`;
 }

@@ -79,9 +79,10 @@ try {
     await page.getByRole('button', { name: '清空聊天', exact: true }).click();
     await page.getByRole('button', { name: '聊天选项', exact: true }).click();
     await page.getByRole('button', { name: '删除联系人', exact: true }).click();
-    await page.locator('.view-delete-confirm').waitFor();
-    await back().click();
-    assert.equal(await page.locator('.view-chat').count(), 1, 'back from contact deletion returns to the source page in one press');
+    const deletion = page.getByRole('dialog', { name: '删除联系人', exact: true });
+    await deletion.waitFor();
+    await deletion.getByRole('button', { name: '取消', exact: true }).click();
+    assert.equal(await page.locator('.view-chat').count(), 1, 'cancelling contact deletion keeps the source page');
     await back().click();
     await page.locator('.view-inbox').waitFor();
     await back().click();
