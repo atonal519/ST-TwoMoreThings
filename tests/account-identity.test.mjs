@@ -14,7 +14,7 @@ import {readTimeline} from '../src/timeline.js';
 
 function setup(kind='native'){
  const past={key:'[0,"2031/4/8","08:00"]'},current={key:'[1,"2031/4/8","09:30"]'};
- const h=createHarness({hostKind:kind,settings:{'schedule-planner':{apiPresets:[{id:'p',url:'https://fixture.invalid/v1',key:'synthetic',model:'m'}]}},messages:[{is_user:false,mes:'旧楼'},{is_user:false,mes:'当前普通场景<!-- QQJ-end | date=2031/4/8 | time=09:30 -->'}],metadata:{pocketPhone:{contacts:[
+ const h=createHarness({hostKind:kind,settings:{pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'p'}}, 'schedule-planner':{apiPresets:[{id:'p',url:'https://fixture.invalid/v1',key:'synthetic',model:'m'}]}},messages:[{is_user:false,mes:'旧楼'},{is_user:false,mes:'当前普通场景<!-- QQJ-end | date=2031/4/8 | time=09:30 -->'}],metadata:{pocketPhone:{contacts:[
   {id:'a',name:'林舟',personality:'MAIN_PERSONALITY',expression:'主号表达',source:{kind:'qqj',entityId:'qa'},extensionKeep:'keep'},
   {id:'b',name:'路边纸袋',identityOwnerId:'a',personality:'NOT_AUTHORITY',expression:'小号表达',avatar:'https://fixture.invalid/avatar.png'},
   {id:'c',name:'周予',personality:'另一人'},{id:'same',name:'林舟'},{id:'ua',name:'自己的小号',identityOwnerId:'@user'}],
@@ -90,14 +90,14 @@ test('a pending SMS cannot save an old owners private material after manual reas
  const pending=service.continueChat('b');await waiting;await store.saveContact('b',{name:'路边纸袋',identityOwnerId:'c'});const before=structuredClone(store.read());release('{"messages":[{"text":"旧owner资料不能写给新owner"}]}');await assert.rejects(pending);assert.deepEqual(store.read(),before);assert.equal(h.metadataSaves,1);
 });
 
-test('public candidate sets and proactive-message persistence exclude manually user-owned contacts',async()=>{
+test('public candidate sets exclude manually user-owned contacts and retired SMS fields remain inert',async()=>{
  const{store,reader,client,h}=setup();let input;h.completion=(_p,init)=>{input=JSON.parse(JSON.parse(init.body).messages[1].content);const author=input.authors.find(p=>p.kind==='contact');return{choices:[{message:{content:JSON.stringify({posts:[{authorId:author.id,image:{description:'公开场景。'},text:'普通公开动态'}],proactiveMessages:[{contactId:'ua',messages:[{text:'不能代本人发短信'}]}]})}}]};};
  await createSocialService({store,contextReader:reader,modelClient:client,random:()=>0}).refresh();assert.ok(!input.authors.some(p=>p.id==='ua'));assert.equal(store.read().conversations.ua.length,1);assert.equal(h.modelRequests.length,1);
  await store.updateSocial(s=>s,{incomingMessages:[{contactId:'ua',messages:[{role:'assistant',text:'持久化口也不能代发'}]}]});assert.equal(store.read().conversations.ua.length,1);
  assert.ok(!(await reader.readForLiangshi()).knownContacts.some(p=>p.id==='ua'));
 });
 
-test('pending social output and proactive SMS cannot be written after their actor is reassigned',async()=>{
+test('pending social output cannot be written after its actor is reassigned',async()=>{
  const{store,reader,h}=setup();let release,signal,selected;const started=new Promise(r=>signal=r);
  const service=createSocialService({store,contextReader:reader,random:()=>0,modelClient:{complete:request=>{const input=JSON.parse(request.messages[0].content);selected=input.authors.find(p=>p.kind==='contact');signal();return new Promise(r=>release=r);}}});
  const task=service.refresh();await started;await store.saveContact(selected.id,{name:selected.name,identityOwnerId:'@user'});const before=structuredClone(store.read());

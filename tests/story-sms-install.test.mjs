@@ -100,3 +100,15 @@ test('an old installed entry uses the normal update action to remove retired out
   assert.equal((await installer.readStatus()).state, 'installed');
   assert.deepEqual(f.book.entries[5], { uid: 5, comment: '用户内容', content: '保留', custom: { keep: true } });
 });
+
+test('the previous cross-opener display pattern is outdated and updates through the existing installer', async () => {
+  const f = fixture(), installer = createStorySmsInstaller({ host: f.host });
+  await installer.install();
+  f.scripts.at(-1).findRegex = String.raw`/\[tmt\|([^|\]\r\n]+)\|([^|\]\r\n]+)\]([\s\S]*?)\[\/tmt\]/g`;
+  const counts = f.counts(), prompt = Object.values(f.book.entries).find(entry => entry.extensions?.twoMoreThings?.storySms).content;
+  assert.equal((await installer.readStatus()).state, 'outdated'); assert.deepEqual(f.counts(), counts, 'status is read-only');
+  await installer.install();
+  assert.equal((await installer.readStatus()).state, 'installed'); assert.equal(f.scripts[0], f.other);
+  assert.deepEqual(f.counts(), counts.map(count => count + 1));
+  assert.equal(Object.values(f.book.entries).find(entry => entry.extensions?.twoMoreThings?.storySms).content, prompt, 'format instructions do not change');
+});

@@ -11,7 +11,7 @@ export function publicationValue(item, clock, historical = false) {
   return split || (historical ? '' : dateAndTime(clock?.date, clock?.time));
 }
 
-function savedPublication(post) {
+export function savedPublication(post) {
   // 新帖的空字符串明确表示未知；旧帖才读取原有剧情日期，createdAt始终只是生成时间。
   return Object.hasOwn(post, 'publishedAt') ? text(post.publishedAt) : dateAndTime(post.storyDate, post.timeLabel);
 }

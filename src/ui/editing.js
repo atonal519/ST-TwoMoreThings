@@ -2,6 +2,7 @@
 // Moving a saved textarea out and back would blur it and end a mobile IME session.
 export function createEditingRenderer(surface) {
   const root = surface.getRootNode(), composing = new WeakSet();
+  let held;
   const start = event => composing.add(event.target);
   const end = event => composing.delete(event.target);
   root.addEventListener('compositionstart', start);
@@ -13,6 +14,14 @@ export function createEditingRenderer(surface) {
     for (const { name, value } of next.attributes) if ((!editor || name !== 'value') && current.getAttribute(name) !== value) current.setAttribute(name, value);
   }
   return {
+    hold() {
+      const input = root.activeElement;
+      if (input?.matches?.('textarea, input:not([type="checkbox"]):not([type="file"]):not([type="radio"])') && input.closest(forms) && input.closest('.phone-main')) held = { input, start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection };
+    },
+    release(restore = false) {
+      const previous = held; held = null;
+      if (restore && previous?.input.isConnected) { previous.input.focus({ preventScroll: true }); if (previous.start !== null) previous.input.setSelectionRange(previous.start, previous.end, previous.direction); }
+    },
     render(markup, sameRoute) {
       const overlays = sameRoute && [...surface.children].filter(node => node.hasAttribute('data-phone-overlay'));
       if (overlays?.length) {
@@ -21,7 +30,7 @@ export function createEditingRenderer(surface) {
         surface.insertBefore(template.content, overlays[0]);
         return;
       }
-      const input = sameRoute && root.activeElement;
+      const input = sameRoute && (held?.input.isConnected ? held.input : root.activeElement);
       const form = input?.matches?.('textarea, input:not([type="checkbox"]):not([type="file"]):not([type="radio"])') && input.closest(forms);
       if (!form || !surface.contains(form) || !input.closest('.phone-main')) { surface.innerHTML = markup; return; }
       const template = surface.ownerDocument.createElement('template'); template.innerHTML = markup;

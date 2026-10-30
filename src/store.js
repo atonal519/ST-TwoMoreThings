@@ -2,9 +2,11 @@ import { cleanProfile } from './profiles.js';
 import { createCameoAvatar, isCameoAvatar } from './cameo-avatar.js';
 import { messageText } from './content.js';
 import { cleanBackground } from './backgrounds.js';
-import { contentImagePaths, imagePath } from './image-files.js';
+import { imagePath } from './image-files.js';
+import { findAlbumPhoto, preserveAlbumPhotos, rememberAlbumPhotos } from './album.js';
 import { groupAudience } from './phone-context.js';
-import { assignIdentityOwner, isUserIdentity, identityOwnerId, assertIdentitySnapshot } from './identities.js';
+import { assignIdentityOwner, isUserIdentity, assertIdentitySnapshot } from './identities.js';
+import { archiveNotifications, initializeNotificationHistory } from './notifications.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
 const fillDefaultAvatars = people => {
@@ -18,18 +20,25 @@ const fillDefaultAvatars = people => {
   return filled;
 };
 const text = value => typeof value === 'string' ? value.trim() : '';
+const withContactRemark = (state, id, value) => {
+  const remark = text(value);
+  return remark && !isUserIdentity(state, id) ? { ...state, contacts: state.contacts.map(person => person.id === id ? { ...person, remarkForUser: remark } : person) } : state;
+};
 const sealGroupScope = (messages = [], group) => messages.map(message => Object.hasOwn(message, 'knownToIds') ? message : { ...message, knownToIds: groupAudience(group) });
-export function createPhoneStore({ target, assertEnabled = () => {}, isReading = () => false, onIncomingMessage = () => {}, initialState, removeImages = async () => {} }) {
+export function createPhoneStore({ target, assertEnabled = () => {}, isReading = () => false, onIncomingMessage = () => {}, onNotifications = () => {}, initialState }) {
   const empty = initialState || emptyState();
   const read = () => target.metadata.pocketPhone || empty;
   // Serialize normal phone saves so sending while a reply arrives keeps both changes.
   let saving = Promise.resolve();
-  function update(change, cleanImages = false) {
+  function update(change, cleanImages = false, notices) {
     const operation = saving.then(async () => {
       const previous = target.metadata.pocketPhone;
       const current = read(); let next = change(current);
       if (next === current) return current;
+      if (cleanImages) next = preserveAlbumPhotos(current, next);
       if (Object.hasOwn(next, 'todos')) { const { todos, ...active } = next; next = active; }
+      let records = [];
+      if (notices?.some(Boolean)) { const archived = archiveNotifications(current, next, notices); next = archived.state; records = archived.records; }
       target.metadata.pocketPhone = next;
       try { await target.saveMetadata(); }
       catch (error) {
@@ -37,15 +46,8 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         else target.metadata.pocketPhone = previous;
         throw error;
       }
-      // 先保存真实删除，再删已无引用的文件；文件失败不能伪装成存档回滚成功。
-      if (cleanImages) {
-        const retained = contentImagePaths(next);
-        const removed = [...contentImagePaths(current)].filter(path => !retained.has(path));
-        if (removed.length) {
-          try { await removeImages(removed); }
-          catch { throw new Error('内容已保存，但旧图片及附带文件清理失败，请检查酒馆连接。'); }
-        }
-      }
+      // A committed save stays successful even if its local display observer fails.
+      if (records.length) { try { onNotifications(records); } catch {} }
       return read();
     });
     saving = operation.catch(() => {});
@@ -54,12 +56,39 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   const store = {
     read,
     readSaved: () => saving.then(read),
+    saveGeneratedPhoto(photo, change) {
+      let sourceError;
+      return update(state => {
+        let next = state;
+        try { next = change(state); } catch (error) { sourceError = error; }
+        return rememberAlbumPhotos(next, [sourceError ? photo : findAlbumPhoto(next, photo.path) || photo]);
+      }).then(saved => {
+        if (sourceError) throw new Error(`${sourceError.message} 图片已保存到相册。`);
+        return saved;
+      });
+    },
+    initializeNotifications() { return update(initializeNotificationHistory); },
+    clearNotifications() { return update(state => ({ ...state, notifications: { initialized: true, items: [] } })); },
+    dismissNotification(key, shouldDismiss = () => true) {
+      return update(state => {
+        if (!key || !shouldDismiss()) return state;
+        const seeded = initializeNotificationHistory(state), history = seeded.notifications;
+        const items = history.items.filter(item => item.key !== key);
+        return items.length === history.items.length ? state : { ...seeded, notifications: { ...history, items } };
+      });
+    },
     importStorySms({ floor, blocks, batch }) {
       return update(state => {
         assertEnabled();
         if (state.storySmsImportedFloor === floor) return state;
         const contacts = [...state.contacts], groups = [...(state.groups || [])], conversations = { ...state.conversations };
-        const findPerson = name => contacts.filter(person => person.name === name || person.nickname === name);
+        const separatedName = (label, name) => label && name && new RegExp(`(^|[\\s\\p{P}\\p{S}])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[\\s\\p{P}\\p{S}])`, 'u').test(label);
+        const findPerson = name => {
+          const exact = contacts.filter(person => person.name === name || person.nickname === name);
+          // Extra labels may surround a whole name; continuous names stay distinct.
+          const matches = exact.length ? exact : contacts.filter(person => [person.name, person.nickname].some(alias => separatedName(name, alias) || separatedName(alias, name)));
+          return [...new Map(matches.map(person => [person.id, person])).values()];
+        };
         const personFor = name => {
           const matches = findPerson(name);
           if (matches.length > 1) return null;
@@ -111,37 +140,24 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         return { ...state, contacts, ...(filledNpcs !== npcs ? { social: { ...state.social, npcs: filledNpcs } } : {}) };
       });
     },
-    updateSocial(change, { cleanImages = false, incomingMessages = [] } = {}) {
-      const incomingContacts = new Set();
+    updateSocial(change, { cleanImages = false, notice } = {}) {
       return update(state => {
         assertEnabled();
         const social = state.social || { posts: [], npcs: [], feedIds: [] };
         const next = change(social, state);
-        const conversations = { ...state.conversations };
-        let messagesChanged = false;
-        const validContacts = new Set((state.contacts || []).map(person => person.id));
-        for (const entry of Array.isArray(incomingMessages) ? incomingMessages : []) {
-          if (!validContacts.has(entry?.contactId) || isUserIdentity(state, entry.contactId) || entry.expectedIdentityOwner !== undefined && entry.expectedIdentityOwner !== identityOwnerId(state, entry.contactId) || !Array.isArray(entry.messages) || !entry.messages.length) continue;
-          const existing = conversations[entry.contactId] || [];
-          const savedMessages = entry.messages.map(message => message.role === 'assistant' ? { ...message, read: Boolean(isReading(entry.contactId)) } : message);
-          conversations[entry.contactId] = [...existing, ...savedMessages];
-          if (savedMessages.some(message => message.role === 'assistant')) incomingContacts.add(entry.contactId);
-          messagesChanged = true;
-        }
-        if (next === social && !messagesChanged) return state;
-        return { ...state, social: next, ...(messagesChanged ? { conversations } : {}) };
-      }, cleanImages).then(state => { for (const id of incomingContacts) onIncomingMessage(id); return state; });
+        return next === social ? state : { ...state, social: next };
+      }, cleanImages, notice && [notice]);
     },
-    updateLiangshi(change, { cleanImages = false } = {}) {
+    updateLiangshi(change, { cleanImages = false, notice } = {}) {
       return update(state => {
         assertEnabled();
         const current = state.liangshi || { accounts: [], posts: [], topics: [] };
         const next = change(current);
         return next === current ? state : { ...state, liangshi: next };
-      }, cleanImages);
+      }, cleanImages, notice && [notice]);
     },
     appendMessage(id, message) { return store.appendMessages(id, [message]); },
-    appendMessages(id, messages, { identityOwners } = {}) {
+    appendMessages(id, messages, { identityOwners, remarkForUser } = {}) {
       return update(state => {
         assertEnabled();
         if (!state.contacts.some(person => person.id === id) && !state.groups?.some(group => group.id === id)) throw new Error('这个会话已删除，无法保存新消息。');
@@ -151,8 +167,8 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         if (group && messages.some(message => message.role === 'assistant' && !group.memberIds.includes(message.speakerId))) throw new Error('群成员已经移出，无法保存这次回复，请重新点继续。');
         if (group && messages.some(message => message.type === 'transfer' && !(group.memberIds.includes(message.transfer.recipientId) || message.transfer.recipientId === '@user' && group.userIsMember))) throw new Error('收款人已不在群中，无法保存这条转账。');
         const savedMessages = messages.map(message => ({ ...message, ...(message.role === 'assistant' ? { read: Boolean(isReading(id)) } : {}), ...(group ? { knownToIds: groupAudience(group) } : {}) }));
-        return { ...state, conversations: { ...state.conversations, [id]: [...(state.conversations[id] || []), ...savedMessages] } };
-      }).then(state => { if (messages.some(message => message.role === 'assistant')) onIncomingMessage(id); return state; });
+        return withContactRemark({ ...state, conversations: { ...state.conversations, [id]: [...(state.conversations[id] || []), ...savedMessages] } }, id, group ? undefined : remarkForUser);
+      }, false, [{ kind: 'message', id }]).then(state => { if (messages.some(message => message.role === 'assistant')) onIncomingMessage(id); return state; });
     },
     markRead(id) {
       return update(state => {
@@ -169,7 +185,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         validate?.(state, current);
         if (description !== undefined && current.image.description !== description) throw new Error('这条图片描述已修改，请重新点击生成。');
         return { ...state, conversations: { ...state.conversations, [id]: messages.map(message => message.id === messageId ? { ...message, image: { ...message.image, ...image } } : message) } };
-      });
+      }, true);
     },
     clearImagePaths(paths) {
       const missing = new Set(paths.map(imagePath).filter(Boolean));
@@ -192,10 +208,12 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         const social = state.social && { ...state.social, posts: state.social.posts.map(row => clear(row, false)) };
         const forum = state.forum && { ...state.forum, posts: state.forum.posts.map(row => clear(row)) };
         const liangshi = state.liangshi && { ...state.liangshi, posts: state.liangshi.posts.map(row => clear(row)) };
-        return changed ? { ...state, conversations, ...(social ? { social } : {}), ...(forum ? { forum } : {}), ...(liangshi ? { liangshi } : {}) } : state;
-      }, true);
+        const albumPhotos = state.albumPhotos?.filter(photo => !missing.has(imagePath(photo.path)));
+        if (albumPhotos?.length !== state.albumPhotos?.length) changed = true;
+        return changed ? { ...state, conversations, ...(social ? { social } : {}), ...(forum ? { forum } : {}), ...(liangshi ? { liangshi } : {}), ...(albumPhotos ? { albumPhotos } : {}) } : state;
+      });
     },
-    respondTransfer(id, messageId, status, actorId, batch, identityOwners) {
+    respondTransfer(id, messageId, status, actorId, batch, identityOwners, remarkForUser) {
       return update(state => {
         assertEnabled();
         assertIdentitySnapshot(state, identityOwners);
@@ -210,7 +228,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         if (actorId === '@user' && group && !group.userIsMember) throw new Error('你不在这个群，无法处理转账。');
         const next = { ...message, transfer: { ...message.transfer, status, handledAt: new Date().toISOString() } };
         next.text = messageText(next);
-        return { ...state, conversations: { ...state.conversations, [id]: messages.map(item => item.id === messageId ? next : item) } };
+        return withContactRemark({ ...state, conversations: { ...state.conversations, [id]: messages.map(item => item.id === messageId ? next : item) } }, id, group ? undefined : remarkForUser);
       });
     },
     deleteMessage(id, messageId) {
@@ -325,10 +343,10 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         return { ...state, [key]: state[key].map(person => person.id === id ? { ...person, background } : person) };
       });
     },
-    updateForum(change, { cleanImages = false } = {}) {
-      return update(state => { assertEnabled(); const current = state.forum || { posts: [] }, next = change(current); return next === current ? state : { ...state, forum: next }; }, cleanImages);
+    updateForum(change, { cleanImages = false, notice } = {}) {
+      return update(state => { assertEnabled(); const current = state.forum || { posts: [] }, next = change(current); return next === current ? state : { ...state, forum: next }; }, cleanImages, notice && [notice]);
     },
-    replaceForum(posts) { return store.updateForum(current => ({ ...current, posts }), { cleanImages: true }); },
+    replaceForum(posts) { return store.updateForum(current => ({ ...current, posts }), { cleanImages: true, notice: { kind: 'forum' } }); },
     upsertContacts(items) {
       return update(state => {
         const contacts = new Map(state.contacts.map(item => [item.id, item]));

@@ -42,7 +42,7 @@ const icons = {
 export const asset = name => phoneUrl(`assets/${name}`);
 export const icon = name => ['messages', 'forum'].includes(name)
   ? `<span class="app-icon" style="--pp-app-icon:url('${asset(`${name}.svg`)}')" aria-hidden="true"></span>`
-  : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">${icons[name] || ''}</svg>`;
+  : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">${icons[name === 'album' ? 'image' : name] || ''}</svg>`;
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 export const refKey = ref => ref ? `${ref.kind}:${ref.presetId || ''}` : '';
 
@@ -62,9 +62,11 @@ export function renderMentionText(text, people = []) {
     : part.text.split(pattern).map((piece, index) => index % 2 ? `<mark class="message-mention">${escape(piece)}</mark>` : escape(piece)).join('')).join('');
 }
 
-export function renderBilingual(text, translation) {
+export function renderBilingual(text, translation, render = renderEmojiText) {
   const shown = translationForDisplay(text, translation);
-  return `<span class="message-original">${renderEmojiText(text)}</span>${shown ? `<span class="message-translation" lang="zh-CN">${renderEmojiText(shown)}</span>` : ''}`;
+  const language = /[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(String(text || '')) ? ' lang="ja"' : '';
+  const original = `<span class="message-original"${language}>${render(text)}</span>`;
+  return shown ? `<span class="bilingual-copy">${original}<span class="message-translation" lang="zh-CN">${render(shown)}</span></span>` : original;
 }
 
 function translationComparisonText(value) {

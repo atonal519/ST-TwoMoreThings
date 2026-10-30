@@ -45,7 +45,7 @@ try {
   assert.equal(await page.locator('.post-detail h1 .message-translation').textContent(), '河畔新增步道');
   assert.equal(await page.locator('.post-body .message-translation').textContent(), '新步道开放了，路灯亮到晚上十点。');
   assert.equal(await page.locator('.comment-row .message-translation').textContent(), '很适合傍晚散步。');
-  assert.equal(await page.locator('.comment-row .message-translation').evaluate(el => getComputedStyle(el).borderTopStyle), 'solid');
+  assert.equal(await page.locator('.comment-row .message-translation').evaluate(el => getComputedStyle(el).borderTopStyle), 'none');
   assert.equal(await page.locator('.phone-main').evaluate(el => el.scrollWidth <= el.clientWidth), true);
   await page.evaluate(() => { previewHarness.metadata.pocketPhone.theme = 'night'; previewHarness.app.open(); });
   await page.locator('.phone-shell').screenshot({ path: `${output}/${host}-${width}-post-night.png` });

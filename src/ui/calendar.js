@@ -22,7 +22,7 @@ export function renderCalendar(_state, { ui, calendar }) {
     <div>
       <div class="calendar-event-title">
         <h3>${escape(item.name)}</h3>
-        <small>${item.type === 'festival' ? '节日' : '纪念日'}</small>
+        <small>${({ festival: '节日', birthday: '生日', anniversary: '纪念日', custom: '日程' })[item.type] || '日程'}</small>
       </div>
       <span class="calendar-event-date">${escape(item.date)}${item.days > 1 ? ` · ${item.days}天` : ''}</span>
       ${item.note ? `<p>${escape(item.note)}</p>` : ''}

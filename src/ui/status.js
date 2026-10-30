@@ -9,9 +9,10 @@ export function renderLockMeta(weather) {
   </div>`;
 }
 
-export function renderStatusBar() {
+export function renderStatusBar({ notificationsEnabled = true } = {}) {
   return `<header class="phone-status" aria-label="手机状态栏">
     <time class="status-time"></time>
+    <button type="button" class="notification-shade-toggle" data-action="toggle-notification-shade" aria-label="打开通知与快捷设置" aria-expanded="false"${notificationsEnabled ? '' : ' disabled'}>${icon('arrow')}</button>
     <span class="status-indicators" aria-hidden="true" title="装饰状态">
       <span class="status-indicator">${icon('signal')}</span>
       <span class="status-indicator">${icon('wifi')}</span>
@@ -21,12 +22,13 @@ export function renderStatusBar() {
 }
 
 // 状态栏和锁屏共用一个时钟；只有现实时间回退才安排下一次刷新。
-export function createPhoneClock({ root, element, readTime }) {
+export function createPhoneClock({ root, element, readTime, onRefresh = () => {} }) {
   let timer;
   function refresh() {
     clearTimeout(timer);
     if (element.hidden) return;
     const clock = readTime();
+    onRefresh(clock);
     const status = root.querySelector('.status-time');
     if (status) status.textContent = clock.time;
     const digits = root.querySelector('[data-clock-digits]');

@@ -14,7 +14,7 @@ function renderPost(post, state, busy, ui) {
         ? `<img data-phone-image="${escape(post.image.path)}" src="${escape(imageSource(post.image.path))}" alt="${escape(post.image.description)}" loading="lazy" draggable="false">`
         : `<span class="social-photo-placeholder">${icon('image')}<span>${escape(post.image.description)}</span><small>${generating ? '生成中…' : '点击生成图片'}</small></span>`}
     </button>` : '';
-  const comments = (post.comments || []).map(comment => `<p class="social-comment" ${comment.replyToId && comment.read === false ? 'data-unread-reply' : ''}><strong>${escape(comment.name)}</strong>${renderBilingual(comment.text, comment.translation)}</p>`).join('');
+  const comments = (post.comments || []).map(comment => `<p class="social-comment" ${comment.replyToId && comment.read === false ? 'data-unread-reply' : ''}><strong class="social-comment-name">${escape(comment.name)}</strong>${renderBilingual(comment.text, comment.translation)}</p>`).join('');
   const commentOpen = ui.socialCommentOpen.has(post.id);
   const draft = ui.socialDrafts.get(post.id) || '';
   const commentBusy = busy.has(`social-comment:${post.id}`);

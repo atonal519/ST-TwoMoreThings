@@ -256,7 +256,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
         const batch = { id: uid(), inputIds: [...selectedIds], commentIds: comments.map(row => row.id) };
         const next = { ...actual, comments: [...actual.comments.filter(row => !excluded.has(row.id)).map(row => selectedIds.has(row.id) ? { ...row, replyHandled: true } : row), ...comments], replyBatch: batch };
         return { ...latest, accounts: catalog.accounts, posts: latest.posts.map(row => row.id === postId ? next : row) };
-      }, { cleanImages: true });
+      }, { cleanImages: true, notice: { kind: 'liangshi-post', id: postId } });
       return noReplies ? null : saved.liangshi.posts.find(row => row.id === postId);
     },
     async publishUser(draft) {
@@ -314,7 +314,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
         const posts = batch.posts.map(post => ({ ...post, ...liangshiStatistics(post) }));
         return retainOwned({ ...owned, followingFeedIds: posts.map(post => post.id), posts: [...owned.posts, ...posts],
           accounts: [...new Map([...owned.accounts, ...batch.accounts].map(account => [account.id, account])).values()] });
-      }, { cleanImages: true });
+      }, { cleanImages: true, notice: { kind: 'liangshi-following' } });
       return readLiangshiFollowingFeed(saved.liangshi);
     },
     async toggleLike(postId) {
@@ -359,7 +359,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
         batch.promoCountdown = due ? period() : remaining - 1;
         return retainOwned({ ...owned, feedIds: batch.posts.map(post => post.id), posts: [...owned.posts, ...batch.posts],
           accounts: [...new Map([...owned.accounts, ...batch.accounts].map(account => [account.id, account])).values()], promoCountdown: batch.promoCountdown });
-      }, { cleanImages: true });
+      }, { cleanImages: true, notice: { kind: 'liangshi-feed' } });
       return saved.liangshi;
     },
     async refreshHot() {
@@ -367,7 +367,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
       const answer = parseJsonObject(await modelClient.complete({ system: LIANGSHI_HOT_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, recipe: { topics: 15 } }) }] }));
       const topics = parseHot(answer);
       if (!topics.length) throw new Error('没有生成可读的热榜话题，请点刷新重试。');
-      const saved = await store.updateLiangshi(latest => retainOwned({ ...withOwnership(latest), topics }), { cleanImages: true });
+      const saved = await store.updateLiangshi(latest => retainOwned({ ...withOwnership(latest), topics }), { cleanImages: true, notice: { kind: 'liangshi-hot' } });
       return saved.liangshi.topics;
     },
     async loadTopic(topicId, { refresh = false } = {}) {
@@ -387,7 +387,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
         const posts = batch.posts.map(post => ({ ...post, topic: topic.name, ...liangshiStatistics(post) }));
         return retainOwned({ ...owned, topics: owned.topics.map(item => item.id === topicId ? { ...item, postIds: posts.map(post => post.id) } : item), posts: [...owned.posts, ...posts],
           accounts: [...new Map([...owned.accounts, ...batch.accounts].map(account => [account.id, account])).values()] });
-      }, { cleanImages: true });
+      }, { cleanImages: true, notice: { kind: 'liangshi-topic', id: topicId } });
       return readLiangshiTopic(saved.liangshi, topicId).postIds.map(id => saved.liangshi.posts.find(post => post.id === id));
     },
     async loadMore(postId) {
@@ -419,7 +419,7 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
         const appended = { ...actual, comments: [...actual.comments, ...comments], reposts: [...actual.reposts, ...reposts] };
         const next = { ...appended, ...liangshiStatistics(appended) };
         return { ...latest, accounts: [...new Map([...latest.accounts, ...catalog.accounts].map(account => [account.id, account])).values()], posts: latest.posts.map(item => item.id === postId ? next : item) };
-      });
+      }, { notice: { kind: 'liangshi-post', id: postId } });
       return noNewInteractions ? null : saved.liangshi.posts.find(item => item.id === postId);
     },
   };

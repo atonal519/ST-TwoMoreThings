@@ -106,9 +106,9 @@ try {
     const final = await page.evaluate(() => ({ state: startupHarness.metadata.pocketPhone, saved: startupHarness.persisted.pocketPhone, saves: startupHarness.metadataSaves, bookReads: startupHarness.bookReads, memoryReads: startupHarness.memoryReads, errors: startupHarness.errors }));
     assert.equal(requests.length, 5); assert.equal(final.bookReads, 4); assert.equal(final.memoryReads, 4); assert.deepEqual(final.state, final.saved);
     assert.deepEqual(final.state.todos.map(row => row.title), ['FIXED_OPEN','FIXED_DONE','UNCONFIRMED_CANDIDATE']);
-    assert.equal(final.state.conversations.lin.filter(message => message.text === 'SAVED_PROACTIVE_SMS').length, 2);
+    assert.equal(final.state.conversations.lin.filter(message => message.text === 'SAVED_PROACTIVE_SMS').length, 0);
     assert.deepEqual(final.errors, []); assert.deepEqual(errors, []); assert.deepEqual(unexpected, []);
-    results.push({ kind, mode, requests: 5, refreshes: 2, historyAdded: 2, commentsAdded: 1, saves: final.saves, bookReads: 4, memoryReads: 4, memorySource: kind === 'native' ? 'QQJ' : 'BBS', previousDraftOmitted: true, fixedSourcesRetained: true, candidateExcluded: true, proactiveSmsRetained: 2, retiredTasksUnchanged: true, historyBoundary: requests[2].historyBefore, explicitStyleSave: true, commentThreadRetained: true, removedImagePaths: deleted, errors, unexpected });
+    results.push({ kind, mode, requests: 5, refreshes: 2, historyAdded: 2, commentsAdded: 1, saves: final.saves, bookReads: 4, memoryReads: 4, memorySource: kind === 'native' ? 'QQJ' : 'BBS', previousDraftOmitted: true, fixedSourcesRetained: true, candidateExcluded: true, proactiveSmsIgnored: true, retiredTasksUnchanged: true, historyBoundary: requests[2].historyBefore, explicitStyleSave: true, commentThreadRetained: true, removedImagePaths: deleted, errors, unexpected });
     await page.close();
   }
   if (output) await writeFile(resolve(output, 'browser-result.json'), JSON.stringify(results, null, 2) + '\n');

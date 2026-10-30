@@ -24,7 +24,7 @@ test('past labels correct only the trailing floor from a valid batch key without
 });
 
 test('same story time on two AI floors still separates history; clear only removes current messages', async () => {
-  const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }], settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } } });
+  const h = createHarness({ messages: [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' }], settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   await store.upsertContacts([{ id: 'lin', name: '林舟' }]);
   const { createContextReader } = await import('../src/context.js');

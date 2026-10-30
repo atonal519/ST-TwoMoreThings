@@ -1,4 +1,4 @@
-import { action, avatar, empty, escape, icon, pageHeading, renderEmojiText, renderMentionText, translationForDisplay } from './shared.js';
+import { action, avatar, empty, escape, icon, pageHeading, renderBilingual, renderEmojiText, renderMentionText } from './shared.js';
 import { displayName } from '../profiles.js';
 import { partitionHistory } from '../timeline.js';
 import { messageText } from '../content.js';
@@ -83,9 +83,9 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
   const messageAvatar = isGroup && !mine && sender?.id ? `<button type="button" class="mention-avatar" data-mention-id="${escape(sender.id)}" aria-label="提及${escape(displayName(sender))}">${avatar(sender, true)}</button>` : avatar(mine ? { tone: 'lilac', ...user } : contact, true);
   const reply = isGroup ? replyContext(message, state.conversations?.[conversationId] || []) : undefined;
   const replyName = reply && !reply.missing ? displayName(reply.role === 'user' ? user : state.contacts.find(person => person.id === reply.speakerId) || { name: '已移除联系人' }) : '';
-  const replyTranslation = reply && translationForDisplay(reply.messageText, reply.translation), translation = translationForDisplay(message.text, message.translation);
-  const replyBlock = reply ? `<div class="message-reply${reply.missing ? ' is-missing' : ''}"><small>引用${replyName ? ` ${escape(replyName)}` : ''}</small><span>${reply.missing ? '原消息已删除' : renderMentionText(reply.messageText, groupPeople)}</span>${replyTranslation ? `<span class="message-translation" lang="zh-CN">${renderMentionText(replyTranslation, groupPeople)}</span>` : ''}</div>` : '';
-  const body = !message.type ? `<span class="message-original">${renderMentionText(message.text, groupPeople)}</span>${translation ? `<span class="message-translation" lang="zh-CN">${renderMentionText(translation, groupPeople)}</span>` : ''}` : renderCardBody(message, busy.has(`image:${message.id}`));
+  const renderText = text => renderMentionText(text, groupPeople);
+  const replyBlock = reply ? `<div class="message-reply${reply.missing ? ' is-missing' : ''}"><small>引用${replyName ? ` ${escape(replyName)}` : ''}</small>${reply.missing ? '<span>原消息已删除</span>' : renderBilingual(reply.messageText, reply.translation, renderText)}</div>` : '';
+  const body = !message.type ? renderBilingual(message.text, message.translation, renderText) : renderCardBody(message, busy.has(`image:${message.id}`));
   return `<div class="message-row ${mine ? 'is-mine' : 'is-theirs'}${chosen ? ' is-selected' : ''}${!hasNext && message.timeLabel ? ' has-time' : ''}${grouped}">
     ${messageAvatar}
     <div class="message-body">
@@ -120,7 +120,7 @@ export function renderChat(state, { ui, busy }) {
   const profileAction = isGroup ? 'edit-group' : 'profile';
   const observer = isGroup && !contact.userIsMember;
   const reply = isGroup && ui.replyToId ? replyContext({ replyToId: ui.replyToId }, state.conversations[contact.id] || []) : undefined;
-  const replyPreview = reply && !observer ? `<div class="reply-preview"><div><small>引用${reply.missing ? ' · 原消息已删除' : ''}</small><span>${reply.missing ? '原消息已删除' : escape(reply.messageText)}</span></div>${action('cancel-reply', '取消引用', 'close', 'icon-button')}</div>` : '';
+  const replyPreview = reply && !observer ? `<div class="reply-preview"><div><small>引用${reply.missing ? ' · 原消息已删除' : ''}</small>${reply.missing ? '<span>原消息已删除</span>' : renderBilingual(reply.messageText, undefined, escape)}</div>${action('cancel-reply', '取消引用', 'close', 'icon-button')}</div>` : '';
   const renderList = (items, readOnly = false) => items.map((message, index) => renderMessage(
     message, items[index - 1], items[index + 1], {
       ...messageView, readOnly,

@@ -8,9 +8,30 @@ import { createMessageService } from '../src/messages.js';
 import { createGroupService } from '../src/groups.js';
 import { createSocialService } from '../src/social.js';
 
+test('only the selected private account receives its remark; groups, public context, backflow and presets do not', async () => {
+  const h = createHarness({ metadata: { pocketPhone: { schemaVersion: 1, contacts: [
+    { id: 'lin', name: '林舟', remarkForUser: 'LIN_PRIVATE_REMARK' },
+    { id: 'alias', name: '别号', identityOwnerId: 'lin', remarkForUser: 'ALIAS_PRIVATE_REMARK' },
+    { id: 'zhou', name: '周予' },
+  ], groups: [{ id: 'friends', name: '朋友群', memberIds: ['lin', 'zhou'], userIsMember: true }], conversations: { lin: [{ role: 'user', text: '晚点见。', batch: { key: '[-1]' } }] }, forum: { posts: [] }, injectEnabled: true } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target }), reader = createContextReader({ target, store, qqjBridgeProvider: () => null });
+  const before = structuredClone(store.read());
+  const own = await reader.readForContact('lin');
+  assert.equal(own.contact.remarkForUser, 'LIN_PRIVATE_REMARK');
+  assert.equal(JSON.stringify(own).includes('ALIAS_PRIVATE_REMARK'), false);
+  const alias = await reader.readForContact('alias');
+  assert.equal(alias.contact.remarkForUser, 'ALIAS_PRIVATE_REMARK');
+  assert.equal(JSON.stringify(alias).includes('LIN_PRIVATE_REMARK'), false);
+  const { createAuthoringService } = await import('../src/authoring.js');
+  const exported = await createAuthoringService({ host: h.host, store, readEntries: () => ({}) }).exportScript({ coreUrl: 'https://example.invalid/embed.js' });
+  const outputs = [await reader.readForContact('zhou'), await reader.readForGroup('friends'), await reader.readForSocial(store.read().contacts), await reader.readForForum(), await reader.readForLiangshi({ includePhoneContext: true }), await reader.readForLiangshiHot(), await reader.readDirectorySources(), await createBackflowService({ target, store, modelClient: { complete() { throw new Error('短消息不调用模型'); } } }).prepare(), exported];
+  for (const output of outputs) for (const secret of ['remarkForUser', 'LIN_PRIVATE_REMARK', 'ALIAS_PRIVATE_REMARK']) assert.equal(JSON.stringify(output).includes(secret), false, secret);
+  assert.deepEqual(store.read(), before); assert.equal(h.metadataSaves, 0); assert.equal(h.modelRequests.length, 0);
+});
+
 function continuityHarness(hostKind = 'native') {
   const sourceBatch = { key: '[0,"2026-10-18","15:30"]', label: '2026-10-18 15:30' };
-  const h = createHarness({ hostKind, settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'synthetic', model: 'm' }] } }, messages: [
+  const h = createHarness({ hostKind, settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'synthetic', model: 'm' }] } }, messages: [
     { is_user: false, mes: '最初约定时的正文。<!-- SDC-end | date=2026-10-18 | time=15:30 -->' },
     { is_user: false, mes: '后来约定已取消，改成休息。' },
     { is_user: false, mes: '此刻在家。<!-- SDC-end | date=2026-10-18 | time=19:30 -->' },

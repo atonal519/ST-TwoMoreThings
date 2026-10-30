@@ -1,4 +1,4 @@
-import { renderModelPicker, renderSourcePicker } from './models.js';
+import { renderSourcePicker } from './models.js';
 import { homeImage } from './home.js';
 import { action, avatar, escape, icon, pageHeading, refKey } from './shared.js';
 import { displayName } from '../profiles.js';
@@ -19,7 +19,7 @@ export function renderSettingsVersion(mode, updates) {
 export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, updates }) {
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
   const current = sources.find(source => refKey(source.ref) === refKey(selected));
-  const manual = ui.manual || !sources.length || selected?.kind === 'none', preferences = entries.read();
+  const preferences = entries.read();
   const instanceLabel = mode === 'embedded' ? '随卡版' : '插件版';
   const drawer = (key, title, content) => `<section class="settings-drawer">
     <button type="button" class="settings-drawer-toggle" data-drawer="${key}" aria-expanded="${ui.drawers[key]}">
@@ -34,20 +34,10 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
       <span></span>
     </span>
   </label>`;
-  const connectionDetails = manual || current ? `<form class="api-form">
-    ${manual ? '' : '<p class="setting-note">地址和密钥共享，模型单独保存在两三事。</p>'}
-    <label class="field-label" for="api-url">接口地址</label>
-    <input id="api-url" name="url" type="url" placeholder="https://…/v1" value="${escape(ui.apiDraft.url || '')}" required>
-    <label class="field-label" for="api-key">密钥</label>
-    <input id="api-key" name="key" type="password" placeholder="${manual ? '输入 API 密钥' : '已保存，留空保持不变'}" value="${escape(ui.apiDraft.key || '')}" autocomplete="off" ${manual ? 'required' : ''}>
-    ${renderModelPicker(ui, busy)}
-    <div class="api-actions"><button type="submit" class="save-button" ${busy.has('api') ? 'disabled' : ''}>保存</button>
-      ${action('api-save-as', '另存为', '', 'quiet-button', busy.has('api'))}
-      ${action('api-delete', '删除', '', 'quiet-button danger', busy.has('api') || manual || !current)}</div>
-  </form>` : '';
   const connection = `<label class="field-label" for="api-source">使用的配置</label>
-    ${renderSourcePicker(ui, sources, selected)}
-    ${connectionDetails}`;
+    <div class="api-source-row">${renderSourcePicker(ui, sources, selected)}${action('api-edit', '编辑', '', 'quiet-button', busy.has('api') || !current)}</div>
+    <div class="api-actions">${action('api-new', '新增 API', '', 'quiet-button', busy.has('api'))}</div>
+    <p class="setting-note">新增连接后，可在用途中选择。</p>`;
   const appearanceContent = `<label class="field-label" for="phone-theme">主题</label>
     <select id="phone-theme" aria-label="外观主题">
       <option value="day" ${state.theme !== 'night' ? 'selected' : ''}>日间 · 回声</option>
@@ -70,6 +60,10 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
         <span></span>
       </span>
     </label>
+    <label class="field-label" for="font-css-url">字体 CSS URL</label>
+    <input id="font-css-url" type="url" aria-label="字体 CSS URL" value="${escape(appearance.fontPreference().cssUrl)}" placeholder="https://…/font.css" autocomplete="off" spellcheck="false">
+    ${action('restore-font', '恢复默认字体', '', 'quiet-button')}
+    <p class="setting-note">留空使用系统字体，日韩原文保留手写体。</p>
     <span class="field-label">锁屏背景</span>
     <div class="wallpaper-editor">
       ${renderBackgroundPicker({ value: state.wallpapers?.[state.theme === 'night' ? 'night' : 'day'], theme: state.theme,

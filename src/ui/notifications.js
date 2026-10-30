@@ -11,11 +11,11 @@ function preview(value) {
   return text || fallbackPreview;
 }
 
-function noticeButton(kind, id, title, content, visual) {
+function noticeButton(kind, id, title, content, visual, key) {
   const identifier = id ? ` data-notice-id="${escape(id)}"` : '';
   return `<div class="phone-top-notice" role="status">
-    <button type="button" class="phone-top-notice-open" data-action="open-phone-notice" data-notice-kind="${escape(kind)}"${identifier} aria-label="${escape(`${title}：${content}`)}">
-      <span class="phone-top-notice-visual">${visual}</span>
+    <button type="button" class="phone-top-notice-open" data-action="open-phone-notice" data-notice-kind="${escape(kind)}"${identifier}${key ? ` data-notification-key="${escape(key)}"` : ''} aria-label="${escape(`${title}：${content}`)}">
+      <span class="phone-top-notice-visual">${icon(kind === 'message' ? 'messages' : kind.startsWith('social') ? 'social' : kind.startsWith('forum') ? 'forum' : 'liangshi')}</span>
       <span class="phone-top-notice-copy"><strong>${escape(title)}</strong><span>${renderEmojiText(content)}</span></span>
     </button>
     <button type="button" class="phone-top-notice-dismiss" data-action="dismiss-phone-notice" aria-label="关闭${escape(title)}通知">${icon('close')}</button>
@@ -75,6 +75,7 @@ function liangshiHotNotice(state, id) {
 
 export function renderPhoneNotice(state, notice) {
   if (!notice || !state) return '';
+  if (notice.key) return noticeButton(notice.kind, notice.id, notice.title, notice.text, '', notice.key);
   switch (notice.kind) {
     case 'message': return notice.id ? messageNotice(state, notice.id) : '';
     case 'social-reply': return notice.id ? socialReplyNotice(state, notice.id) : '';

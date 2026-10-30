@@ -10,7 +10,7 @@ import { createSocialService } from '../src/social.js';
 import { readTimeline } from '../src/timeline.js';
 
 function setup(hostKind = 'native') {
-  const h = createHarness({ hostKind, settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'synthetic', model: 'm' }] } }, messages: [{ is_user: false, mes: '后续已经改约。<!-- SDC-end | date=2026-10-18 | time=18:00 -->' }], metadata: { pocketPhone: {
+  const h = createHarness({ hostKind, settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'synthetic', model: 'm' }] } }, messages: [{ is_user: false, mes: '后续已经改约。<!-- SDC-end | date=2026-10-18 | time=18:00 -->' }], metadata: { pocketPhone: {
     contacts: [{ id: 'lin', name: '林舟' }, { id: 'zhou', name: '周予' }], groups: [{ id: 'g', name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: true }], conversations: { lin: [{ id: 'source', role: 'assistant', text: '明晚见。', batch: { key: '[-1]' } }], g: [{ id: 'group-source', role: 'assistant', speakerId: 'zhou', text: '早已在群里说定的约定。', batch: { key: '[-1]' } }] }, injectEnabled: true,
     todos: [{ id: 'legacy', status: 'candidate', title: 'LEGACY_UNUSED_TASK', participantIds: ['@user', 'lin'], knownToIds: ['@user', 'lin'], sourceConversationId: 'lin', sourceMessageIds: ['source'], sourceBatch: { key: '[-1]' }, unknownField: { keep: true } }],
   } } });
@@ -53,7 +53,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: original services
   const social = createSocialService({ store, contextReader: reader, modelClient, random: () => 0 });
   h.completion = (_path, init) => {
     const input = JSON.parse(JSON.parse(init.body).messages[1].content);
-    const proactiveMessages = [{ contactId: 'lin', messages: [{ text: '私信正常保存。' }], todoSuggestions: stale }];
+    const proactiveMessages = [{ contactId: 'lin', messages: [{ text: '退役渠道不应保存。' }], todoSuggestions: stale }];
     const answer = input.task === 'comment' ? { comments: [{ authorId: 'lin', text: '谢谢。' }], proactiveMessages } : { posts: input.authors.filter(person => person.kind !== 'npc').map(person => ({ authorId: person.id, image:{description:'日常照片。'}, text: '普通近况。', publishedAt: '2026-10-18 17:00' })), proactiveMessages };
     return { choices: [{ message: { content: JSON.stringify(answer) } }] };
   };
@@ -61,7 +61,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: original services
   assert.ok(feed.authors.filter(author => author.kind !== 'npc').every(author => !('todos' in author) && !('todoPeople' in author)));
   await social.comment(store.read().social.posts.find(post => post.authorId === 'lin').id, '下午好。'); assertInput();
   assert.equal(h.modelRequests.length, 4); assert.equal(h.metadataSaves, 5);
-  assert.equal(store.read().conversations.lin.filter(message => message.text === '私信正常保存。').length, 2);
+  assert.equal(store.read().conversations.lin.filter(message => message.text === '退役渠道不应保存。').length, 0);
 });
 
 for (const hostKind of ['native', 'luker']) test(`${hostKind}: short/long backflow uses only actual SMS and leaves retired todos inert`, async () => {

@@ -1,5 +1,6 @@
 import { action, avatarEditor, escape, icon } from './shared.js';
 import { renderBackgroundPicker } from './backgrounds.js';
+import { isUserIdentity } from '../identities.js';
 
 export function renderIdentityOptions(state, ui) {
   const choices = [{ id: '', name: '此联系人本人' }, { id: '@user', name: '我' }, ...state.contacts.filter(person => person.id !== ui.editId).map(person => ({ id: person.id, name: person.nickname || person.name }))];
@@ -9,6 +10,8 @@ export function renderIdentityOptions(state, ui) {
 export function renderProfile(state, { ui, busy, profileAvatar }) {
   const person = ui.profileDraft;
   const contact = ui.editor === 'contact';
+  const savedContact = contact && state.contacts.find(item => item.id === ui.editId);
+  const remark = savedContact && !isUserIdentity(state, savedContact.id) ? `<label class="field-label" for="profile-remark">TA 给我的备注</label><output id="profile-remark" class="profile-readonly">${escape(typeof savedContact.remarkForUser === 'string' && savedContact.remarkForUser.trim() ? savedContact.remarkForUser : '—')}</output>` : '';
   const selectedOwner = person.identityOwnerId === '@user' ? '我' : state.contacts.find(item => item.id === person.identityOwnerId)?.nickname || state.contacts.find(item => item.id === person.identityOwnerId)?.name || '此联系人本人';
   const contactFields = contact ? `
     <div class="field-label profile-expression-heading">
@@ -28,6 +31,7 @@ export function renderProfile(state, { ui, busy, profileAvatar }) {
       <input id="profile-name" name="name" value="${escape(person.name)}" required>
       <label class="field-label" for="profile-nickname">网名</label>
       <input id="profile-nickname" name="nickname" value="${escape(person.nickname)}" placeholder="手机里显示的名字，不填则用姓名">
+      ${remark}
       <label class="field-label" for="profile-avatar">头像地址</label>
       <input id="profile-avatar" name="avatar" type="url" value="${escape(person.avatar?.startsWith('data:') ? '' : person.avatar)}" placeholder="https://…，也可从上方选择图片">
       ${contact ? `<label class="field-label" for="identity-owner">所属人物</label><div class="identity-picker"><button type="button" id="identity-owner" class="model-list-toggle" data-action="identity-menu" aria-haspopup="listbox" aria-expanded="${Boolean(ui.identityOwnersOpen)}"><span>${escape(selectedOwner)}</span>${icon('next')}</button>${ui.identityOwnersOpen ? renderIdentityOptions(state, ui) : ''}</div>` : ''}

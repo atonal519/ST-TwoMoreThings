@@ -76,7 +76,7 @@ export function createForumService({ store, contextReader, modelClient, random =
         }
         if (!added.length) { if (Array.isArray(rows) && !rows.length) { noComments = true; return data; } throw new Error('没有可用的新回帖，请重新加载。'); }
         return { ...data, posts: data.posts.map(row => row.id === postId ? { ...row, comments: [...comments, ...added] } : row) };
-      });
+      }, { notice: { kind: 'forum-post', id: postId } });
       return noComments ? null : saved.forum.posts.find(row => row.id === postId);
     },
   };

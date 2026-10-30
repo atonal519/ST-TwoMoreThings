@@ -18,6 +18,7 @@ import { LOCAL_CORE_URL, REMOTE_CORE_URL } from './authoring.js';
 import { renderCalendar } from './ui/calendar.js';
 import { createCalendarReader } from './calendar.js';
 import { mountChatParticles } from './ui/particles.js';
+import { createAppearanceFontController, DEFAULT_FONT_CSS_URL } from './appearance.js';
 import { mountAvatarCropper } from './ui/avatar-cropper.js';
 import { createPhoneWindow } from './ui/window.js';
 import { createChatScroll } from './ui/chat-scroll.js';
@@ -34,11 +35,16 @@ import { renderPhoneNotice } from './ui/notifications.js';
 import { readSocialPosts } from './social.js';
 import { createPluginUpdatesView } from './ui/plugin-updates-view.js';
 import { createPhoneDialog } from './ui/dialog.js';
+import { openApiEditor } from './ui/api-editor.js';
 import { createEditingRenderer } from './ui/editing.js';
 import { createPhoneSelects } from './ui/selects.js';
 import { createPhoneActionMenu } from './ui/action-menu.js';
 import { MEMORY_CONFLICT_CODE } from './memory-sources.js';
 import { phoneUrl } from './paths.js';
+import { renderAlbum } from './ui/album.js';
+import { findAlbumPhoto } from './album.js';
+import { createAlbumEditor } from './ui/album-editor.js';
+import { createNotificationShade } from './ui/notification-shade.js';
 
 // 新应用在这里注册入口和页面，页面模板保留在 src/ui/。
 const apps = [
@@ -47,6 +53,7 @@ const apps = [
   { id: 'messages', label: '短信', view: 'inbox' },
   { id: 'forum', label: '论坛', view: 'forum' },
   { id: 'calendar', label: '日历', view: 'calendar' },
+  { id: 'album', label: '相册', view: 'album' },
   { id: 'settings', label: '设置', view: 'settings' },
 ];
 const pages = {
@@ -66,9 +73,10 @@ const pages = {
   social: renderSocial,
   'social-profile': renderSocialProfile,
   liangshi: renderLiangshi,
+  album: renderAlbum,
 };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, social, liangshi, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onEnable = () => {}, onContextChange = () => {} }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, social, liangshi, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenNotifications }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
@@ -78,7 +86,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const fontStyle = doc.createElement('style');
   fontStyle.dataset.pocketPhoneFont = '';
   fontStyle.textContent = `@font-face { font-family: PocketPhoneClock; src: url("${phoneUrl('assets/clock-dorsa.ttf')}") format("truetype"); font-display: block; }
-    @font-face { font-family: PocketPhoneRoundClock; src: url("${phoneUrl('assets/clock-fredoka.woff2')}") format("woff2"); font-weight: 500; font-display: block; }`;
+    @font-face { font-family: PocketPhoneRoundClock; src: url("${phoneUrl('assets/clock-fredoka.woff2')}") format("woff2"); font-weight: 500; font-display: block; }
+    @font-face { font-family: PocketPhoneKorean; src: url("${phoneUrl('assets/gaegu-korean-400-normal.woff2')}") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7FF; }
+    @font-face { font-family: PocketPhoneJapanese; src: url("${phoneUrl('assets/yomogi-japanese-400-normal.woff2')}") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; }`;
   doc.head.append(fontStyle);
   const stylesheet = doc.createElement('link');
   stylesheet.rel = 'stylesheet';
@@ -89,6 +99,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   surface.setAttribute('aria-label', '两三事');
   root.append(stylesheet, surface);
   mount.append(element);
+  const appearanceFont = createAppearanceFontController({ appearance, root, element, documentRef: doc });
   const windowControls = createPhoneWindow(surface);
   const chatScroll = createChatScroll(root);
   const dialog = createPhoneDialog({ mount: surface, documentRef: doc });
@@ -113,6 +124,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     attachment: '', attachmentDraft: {}, stickerPack: 'emoji', photo: null,
     calendarOffset: 0, calendarDay: null,
     replyToId: '',
+    albumPage: 'gallery', albumPath: '', albumScroll: 0,
   };
   const actionMenu = createPhoneActionMenu({ root, onClose: () => {
     ui.chatMenu = false; ui.liangshiMenu = ''; ui.inboxMenu = false; ui.avatarMenuOpen = false; ui.selectedMessage = '';
@@ -122,10 +134,40 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const busy = new Set();
   let renderedRoute = '', apiEditor = 0, renderedApiEditor = 0, photoReturn = null;
   if (!control.isEnabled()) ui.view = 'settings';
-  const clock = createPhoneClock({ root, element, readTime });
+  let notificationShade, notificationsSuppressed = false, notificationEpoch = 0;
+  const clock = createPhoneClock({ root, element, readTime, onRefresh: value => notificationShade?.updateClock(value) });
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
   let particles = null, avatarCropper = null, lockImageNode = null, lockImageSrc = '', noticeTimer, feedbackTimer;
+  const albumEditor = createAlbumEditor({ root, documentRef: doc,
+    readPhoto: path => findAlbumPhoto(store.read(), path, { defaultUser }),
+    isActive: () => element.isConnected && !element.hidden && ui.view === 'album' && ui.albumPage === 'editor',
+    onChange: () => render(), onFeedback: text => setFeedback({ error: true, text }), onMissing: path => void recoverImages([path]),
+    onView: (photo, trigger) => { photoReturn = { route: renderedRoute, position: listPosition(trigger), selector: '[data-action="album-zoom"]' }; ui.photo = photo; render(); },
+  });
+  notificationShade = createNotificationShade({ root, surface, readState: store.read,
+    initialize: () => store.initializeNotifications(),
+    canOpen: () => element.isConnected && !element.hidden && control.isEnabled() && !ui.conflict && !ui.photo && !root.querySelector('.phone-dialog-backdrop'),
+    onBeforeOpen: () => { editing.hold(); dismissMenus(); clock.refresh(); },
+    onClose: ({ restoreFocus }) => editing.release(restoreFocus),
+    onClear: async () => { notificationsSuppressed = true; dismissPhoneNotice(); try { await store.clearNotifications(); root.querySelector('.lock-notifications')?.replaceChildren(); } finally { notificationsSuppressed = false; } },
+    onTheme: async () => {
+      await store.setTheme(store.read().theme === 'night' ? 'day' : 'night');
+      const state = store.read(); element.dataset.theme = state.theme;
+      onThemeChange(element.dataset.theme);
+      if (ui.view === 'home') {
+        const main = root.querySelector('.view-home'), footer = main.querySelector('.home-footer'), content = doc.createElement('template');
+        content.innerHTML = renderHome(state, { weather: readWeather() });
+        for (const child of [...main.children]) if (child !== footer) child.remove();
+        main.insertBefore(content.content, footer); clock.refresh(); revealClassicArtwork();
+      }
+      const select = root.querySelector('#phone-theme');
+      if (select) { select.value = state.theme; const label = root.querySelector('[data-phone-select="phone-theme"]>span'); if (label) label.textContent = select.selectedOptions[0]?.label || ''; }
+    },
+    onNotice: openPhoneNotice,
+    onHome: () => showPage('desktop'),
+    onError: error => setFeedback({ error: true, text: error.message || '通知操作未能保存。' }),
+  });
 
   function setFeedback(feedback) {
     doc.defaultView.clearTimeout(feedbackTimer);
@@ -158,9 +200,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     root.querySelector('.phone-top-notice')?.remove();
   }
   function pushPhoneNotice(notice) {
-    if (element.hidden || !element.isConnected || !control.isEnabled()) return;
+    if (element.hidden || !element.isConnected || !control.isEnabled() || notificationsSuppressed || !notice?.key || !store.read().notifications?.items.some(item => item.key === notice.key)) return;
     dismissPhoneNotice();
     ui.notice = notice;
+    surface.insertAdjacentHTML('beforeend', renderPhoneNotice(store.read(), notice));
     noticeTimer = doc.defaultView.setTimeout(dismissPhoneNotice, 6000);
   }
   function visibleInPage(node, page) {
@@ -169,13 +212,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     return box.bottom > frame.top && box.top < frame.bottom;
   }
   function isReadingSocial(postId) {
-    if (element.hidden || !element.isConnected || !['social', 'social-profile'].includes(ui.view)) return false;
+    if (element.hidden || notificationShade.isOpen || !element.isConnected || !['social', 'social-profile'].includes(ui.view)) return false;
     const post = root.querySelector(`.social-post[data-social-post="${CSS.escape(postId)}"]`);
     return visibleInPage(post?.querySelector('.social-comment:last-child') || post?.querySelector('.social-stats'), root.querySelector('.phone-main'));
   }
   function readVisibleSocialReplies(event) {
     if (event && !event.target.matches?.('.view-social, .view-social-profile')) return;
-    if (element.hidden || !['social', 'social-profile'].includes(ui.view)) return;
+    if (element.hidden || notificationShade.isOpen || !['social', 'social-profile'].includes(ui.view)) return;
     const main = root.querySelector('.phone-main');
     const ids = [...new Set([...root.querySelectorAll('.social-comment[data-unread-reply]')]
       .filter(node => visibleInPage(node, main)).map(node => node.closest('.social-post').dataset.socialPost))];
@@ -185,28 +228,24 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       if (ui.notice?.kind === 'social-reply' && ids.includes(ui.notice.id)) dismissPhoneNotice();
     }).catch(() => { setFeedback({ error: true, text: '回复的已读状态未能保存，请检查酒馆连接。' }); render(); });
   }
-  function notifyCompletion(key, result) {
-    let notice;
-    if (key === 'forum' && ui.view !== 'forum') notice = { kind: 'forum' };
-    if (key.startsWith('forum-more:') && result !== null) { const id = key.slice('forum-more:'.length); if (ui.view !== 'post' || ui.postId !== id) notice = { kind: 'forum-post', id }; }
-    if (key === 'social' && ui.view !== 'social') notice = { kind: 'social-feed' };
-    if (key === 'liangshi' && (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'feed' || ui.liangshiPage.tab !== 'square')) notice = { kind: 'liangshi-feed' };
-    if (key === 'liangshi-following' && (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'feed' || ui.liangshiPage.tab !== 'following')) notice = { kind: 'liangshi-following' };
-    if (key === 'liangshi-hot' && (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'feed' || ui.liangshiPage.tab !== 'hot')) notice = { kind: 'liangshi-hot' };
-    if (key.startsWith('liangshi-topic:')) {
-      const id = key.slice('liangshi-topic:'.length);
-      if (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'hot-topic' || ui.liangshiPage.id !== id) notice = { kind: 'liangshi-topic', id };
-    }
-    if (key.startsWith('liangshi-more:') || key.startsWith('liangshi-replies:')) {
-      if (result === null) return;
-      const id = key.slice(key.indexOf(':') + 1);
-      if (ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'post' || ui.liangshiPage.id !== id) notice = { kind: 'liangshi-post', id };
-    }
-    if (key.startsWith('social-author:')) {
-      const id = key.slice('social-author:'.length);
-      if (ui.view !== 'social-profile' || ui.socialAuthorId !== id) notice = { kind: 'social-author', id };
-    }
-    if (notice) pushPhoneNotice(notice);
+  function notifyNotifications(records) {
+    notificationShade.refresh();
+    if (notificationsSuppressed || notificationShade.isClearing) return;
+    const current = store.read().notifications?.items || [];
+    const eligible = records.filter(record => current.some(item => item.key === record.key)).filter(({ kind, id }) => {
+      if (notificationShade.isOpen) return true;
+      if (kind === 'message') return !(inChat() && conversationId() === id);
+      if (kind === 'social-reply') return !isReadingSocial(id);
+      if (kind === 'social-author') return ui.view !== 'social-profile' || ui.socialAuthorId !== id;
+      if (kind === 'social-feed') return ui.view !== 'social';
+      if (kind === 'forum') return ui.view !== 'forum';
+      if (kind === 'forum-post') return ui.view !== 'post' || ui.postId !== id;
+      if (kind === 'liangshi-post') return ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'post' || ui.liangshiPage.id !== id;
+      if (kind === 'liangshi-topic') return ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'hot-topic' || ui.liangshiPage.id !== id;
+      const tab = kind === 'liangshi-following' ? 'following' : kind === 'liangshi-hot' ? 'hot' : 'square';
+      return ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'feed' || ui.liangshiPage.tab !== tab;
+    });
+    if (eligible.length) pushPhoneNotice(eligible.at(-1));
   }
 
   function syncParticles() {
@@ -233,7 +272,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   // 导航、草稿、事件与服务调用由控制器统一持有，页面只负责展示。
   function render({ bottom = false } = {}) {
     if (!element.isConnected) return;
-    const route = JSON.stringify([ui.view, ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'post' ? ui.postId : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
+    if (ui.notice?.key && !store.read().notifications?.items.some(item => item.key === ui.notice.key)) dismissPhoneNotice();
+    if (ui.view === 'album' && ui.albumPath && !findAlbumPhoto(store.read(), ui.albumPath, { defaultUser })) { albumEditor.forgetCurrent(ui.albumPath); ui.albumPage = 'gallery'; ui.albumPath = ''; ui.photo = null; }
+    if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
+    const route = JSON.stringify([ui.view, ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'post' ? ui.postId : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
     const sameRoute = route === renderedRoute;
     if (!sameRoute) actionMenu.close();
     const sameEditor = sameRoute && (ui.view !== 'settings' || renderedApiEditor === apiEditor);
@@ -257,6 +299,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (ui.batch?.key !== batch.key) { ui.historyOpen = false; ui.visibleHistory = 60; }
     ui.batch = batch;
     element.dataset.theme = state.theme === 'night' ? 'night' : 'day';
+    onThemeChange(element.dataset.theme);
     const page = pages[ui.view];
     if (!['contact-profile', 'user-profile', 'group-profile'].includes(ui.view)) ui.avatarMenuOpen = false;
     const weather = ui.view === 'home' ? readWeather() : null;
@@ -265,8 +308,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     const calendarMonth = ui.view === 'calendar'
       ? calendar.month(ui.calendarOffset)
       : ui.view === 'desktop' ? calendar.month(0) : null;
+    notificationShade.beforeRender();
     editing.render(renderShell({
-      content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates,
+      content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
         profileAvatar: ui.view === 'contact-profile' ? readContactAvatarDraft(ui.profileDraft, store.read().contacts.find(person => person.id === ui.editId), qqjBridgeProvider?.()) : undefined }),
       view: ui.view, enabled, weather,
       feedback: ui.feedback, photo: ui.photo,
@@ -280,6 +324,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       root.querySelector('[data-update-notice]')?.append(updatesView.noticeButton);
     }
     if (!ui.conflict && enabled) surface.insertAdjacentHTML('beforeend', renderPhoneNotice(state, ui.notice));
+    notificationShade.attach();
     dialog.attach();
     const nextLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
     if (lockImageNode && nextLockImage && lockImageSrc === nextLockImage.getAttribute('src')) {
@@ -303,10 +348,12 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       if (feed) feed.scrollTop = feed.scrollHeight;
     } else if (scrollTop !== undefined) root.querySelector('.message-feed').scrollTop = scrollTop;
     if (mainScroll !== undefined) root.querySelector('.phone-main').scrollTop = mainScroll;
+    if (ui.view === 'album' && ui.albumPage === 'gallery') root.querySelector('.album-gallery').scrollTop = ui.albumScroll;
     actionMenu.update(route);
     chatScroll.revealEditor();
     syncParticles();
     avatarCropper?.attach();
+    albumEditor.attach();
     if (ui.photo) {
       const viewer = root.querySelector('.photo-viewer');
       for (const child of surface.children) child.inert = child !== viewer;
@@ -318,7 +365,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     busy.add(key);
     setFeedback(null);
     render({ bottom: key.startsWith('continue:') });
-    try { const result = await task(); notifyCompletion(key, result); after?.(result); }
+    try { const result = await task(); after?.(result); }
     catch (error) {
       if (error?.code === MEMORY_CONFLICT_CODE) {
         const content = doc.createElement('p'); content.textContent = error.message;
@@ -326,7 +373,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       } else setFeedback({ error: true, text: error?.message || '操作未完成，请重试。' });
     }
     finally {
-      if (!element.hidden && inChat() && control.isEnabled()) {
+      if (!element.hidden && !notificationShade.isOpen && inChat() && control.isEnabled()) {
         try { await store.markRead(conversationId()); }
         catch { setFeedback({ error: true, text: '消息的已读状态保存失败，请检查酒馆连接。' }); }
       }
@@ -387,6 +434,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   }
   function closePhoto() {
     const previous = photoReturn; photoReturn = null; ui.photo = null; render();
+    albumEditor.releaseViewer();
     if (previous?.route !== renderedRoute) return;
     restoreListPosition(previous.position);
     const feed = root.querySelector('.message-feed'); if (feed && previous.feedScroll !== undefined) feed.scrollTop = previous.feedScroll;
@@ -397,6 +445,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (ui.liangshiPage.kind === 'compose') { ui.liangshiPage = { kind: 'feed', tab: 'mine' }; ui.liangshiTrail = []; }
   }
   function close() {
+    notificationShade.close({ immediate: true, restoreFocus: false });
+    albumEditor.leave();
     discardLiangshiDraft();
     setFeedback(null);
     avatarCropper?.close();
@@ -441,6 +491,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
   }
   function showPage(view, { bottom = false, sourceNode } = {}) {
+    notificationShade.close({ immediate: true, restoreFocus: false });
+    if (ui.view === 'album' && view !== 'album') albumEditor.leave();
+    if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
     if (view !== 'liangshi') discardLiangshiDraft();
     if (view === 'settings' && ui.view !== 'settings') fillApiDraft();
     if (ui.view === 'social' && view !== 'social') ui.socialScroll = listPosition(sourceNode);
@@ -458,6 +511,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     readVisibleSocialReplies();
   }
   function openConversation(id, isGroup = false) {
+    notificationShade.close({ immediate: true, restoreFocus: false });
     if (isGroup) { ui.groupId = id; ui.view = 'group-chat'; }
     else { ui.contactId = id; ui.view = 'chat'; }
     ui.chatMenu = false; ui.inboxMenu = false; ui.confirmClear = false; ui.selectedMessage = ''; ui.visibleMessages = 60; ui.historyOpen = false; ui.visibleHistory = 60; setFeedback(null);
@@ -477,6 +531,42 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (anchor && main) main.scrollTop += anchor.getBoundingClientRect().top - main.getBoundingClientRect().top - 8;
     readVisibleSocialReplies();
   }
+  function openPhoneNotice(notice) {
+    if (!notice) return false;
+    const epoch = notificationEpoch, current = () => epoch === notificationEpoch && element.isConnected && !element.hidden;
+    let navigated = false;
+    // Queue the initial seed before navigation queues markRead; only this
+    // synchronous route's successful completion permits the queued dismissal.
+    if (notice.key) void store.dismissNotification(notice.key, () => navigated).then(() => {
+      if (!current()) return;
+      if (ui.notice?.key === notice.key) dismissPhoneNotice();
+      notificationShade.refresh();
+    }).catch(error => { if (current()) setFeedback({ error: true, text: `通知移除未能保存。${error.message || '请检查酒馆连接。'}` }); });
+    try { navigated = routePhoneNotice(notice); return navigated; }
+    catch (error) { if (current()) setFeedback({ error: true, text: error.message || '通知未能打开，请重试。' }); return false; }
+  }
+  function routePhoneNotice(notice) {
+    const state = store.read(), missing = view => { showPage(view); setFeedback({ text: '通知的来源已不存在。' }); };
+    if (notice.kind === 'message') {
+      const group = state.groups?.some(item => item.id === notice.id);
+      if (group || state.contacts.some(item => item.id === notice.id)) openConversation(notice.id, group); else missing('inbox');
+    } else if (notice.kind === 'social-reply') { if (state.social?.posts.some(post => post.id === notice.id)) openSocialReply(notice.id); else missing('social'); }
+    else if (notice.kind === 'social-author') { if ([...(state.contacts || []), ...(state.social?.npcs || [])].some(item => item.id === notice.id)) { ui.socialAuthorId = notice.id; showPage('social-profile'); } else missing('social'); }
+    else if (notice.kind === 'social-feed') showPage('social');
+    else if (notice.kind === 'forum') showPage('forum');
+    else if (notice.kind === 'forum-post') { if (state.forum?.posts.some(post => post.id === notice.id)) { ui.forumScroll = 0; ui.forumTag = ''; ui.postId = notice.id; showPage('post'); } else missing('forum'); }
+    else if (notice.kind === 'liangshi-feed') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'square' }, false); }
+    else if (notice.kind === 'liangshi-following') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'following' }, false); }
+    else if (notice.kind === 'liangshi-hot') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'hot' }, false); }
+    else if (notice.kind === 'liangshi-topic') { if (state.liangshi?.topics.some(topic => topic.id === notice.id)) { ui.liangshiTrail = [{ page: { kind: 'feed', tab: 'hot' }, scroll: 0 }]; openLiangshiPage({ kind: 'hot-topic', id: notice.id }, false); } else { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'hot' }, false); } }
+    else if (notice.kind === 'liangshi-post') {
+      const data = state.liangshi, topic = data && findLiangshiTopicForPost(data, notice.id);
+      if (!data?.posts.some(post => post.id === notice.id)) { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'square' }, false); return true; }
+      ui.liangshiTrail = isLiangshiUserPost(data, notice.id) ? [{ page: { kind: 'feed', tab: 'mine' }, scroll: 0 }] : isLiangshiFollowingPost(data, notice.id) ? [{ page: { kind: 'feed', tab: 'following' }, scroll: 0 }] : topic ? [{ page: { kind: 'feed', tab: 'hot' }, scroll: 0 }, { page: { kind: 'hot-topic', id: topic.id }, scroll: 0 }] : [];
+      openLiangshiPage({ kind: 'post', id: notice.id }, false);
+    } else return false;
+    return true;
+  }
   function openLiangshiPage(page, remember = true, sourceNode) {
     if (page.kind !== 'compose') ui.liangshiDraft = null;
     if (remember && ui.view === 'liangshi') ui.liangshiTrail.push({ page: ui.liangshiPage, ...listPosition(sourceNode) });
@@ -486,6 +576,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   }
   // 返回先收起当前聊天的清空确认，再按页面父级走，不另存应用历史栈。
   function goBack() {
+    if (ui.view === 'album' && ui.albumPage !== 'gallery') { albumEditor.leave(); ui.albumPage = ui.albumPage === 'editor' ? 'detail' : 'gallery'; render(); return; }
     if (ui.view === 'liangshi' && (ui.liangshiTrail.length || ui.liangshiPage.kind !== 'feed')) {
       if (ui.liangshiPage.kind === 'compose') ui.liangshiDraft = null;
       const previous = ui.liangshiTrail.pop();
@@ -552,11 +643,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     (options.find(option => option.getAttribute('aria-selected') === 'true') || (direction > 0 ? options[0] : options.at(-1)))?.focus();
   }
   function dismissMenus(event) {
+    const shadeInteraction = event?.composedPath().some(node => node.dataset?.action === 'toggle-notification-shade' || node.classList?.contains('phone-notification-layer'));
+    if (shadeInteraction) editing.hold();
     selects.dismiss(event);
     actionMenu.dismiss(event);
     if (ui.selectedMessage && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.bubble, .card-more, .message-actions'))) closeMessageActions();
     if (ui.identityOwnersOpen && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.identity-picker'))) closeIdentityOptions();
-    if (event) {
+    if (event && !shadeInteraction) {
       const path = event.composedPath();
       for (const form of root.querySelectorAll('.social-comment-form')) {
         const postId = form.dataset.socialCommentForm;
@@ -596,6 +689,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.view = `${kind}-profile`; ui.chatMenu = false; ui.inboxMenu = false; setFeedback(null); render();
   }
   function keydown(event) {
+    if (notificationShade.keydown(event)) return;
     if (actionMenu.keydown(event) || selects.keydown(event)) return;
     if (ui.identityOwnersOpen || event.target.id === 'identity-owner') {
       if (event.key === 'Escape' && ui.identityOwnersOpen) { event.preventDefault(); event.stopPropagation(); closeIdentityOptions(); root.querySelector('#identity-owner')?.focus({ preventScroll: true }); return; }
@@ -677,6 +771,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (event.target.matches('.photo-viewer')) { closePhoto(); return; }
     const button = event.target.closest('button');
     if (button?.disabled) return;
+    if (button?.dataset.albumPhoto) {
+      albumEditor.leave();
+      ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop || 0;
+      ui.albumPath = button.dataset.albumPhoto; ui.albumPage = 'detail'; render(); recoverVisibleImages(); return;
+    }
+    if (button?.dataset.albumTemplate) { albumEditor.setTemplate(button.dataset.albumTemplate); return; }
+    if (button?.dataset.albumTab) { albumEditor.setTab(button.dataset.albumTab); return; }
     if (button?.closest('.phone-action-popup')) closeActionMenu();
     if (button?.dataset.apiSource) {
       const value = button.dataset.apiSource; closeSources();
@@ -738,6 +839,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (button.dataset.model) { ui.apiDraft.model = button.dataset.model; root.querySelector('#api-model').value = button.dataset.model; root.querySelector('.model-options').innerHTML = renderModelOptions(ui); return; }
     if (button.dataset.drawer) { const key = button.dataset.drawer; closeSources(); closeModels(); ui.drawers[key] = !ui.drawers[key]; render(); if (key === 'content' && ui.drawers.content) void refreshStorySmsStatus(); return; }
     if (button.dataset.tab) {
+      if (button.dataset.tab === 'album' && onOpenAlbum) { onOpenAlbum(); return; }
       showPage(apps.find(app => app.id === button.dataset.tab)?.view || button.dataset.tab);
       return;
     }
@@ -754,27 +856,22 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (button.dataset.post) { ui.forumScroll = { ...listPosition(button), tag: ui.forumTag }; ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
+      case 'album-back': goBack(); break;
+      case 'album-view': void viewPhoto(() => findAlbumPhoto(store.read(), ui.albumPath, { defaultUser }), button); break;
+      case 'album-edit': ui.albumPage = 'editor'; void albumEditor.select(ui.albumPath); break;
+      case 'album-reset': albumEditor.reset(); break;
+      case 'album-zoom': void albumEditor.zoom(button); break;
+      case 'album-export': void albumEditor.download('art'); break;
+      case 'album-export-pieces': void albumEditor.download('pieces'); break;
       case 'dismiss-phone-notice': dismissPhoneNotice(); break;
       case 'open-phone-notice': {
-        const notice = ui.notice;
-        dismissPhoneNotice();
-        if (notice?.kind === 'message') openConversation(notice.id, store.read().groups?.some(group => group.id === notice.id));
-        else if (notice?.kind === 'social-reply') openSocialReply(notice.id);
-        else if (notice?.kind === 'social-author') { ui.socialAuthorId = notice.id; showPage('social-profile'); }
-        else if (notice?.kind === 'social-feed') showPage('social');
-        else if (notice?.kind === 'forum') showPage('forum');
-        else if (notice?.kind === 'forum-post') { ui.forumScroll = 0; ui.forumTag = ''; ui.postId = notice.id; showPage('post'); }
-        else if (notice?.kind === 'liangshi-feed') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'square' }, false); }
-        else if (notice?.kind === 'liangshi-following') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'following' }, false); }
-        else if (notice?.kind === 'liangshi-hot') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'hot' }, false); }
-        else if (notice?.kind === 'liangshi-topic') { ui.liangshiTrail = [{ page: { kind: 'feed', tab: 'hot' }, scroll: 0 }]; openLiangshiPage({ kind: 'hot-topic', id: notice.id }, false); }
-        else if (notice?.kind === 'liangshi-post') {
-          const data = store.read().liangshi, topic = findLiangshiTopicForPost(data, notice.id);
-          ui.liangshiTrail = isLiangshiUserPost(data, notice.id) ? [{ page: { kind: 'feed', tab: 'mine' }, scroll: 0 }] : isLiangshiFollowingPost(data, notice.id) ? [{ page: { kind: 'feed', tab: 'following' }, scroll: 0 }] : topic ? [{ page: { kind: 'feed', tab: 'hot' }, scroll: 0 }, { page: { kind: 'hot-topic', id: topic.id }, scroll: 0 }] : [];
-          openLiangshiPage({ kind: 'post', id: notice.id }, false);
-        }
+        const key = button.dataset.notificationKey, notice = key ? store.read().notifications?.items.find(item => item.key === key) : { kind: button.dataset.noticeKind, id: button.dataset.noticeId };
+        if (ui.notice && ui.notice.key === key) dismissPhoneNotice();
+        if (notice) openPhoneNotice(notice);
         break;
       }
+      case 'open-lock-notice': openPhoneNotice({ key: button.dataset.notificationKey, kind: button.dataset.noticeKind, id: button.dataset.noticeId }); break;
+      case 'toggle-notification-shade': if (notificationShade.isOpen) notificationShade.close(); else if (onOpenNotifications) onOpenNotifications(); else void notificationShade.open(); break;
       case 'open-social-reply': dismissPhoneNotice(); openSocialReply(button.dataset.socialPost); break;
       case 'unlock': showPage('desktop'); break;
       case 'system-home': showPage('desktop'); break;
@@ -1052,28 +1149,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'continue': void perform(`continue:${id}`, () => service.continueChat(id), onContextChange); break;
       case 'refresh': void perform('forum', () => forum.refresh(), () => { const ids = new Set(store.read().forum.posts.map(post => post.id)); for (const id of ui.forumDrafts.keys()) if (!ids.has(id)) ui.forumDrafts.delete(id); for (const id of ui.forumVotes.keys()) if (!ids.has(id)) ui.forumVotes.delete(id); }); break;
       case 'restore-wallpaper': { const theme = store.read().theme; void perform('wallpaper', () => wallpaper.restore(theme)); break; }
+      case 'restore-font': void appearance.setFontCssUrl(DEFAULT_FONT_CSS_URL).catch(error => setFeedback({ error: true, text: error.message })); break;
       case 'sources-menu': if (ui.sourcesOpen) closeSources(); else openSources(); break;
       case 'models-menu': closeSources(); ui.modelsOpen = !ui.modelsOpen; render(); if (ui.modelsOpen) root.querySelector('#model-search').focus(); break;
-      case 'api-save-as': {
-        const form = root.querySelector('.api-form'); if (!form.reportValidity()) break;
-        const draft = { ...ui.apiDraft }, ref = manualApi() ? null : apiSettings.getSelected();
-        const content = doc.createElement('div'), label = doc.createElement('label'), input = doc.createElement('input');
-        label.className = 'field-label'; label.htmlFor = 'api-preset-name'; label.textContent = '预设名称';
-        input.id = 'api-preset-name'; input.setAttribute('aria-label', '预设名称'); input.required = true;
-        input.value = apiSettings.listSources().find(source => refKey(source.ref) === refKey(ref))?.label || '新连接';
-        input.addEventListener('input', () => input.setCustomValidity('')); content.append(label, input);
-        void dialog.custom({ title: '另存为预设', content, confirmText: '保存', cancelText: '取消', submit: () => {
-          input.setCustomValidity(input.value.trim() ? '' : '请输入预设名称。'); return input.reportValidity();
-        } }).then(confirmed => { if (confirmed) void perform('api', () => apiSettings.saveAs(draft, input.value, ref), () => { fillApiDraft(); setFeedback({ text: '预设已另存。' }); }); });
-        break;
-      }
-      case 'api-delete': {
-        const ref = apiSettings.getSelected(), source = apiSettings.listSources().find(item => refKey(item.ref) === refKey(ref));
-        if (!source || manualApi()) break;
-        const content = doc.createElement('p'); content.textContent = `删除「${source.label}」？这是共享预设，使用它的其他插件也会失去这条连接；两三事将改为未配置。`;
-        void dialog.custom({ title: '删除 API 预设', content, confirmText: '删除', cancelText: '取消', danger: true, submit: () => true }).then(confirmed => {
-          if (confirmed) void perform('api', () => apiSettings.deletePreset(ref), () => { fillApiDraft(true); setFeedback({ text: '预设已删除。' }); });
-        });
+      case 'api-edit':
+      case 'api-new': {
+        try { void openApiEditor({ documentRef: doc, dialog, apiSettings, isNew: button.dataset.action === 'api-new', onSaved: () => { ui.sourcesOpen = false; render(); } }).catch(error => setFeedback({ error: true, text: error.message })); }
+        catch (error) { setFeedback({ error: true, text: error.message }); }
         break;
       }
       case 'fetch-models': {
@@ -1094,6 +1176,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     draft.style.height = `${Math.min(draft.scrollHeight + 2, 120)}px`;
   }
   function input(event) {
+    if (event.target.id === 'album-hole-size') { albumEditor.setSize(event.target.value); return; }
     if (event.target.closest('.attachment-form') && event.target.name) ui.attachmentDraft[event.target.name] = event.target.value;
     if (event.target.id === 'sms-draft') {
       ui.drafts.set(conversationId(), event.target.value);
@@ -1156,6 +1239,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       const enabled = event.target.checked;
       void perform('particles', () => appearance.setParticlesEnabled(enabled));
     }
+    if (event.target.id === 'font-css-url') {
+      const input = event.target, value = input.value;
+      void appearance.setFontCssUrl(value).catch(error => {
+        setFeedback({ error: true, text: error.message });
+        if (input.isConnected && input.value === value && root.activeElement !== input) input.value = appearance.fontPreference().cssUrl;
+      });
+    }
     if (event.target.id === 'phone-theme') void perform('theme', () => store.setTheme(event.target.value));
     if (event.target.id === 'phone-lock-style') void perform('lock-style', () => store.setLockStyle(event.target.value));
     if (event.target.id === 'wallpaper-file' && event.target.files[0]) {
@@ -1212,7 +1302,6 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         if ((ui.socialDrafts.get(postId) || '').trim() === text) ui.socialDrafts.delete(postId);
         render();
       } }), result => {
-        if (!isReadingSocial(postId) && result.comments?.some(comment => comment.replyToId === postedId && comment.read === false)) pushPhoneNotice({ kind: 'social-reply', id: postId });
         onContextChange();
       });
     }
@@ -1221,7 +1310,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       void perform(before.postId ? `liangshi-edit:${before.postId}` : 'liangshi-publish', () => before.postId ? liangshi.editUser(before.postId, before) : liangshi.publishUser(before), post => {
         if (ui.view === 'liangshi' && ui.liangshiPage.kind === 'compose' && ui.liangshiDraft === draft && draft.text === before.text && draft.imageDescription === before.imageDescription) {
           ui.liangshiTrail = [{ page: { kind: 'feed', tab: 'mine' }, scroll: 0 }]; openLiangshiPage({ kind: 'post', id: post.id }, false);
-        } else pushPhoneNotice({ kind: 'liangshi-post', id: post.id });
+        } else setFeedback({ text: before.postId ? '修改已保存。' : '微博已发布。' });
       });
     }
     if (event.target.matches('.api-form')) void perform('api', () => manualApi() ? apiSettings.saveManual({ ...ui.apiDraft }) : apiSettings.saveCurrent({ ...ui.apiDraft }), () => { fillApiDraft(); setFeedback({ text: '连接已保存。' }); });
@@ -1245,6 +1334,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const unsubscribeAppearance = appearance.subscribe(() => {
     const toggle = root.querySelector('#particles-enabled');
     if (toggle) toggle.checked = appearance.particlesEnabled();
+    const fontInput = root.querySelector('#font-css-url');
+    if (fontInput && root.activeElement !== fontInput) fontInput.value = appearance.fontPreference().cssUrl;
+    if (!element.hidden) appearanceFont.apply();
     syncParticles();
   });
   doc.defaultView.addEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
@@ -1258,15 +1350,25 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   root.addEventListener('scroll', readVisibleSocialReplies, true);
   doc.addEventListener('pointerdown', dismissMenus, true);
   render();
+  appearanceFont.apply();
   fillDefaultAvatars();
   void updates?.ensureChecked();
   return {
     get isOpen() { return !element.hidden; },
     get isFrontmost() { return isFrontmost(); },
-    isReading(id) { return element.isConnected && !element.hidden && inChat() && conversationId() === id; },
+    isReading(id) { return element.isConnected && !element.hidden && !notificationShade.isOpen && inChat() && conversationId() === id; },
     isReadingSocial,
-    notifyMessage(id) { if (!(inChat() && conversationId() === id)) pushPhoneNotice({ kind: 'message', id }); },
+    notifyNotifications,
+    openNotifications() { void notificationShade.open(); },
+    invalidateNotifications() { notificationEpoch++; notificationShade.close({ immediate: true, restoreFocus: false }); dismissPhoneNotice(); },
     close,
+    openAlbum() { ui.albumPage = 'gallery'; ui.albumPath = ''; showPage('album'); },
+    invalidateAlbum() {
+      albumEditor.invalidate();
+      ui.albumPage = 'gallery'; ui.albumPath = ''; ui.albumScroll = 0;
+      if (ui.photo?.derived) { ui.photo = null; photoReturn = null; }
+      if (ui.view === 'album') close();
+    },
     open() {
       ui.conflict = control.hasConflict?.(doc) === true;
       // 关闭后重开统一进入锁屏；已显示时调用 open 只刷新当前页。
@@ -1276,6 +1378,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         ui.attachment = '';
       }
       element.hidden = false;
+      appearanceFont.apply();
       // 两份手机共享层级；打开已有窗口时按同层 DOM 顺序置前，不改另一份状态。
       if (!isFrontmost()) mount.append(element);
       render();
@@ -1286,7 +1389,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     refreshTime() {
       clock.refresh();
       if (element.hidden) return;
-      if (inChat() || ['inbox', 'calendar', 'desktop'].includes(ui.view)) render();
+      if (inChat() || ['inbox', 'calendar', 'desktop', 'album'].includes(ui.view)) render();
       if (ui.view === 'home') {
         const weather = readWeather(), label = root.querySelector('.lock-weather');
         label.title = weather.source === 'decoration' ? '装饰天气' : '构画剧情天气';
@@ -1294,11 +1397,15 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
     },
     dispose() {
+      notificationEpoch++;
+      notificationShade.dispose();
+      albumEditor.dispose();
       setFeedback(null);
       selects.close(); actionMenu.close(); dialog.dispose(); updatesView?.dispose();
       dismissPhoneNotice();
       avatarCropper?.close();
       unsubscribeAppearance();
+      appearanceFont.dispose();
       clock.stop();
       particles?.dispose();
       chatScroll.dispose(); editing.dispose();

@@ -19,7 +19,7 @@ export function listApiSources(settings) {
 
 export function resolveApiConfig(settings, ref, localModel) {
   const config = sharedConfig(settings, ref), url = normalizeUrl(config?.url);
-  if (!/^https?:\/\//i.test(url) || !config?.key) throw new Error('请在手机设置中选择共享预设，或自行填写连接。');
+  if (!/^https?:\/\//i.test(url) || !config?.key) throw new Error('请在手机设置中选择共享预设，或新增 API 连接。');
   const model = String(localModel || config.model || '').trim();
   if (!model) throw new Error('请在手机连接设置中填写模型并保存。');
   return { url, key: config.key, model, excludeParams: config.excludeParams || [], timeoutSec: config.timeoutSec };
@@ -39,13 +39,43 @@ export async function saveManualPreset(settings, draft, saveSettings) {
 export function createApiSettings({ host, onBusyChange = () => {} }) {
   const settingsKey = host.phoneSettingsKey || 'pocketPhone';
   async function persistPresets(presets, patch, errorText) {
-    const settings = host.readSettings(), previous = settings[settingsKey], previousShared = settings['schedule-planner'];
+    const settings = host.readSettings(), previousLocal = settings[settingsKey], previousShared = settings['schedule-planner'];
     const shared = settings['schedule-planner'] ||= {}, previousPresets = shared.apiPresets;
-    shared.apiPresets = presets; settings[settingsKey] = { ...previous, ...patch };
+    const oldRows = Array.isArray(previousPresets) ? previousPresets : [];
+    const changes = [...new Set([...oldRows, ...presets].filter(value => value && typeof value === 'object').map(value => value.id))].flatMap(id => {
+      const before = oldRows.find(value => value?.id === id), after = presets.find(value => value?.id === id);
+      const fields = [...new Set([...Object.keys(before || {}), ...Object.keys(after || {})])].filter(key => JSON.stringify(before?.[key]) !== JSON.stringify(after?.[key]));
+      return fields.length ? [{ id, before, after, fields, applied: Object.fromEntries(fields.map(key => [key, JSON.stringify(after?.[key])])), created: before ? '' : JSON.stringify(after) }] : [];
+    });
+    shared.apiPresets = presets;
+    if (Object.keys(patch).length) settings[settingsKey] = { ...previousLocal, ...patch };
     try { await host.saveSettings(); }
     catch {
-      if (previousShared === undefined) delete settings['schedule-planner']; else shared.apiPresets = previousPresets;
-      if (previous === undefined) delete settings[settingsKey]; else settings[settingsKey] = previous;
+      const live = host.readSettings(), owner = live['schedule-planner'];
+      if (Array.isArray(owner?.apiPresets)) for (const change of changes) {
+        const index = owner.apiPresets.findIndex(value => value?.id === change.id), current = owner.apiPresets[index];
+        if (!change.before) {
+          if (index >= 0 && JSON.stringify(current) === change.created) owner.apiPresets = owner.apiPresets.filter((_, row) => row !== index);
+        } else if (!change.after) {
+          if (index < 0) { const restored = [...owner.apiPresets]; restored.splice(Math.min(oldRows.indexOf(change.before), restored.length), 0, change.before); owner.apiPresets = restored; }
+        } else if (index >= 0) {
+          const restored = { ...current };
+          for (const key of change.fields) if (JSON.stringify(current[key]) === change.applied[key]) {
+            if (Object.hasOwn(change.before, key)) restored[key] = change.before[key]; else delete restored[key];
+          }
+          owner.apiPresets = owner.apiPresets.map((row, position) => position === index ? restored : row);
+        }
+      }
+      if (owner && previousPresets === undefined && !owner.apiPresets?.length) delete owner.apiPresets;
+      if (owner && previousShared === undefined && !Object.keys(owner).length) delete live['schedule-planner'];
+      const local = live[settingsKey];
+      if (local && Object.keys(patch).length) {
+        const restored = { ...local };
+        for (const key of Object.keys(patch)) if (JSON.stringify(local[key]) === JSON.stringify(patch[key])) {
+          if (previousLocal && Object.hasOwn(previousLocal, key)) restored[key] = previousLocal[key]; else delete restored[key];
+        }
+        if (previousLocal === undefined && !Object.keys(restored).length) delete live[settingsKey]; else live[settingsKey] = restored;
+      }
       throw new Error(errorText);
     }
   }
@@ -80,8 +110,7 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
       const settings = host.readSettings();
       const selected = settings[settingsKey]?.apiSourceRef || settings.pocketPhone?.apiSourceRef;
       if (selected) return selected;
-      const sources = api.listSources();
-      return sources.length === 1 ? sources[0].ref : null;
+      return null;
     },
     readDraft(ref = api.getSelected()) {
       const settings = host.readSettings(), config = sharedConfig(settings, ref);
@@ -110,20 +139,32 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
       await api.select(ref, { model: draft.model });
       return ref;
     },
-    async saveCurrent(draft) {
-      const settings = host.readSettings(), ref = api.getSelected(), current = sharedConfig(settings, ref);
+    async saveCurrent(draft, ref = api.getSelected(), name) {
+      const captured = arguments.length > 1;
+      const settings = host.readSettings(), current = sharedConfig(settings, ref);
       if (!current) throw new Error('这条连接已不存在，请重新选择或另存为。');
+      if (name !== undefined && !String(name).trim()) throw new Error('请输入预设名称。');
       const config = draftConfig(draft, ref);
-      const presets = pool(settings).map(preset => preset.id === ref.presetId ? { ...preset, url: config.url, key: config.key } : preset);
-      await persistPresets(presets, { apiSourceRef: { ...ref }, apiModel: config.model }, '连接保存失败，请重试。');
+      const presets = pool(settings).map(preset => preset.id === ref.presetId ? { ...preset, url: config.url, key: config.key, ...(name !== undefined ? { name: String(name).trim() } : {}) } : preset);
+      const patch = refKey(api.getSelected()) === refKey(ref) ? { ...(!captured ? { apiSourceRef: { ...ref } } : {}), apiModel: config.model } : {};
+      await persistPresets(presets, patch, '连接保存失败，请重试。');
     },
-    async saveAs(draft, name, ref = api.getSelected()) {
+    async saveAs(draft, name, ref = api.getSelected(), { select = true } = {}) {
       const label = String(name || '').trim(); if (!label) throw new Error('请输入预设名称。');
       const settings = host.readSettings(), config = draftConfig(draft, ref), current = sharedConfig(settings, ref);
       const preset = { excludeParams: [], timeoutSec: 180, stream: false, ...current, ...config, id: globalThis.crypto.randomUUID(), name: label };
       const selected = { kind: 'shared-preset', presetId: preset.id };
-      await persistPresets([...pool(settings), preset], { apiSourceRef: selected, apiModel: config.model }, '连接保存失败，请重试。');
+      await persistPresets([...pool(settings), preset], select ? { apiSourceRef: selected, apiModel: config.model } : {}, '连接保存失败，请重试。');
       return selected;
+    },
+    async createPreset(draft, name) { return api.saveAs(draft, name, null, { select: false }); },
+    async renamePreset(ref, name) {
+      const label = String(name ?? '').trim();
+      if (!label) throw new Error('请输入预设名称。');
+      const settings = host.readSettings(), current = sharedConfig(settings, ref);
+      if (!current) throw new Error('这条连接已不存在，请重新选择。');
+      const renamed = pool(settings).map(preset => preset.id === ref.presetId ? { ...preset, name: label } : preset);
+      await persistPresets(renamed, {}, '预设重命名失败，请重试。');
     },
     async deletePreset(ref = api.getSelected()) {
       const settings = host.readSettings();

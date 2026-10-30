@@ -151,7 +151,7 @@ try {
       const h = previewHarness, post = h.metadata.pocketPhone.social.posts.find(item => item.id === id);
       h.reply = { comments: [{ authorId: post.authorId, text: 'I saw your comment.', translation: '看到你的留言啦。' }],
         proactiveMessages: [{ contactId: post.authorId, messages: [{ text: '你也看到了。' }] }] };
-      return { requests: h.requests.length, saves: h.metadataSaves, count: post.commentsCount, date: post.publishedAt, authorId: post.authorId };
+      return { requests: h.requests.length, saves: h.metadataSaves, count: post.commentsCount, date: post.publishedAt, authorId: post.authorId, sms: h.metadata.pocketPhone.conversations[post.authorId] || [] };
     }, commentPost);
     await page.locator(`[data-social-post="${commentPost}"] .social-comment-send`).click();
     await page.waitForFunction(id => previewHarness.metadata.pocketPhone.social.posts.find(post => post.id === id)?.comments.some(comment => comment.text === 'I saw your comment.'), commentPost);
@@ -163,12 +163,11 @@ try {
     assert.equal(await page.evaluate(() => previewHarness.metadataSaves), beforeComment.saves + 2);
     const savedComment = await page.evaluate(({ id, authorId }) => {
       const state = previewHarness.metadata.pocketPhone, post = state.social.posts.find(item => item.id === id);
-      return { count: post.commentsCount, date: post.publishedAt, sms: state.conversations[authorId].at(-1) };
+      return { count: post.commentsCount, date: post.publishedAt, sms: state.conversations[authorId] || [] };
     }, { id: commentPost, authorId: beforeComment.authorId });
     assert.equal(savedComment.count, beforeComment.count + 2);
     assert.equal(savedComment.date, beforeComment.date);
-    assert.equal(savedComment.sms.text, '你也看到了。');
-    assert.equal(savedComment.sms.read, false);
+    assert.deepEqual(savedComment.sms, beforeComment.sms);
     await page.locator('.phone-shell').screenshot({ path: `${output}/${host}-${width}-comment.png` });
     await page.locator(`[data-social-post="${commentPost}"] .social-author`).click();
     assert.equal(await page.locator(`[data-social-post="${commentPost}"]`).getByText('I saw your comment.', { exact: true }).count(), 1, '人物页引用同一份已保存评论');

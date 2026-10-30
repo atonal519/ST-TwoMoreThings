@@ -145,7 +145,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       const previousMessages = recentPhoneHistory(state, id, current.batch.key);
       const phoneContext = readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, targetIds: [id], excludeConversationId: id, ...remainingPhoneBudget(history, previousMessages) });
       const evidence = [...previousMessages, ...phoneContext].map(message => message.sourceBatch).filter(Boolean);
-      const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'));
+      const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'), target.id);
       let related = '';
       const source = memorySources.select(), bridge = source.bridge;
       const storyMemory = memorySources.readStoryMemory(source, 4000);
@@ -155,7 +155,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         const context = await bridge.readContext({ query, entityIds: [entityId], maxCharacters: 4000 });
         if (context?.status === 'ready') related = (context.actors || []).filter(x => x.entityId === entityId).map(x => [x.stateText, x.memoryText].filter(Boolean).join('\n')).join('\n').slice(0, 4000);
       }
-      return withIdentitySource({ ...current, phoneContext, ...(actingPerson ? { actingPerson: { id: actingPerson.id, name: actingPerson.name }, ownAccounts: ownAccounts.map(person => ({ id: person.id, name: person.name })) } : {}), ...(storyMemory ? { storyMemory } : {}), ...(evidence.length ? { storyProgress: storyProgress(target.messages, evidence, target.messages.length, wrapperSettingsProvider(), state) } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { name: contact.name, nickname: contact.nickname || '', personality: character.personality, expression: contact.expression, language: contact.language || '' }, previousMessages, history, related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...phoneContext.map(row => row.text)].join('\n') }) }, state, ownAccounts.map(person => person.id));
+      return withIdentitySource({ ...current, phoneContext, ...(actingPerson ? { actingPerson: { id: actingPerson.id, name: actingPerson.name }, ownAccounts: ownAccounts.map(person => ({ id: person.id, name: person.name })) } : {}), ...(storyMemory ? { storyMemory } : {}), ...(evidence.length ? { storyProgress: storyProgress(target.messages, evidence, target.messages.length, wrapperSettingsProvider(), state) } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { id: contact.id, name: contact.name, nickname: contact.nickname || '', personality: character.personality, expression: contact.expression, language: contact.language || '', ...(typeof contact.remarkForUser === 'string' && contact.remarkForUser.trim() ? { remarkForUser: contact.remarkForUser } : {}) }, previousMessages, history, related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...phoneContext.map(row => row.text)].join('\n') }) }, state, ownAccounts.map(person => person.id));
     },
     async readForForum({ continuation = false, scanText = '' } = {}) {
       const state = await store.readSaved();
@@ -246,7 +246,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       const quoted = selected.flatMap(message => message.replyToId ? thread.filter(item => item.id === message.replyToId) : []);
       const sourceIds = [...selected, ...quoted].flatMap(message => Array.isArray(message.knownToIds) ? message.knownToIds : []);
       const phoneContext = readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, targetIds: group.memberIds, excludeConversationId: id, ...remainingPhoneBudget(history, previousMessages) });
-      const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'));
+      const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'), target.id);
       const members = group.memberIds.map(key => {
         const account = state.contacts.find(item => item.id === key);
         if (!account) throw new Error('有群成员不在联系人中，请编辑群聊重新选择。');

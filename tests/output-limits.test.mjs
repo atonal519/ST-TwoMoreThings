@@ -14,7 +14,7 @@ import {createPhoneImageService} from '../src/phone-images.js';
 import {readTimeline} from '../src/timeline.js';
 const forbidden=['max_tokens','max_completion_tokens','num_predict','reasoning_effort','thinking'];
 for(const hostKind of ['native','luker'])test(`${hostKind}: every actual model task omits plugin output/thinking limits and keeps its original calls/saves`,async()=>{
- const settings={'schedule-planner':{apiPresets:[{id:'p',url:'https://fixture.invalid/v1',key:'synthetic',model:'upstream-default',timeoutSec:90}]},pocketPhone:{apiModel:'own-model'}};
+ const settings={'schedule-planner':{apiPresets:[{id:'p',url:'https://fixture.invalid/v1',key:'synthetic',model:'upstream-default',timeoutSec:90}]},pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'p'},apiModel:'own-model'}};
  const h=createHarness({hostKind,settings,messages:[{is_user:false,mes:'<content>最新公开背景</content><!-- SDC-end | date=2031/4/8 | time=10:00 -->'}],metadata:{pocketPhone:{contacts:[{id:'lin',name:'林舟',avatar:'fixed'}],groups:[{id:'g',name:'本群',memberIds:['lin'],userIsMember:true}],conversations:{lin:[]},userProfile:{name:'本人'},forum:{posts:[]},social:{posts:[],npcs:[],feedIds:[]},liangshi:{accounts:[],posts:[],topics:[],feedIds:[],promoCountdown:3},injectEnabled:true}}});
  const target=h.host.captureChat(),store=createPhoneStore({target}),reader=createContextReader({target,store,qqjBridgeProvider:()=>null}),api=createApiSettings({host:h.host}),actual=createModelClient({host:h.host,sourceProvider:api});
  const client={complete:options=>{assert.equal(Object.hasOwn(options,'maxTokens'),false,'no dead per-task cap argument');return actual.complete(options);}};let answer;h.completion=()=>({choices:[{message:{content:JSON.stringify(answer)}}]});
@@ -42,7 +42,7 @@ for(const hostKind of ['native','luker'])test(`${hostKind}: every actual model t
  assert.equal(checks.length,16);assert.equal(h.modelRequests.length,16);assert.equal(h.settingsSaves,0);assert.deepEqual(h.context.extensionSettings,settings);
 });
 test('legacy max_tokens exclusion remains untouched, temperature exclusion and live source resolution still work',async()=>{
- const settings={'schedule-planner':{apiPresets:[{id:'p',url:'https://a.invalid/v1',key:'a-key',model:'a-model',excludeParams:['max_tokens','temperature'],timeoutSec:30}]}};
+ const settings={pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'p'}},'schedule-planner':{apiPresets:[{id:'p',url:'https://a.invalid/v1',key:'a-key',model:'a-model',excludeParams:['max_tokens','temperature'],timeoutSec:30}]}};
  const before=structuredClone(settings),h=createHarness({settings}),api=createApiSettings({host:h.host}),client=createModelClient({host:h.host,sourceProvider:api});
  await client.complete({system:'任务',messages:[]});for(const key of forbidden)assert.equal(Object.hasOwn(h.modelRequests[0].body,key),false);assert.equal('temperature'in h.modelRequests[0].body,false);assert.deepEqual(settings,before);assert.equal(h.settingsSaves,0);
  settings['schedule-planner'].apiPresets[0].url='https://b.invalid/v1';settings['schedule-planner'].apiPresets[0].key='b-key';settings['schedule-planner'].apiPresets[0].model='b-model';await client.complete({system:'任务',messages:[]});assert.deepEqual([h.modelRequests[1].body.reverse_proxy,h.modelRequests[1].body.proxy_password,h.modelRequests[1].body.model],['https://b.invalid/v1','b-key','b-model']);assert.equal(h.modelRequests.length,2);

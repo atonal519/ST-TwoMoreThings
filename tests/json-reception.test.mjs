@@ -44,7 +44,7 @@ test('repair does not extract malformed inner fragments from prose, thought tags
 });
 
 function setup(hostKind){
- const h=createHarness({hostKind,settings:{'schedule-planner':{apiPresets:[{id:'p',url:'https://fixture.invalid/v1',key:'synthetic',model:'m'}]}},metadata:{pocketPhone:{contacts:[{id:'lin',name:'林舟'}],groups:[],conversations:{},liangshi:{accounts:[{id:'own',ownerId:'@user',name:'本人',handle:'owner-handle'}],posts:[{id:'own-post',authorId:'own',userAuthored:true,text:'本人已发布',comments:[],reposts:[]}],userPostIds:['own-post'],feedIds:[],followingFeedIds:[],topics:[]}}}});
+ const h=createHarness({hostKind,settings:{pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'p'}}, 'schedule-planner':{apiPresets:[{id:'p',url:'https://fixture.invalid/v1',key:'synthetic',model:'m'}]}},metadata:{pocketPhone:{contacts:[{id:'lin',name:'林舟'}],groups:[],conversations:{},liangshi:{accounts:[{id:'own',ownerId:'@user',name:'本人',handle:'owner-handle'}],posts:[{id:'own-post',authorId:'own',userAuthored:true,text:'本人已发布',comments:[],reposts:[]}],userPostIds:['own-post'],feedIds:[],followingFeedIds:[],topics:[]}}}});
  const target=h.host.captureChat(),store=createPhoneStore({target}),reader=createContextReader({target,store,qqjBridgeProvider:()=>null});
  const service=createLiangshiService({store,contextReader:reader,modelClient:createModelClient({host:h.host,sourceProvider:createApiSettings({host:h.host})})});
  return{h,store,service};

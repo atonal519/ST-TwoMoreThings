@@ -6,10 +6,23 @@ export const STORY_SMS_PROMPT = '本楼实际新增的短信按[tmt|对话名|�
 const RULE_ID = 'two-more-things:story-sms-display';
 const ENTRY_FIELDS = { content: STORY_SMS_PROMPT, constant: true, disable: false, vectorized: false, position: 4, depth: 1, role: 0, probability: 100, useProbability: false, ignoreBudget: true };
 const avatarName = character => character.avatar.split('/').at(-1).replace(/\.[^.]+$/, '');
-const BLOCK_SOURCE = String.raw`\[tmt\|([^|\]\r\n]+)\|([^|\]\r\n]+)\]([\s\S]*?)\[\/tmt\]`;
+// 未闭合的格式示例不能跨过下一条完整短信头，吞掉正式正文。
+const BLOCK_SOURCE = String.raw`\[tmt\|([^|\]\r\n]+)\|([^|\]\r\n]+)\]((?:(?!\[tmt\|[^|\]\r\n]+\|[^|\]\r\n]+\])[\s\S])*?)\[\/tmt\]`;
+
+export function syncStorySmsTheme(documentRef, theme) {
+  // The shared host style outlives a phone window and is reused by other instances.
+  const id = 'two-more-things-story-sms-theme', value = theme === 'night' ? 'night' : 'day';
+  let style = documentRef.getElementById(id);
+  if (style?.dataset.theme === value) return;
+  if (!style) { style = documentRef.createElement('style'); style.id = id; documentRef.head.append(style); }
+  const tokens = value === 'night'
+    ? '--pp-surface:#162d3a;--pp-ink:#f2efdc;--pp-divider-soft:#344c5a;--pp-message-user:#2d4f65;--pp-message-user-text:#f2efdc;--pp-elevation-soft:none;'
+    : '--pp-surface:#fbfaf6;--pp-ink:#222a29;--pp-divider-soft:#d7dad1;--pp-message-user:#314a50;--pp-message-user-text:#f7f7ef;--pp-elevation-soft:0 1px 3px rgb(0 0 0 / 6%),0 1px 2px rgb(0 0 0 / 4%);';
+  style.textContent = `.tmt-main-sms{${tokens}}`; style.dataset.theme = value;
+}
 
 export function storySmsRegex() {
-  // 气泡直接沿用手机短信页；主楼没有手机主题状态，缺少原token时使用其日间配色。
+  // 气泡沿用手机短信页；宿主同步当前主题token，未加载时保留日间配色。
   const style = `.tmt-main-sms{display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin:10px 0 19px;font:inherit;color:var(--SmartThemeBodyColor,inherit);max-width:100%;box-sizing:border-box}
 .tmt-main-sms-title,.tmt-main-sms-sender{max-width:100%;font-size:10px;font-weight:400;line-height:14px;padding:0 3px;overflow-wrap:anywhere;opacity:.75}
 .tmt-main-sms:not([data-conversation^="群:"]):not([data-conversation^="群："]):not([data-sender="我"]) .tmt-main-sms-title{display:none}

@@ -87,7 +87,7 @@ test('deleting only an own post removes every ownership root, keeps public retel
   await store.updateLiangshi(data => ({ ...data, feedIds: [...data.feedIds, own.id, 'retelling'], followingFeedIds: [own.id], topics: [{ id: 't', name: '已发布转述', postIds: [own.id] }], posts: [...data.posts.map(post => post.id === own.id ? { ...post, image: { description: '图', path: '/user/images/delete-own.png' } } : post), { id: 'retelling', authorId: 'other', text: '第三人已经发布的公开转述', quoteId: own.id, comments: [], reposts: [] }] }));
   const saves = h.metadataSaves; await service.deleteUser(own.id); assert.equal(h.metadataSaves, saves + 1); assert.equal(calls.length, 0);
   const data = store.read().liangshi; assert.equal(service.getPost(own.id), undefined); assert.ok(service.getPost('retelling')); assert.deepEqual(data.userPostIds, []); assert.equal(data.feedIds.includes(own.id), false); assert.equal(data.followingFeedIds.includes(own.id), false); assert.equal(data.topics[0].postIds.includes(own.id), false); assert.deepEqual(data.accounts.find(row => row.ownerId === '@user'), user);
-  assert.deepEqual(removed, ['/user/images/delete-own.png']); assert.equal(JSON.stringify(readPhoneContext(store.read(), { anchor: readTimeline([]), publicOnly: true })).includes('要删除的原帖'), false);
+  assert.deepEqual(removed, []); assert.ok(store.read().albumPhotos.some(photo => photo.path === '/user/images/delete-own.png')); assert.equal(JSON.stringify(readPhoneContext(store.read(), { anchor: readTimeline([]), publicOnly: true })).includes('要删除的原帖'), false);
   await assert.rejects(service.deleteUser('retelling'), /本人|自己/); assert.equal(h.metadataSaves, saves + 1);
 });
 
@@ -104,7 +104,7 @@ test('editing an image description drops old generated fields, removes only unre
   const { service, store, removed, h, target } = setup(); assert.equal(typeof service.editUser, 'function');
   const own = await service.publishUser({ publicName: '昵称', text: '原帖', imageDescription: '旧图' });
   await store.updateLiangshi(data => ({ ...data, posts: data.posts.map(post => post.id === own.id ? { ...post, image: { description: '旧图', path: '/user/images/change.png', seed: 9 } } : post) }));
-  let edited = await service.editUser(own.id, { publicName: '昵称', text: '', imageDescription: '新图' }); assert.equal(edited.text, ''); assert.deepEqual(edited.image, { description: '新图' }); assert.deepEqual(removed, ['/user/images/change.png']);
+  let edited = await service.editUser(own.id, { publicName: '昵称', text: '', imageDescription: '新图' }); assert.equal(edited.text, ''); assert.deepEqual(edited.image, { description: '新图' }); assert.deepEqual(removed, []); assert.ok(store.read().albumPhotos.some(photo => photo.path === '/user/images/change.png' && photo.description === '旧图'));
   edited = await service.editUser(own.id, { publicName: '昵称', text: '改回纯文字', imageDescription: '' }); assert.equal('image' in edited, false);
   const before = structuredClone(store.read()), saves = h.metadataSaves; await assert.rejects(service.editUser('old-post', { publicName: '昵称', text: '不能改他人' }), /本人|自己/); assert.equal(h.metadataSaves, saves);
   target.saveMetadata = async () => { throw Error('save failed'); }; await assert.rejects(service.editUser(own.id, { publicName: '昵称', text: '失败草稿' }), /save failed/); assert.deepEqual(store.read(), before);

@@ -15,7 +15,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
   };
   const chinese = { title: '街角书店', author: '读者', content: '书店周末开放阅读区。', comments: [{ author: '路人', text: '好耶！' }, { author: '邻居', text: '👍' }] };
   const h = createHarness({ hostKind, messages: main, metadata: { foreign: { keep: true } },
-    settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'mock-key', model: 'mock-model' }] } },
+    settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'mock-key', model: 'mock-model' }] } },
     completion: { choices: [{ message: { content: JSON.stringify({ posts: [translated, chinese] }) } }] },
   });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
@@ -52,7 +52,8 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
   assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"titleTranslation":'));
   assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"contentTranslation":'));
   assert.equal(h.metadataSaves, saves + 1);
-  assert.deepEqual(store.read(), { ...before, forum: { posts } });
+  const { notifications, ...contentState } = store.read(); const { notifications: priorNotifications, ...beforeContent } = before;
+  assert.deepEqual(contentState, { ...beforeContent, forum: { posts } }); assert.equal(notifications.items[0].kind, 'forum');
   assert.deepEqual(h.persistedMetadata, { foreign: { keep: true }, pocketPhone: store.read() });
   assert.deepEqual(main, mainBefore);
   assert.equal(h.promptSlots.size, 0);
@@ -60,7 +61,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one forum refresh
 
 test('refresh replaces the batch; reading posts is free and preserves main messages', async () => {
   const main = [{ mes: '在街上散步。', is_user: false }];
-  const h = createHarness({ messages: main, settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'key', model: 'm' }] } }, completion: { choices: [{ message: { content: '{"posts":[{"title":"晚风","author":"路人甲","content":"今晚很凉快","comments":[{"author":"路人乙","text":"适合散步"}]},{"title":"小店","author":"路人丙","content":"新开了一家面馆"}]}' } }] } });
+  const h = createHarness({ messages: main, settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'key', model: 'm' }] } }, completion: { choices: [{ message: { content: '{"posts":[{"title":"晚风","author":"路人甲","content":"今晚很凉快","comments":[{"author":"路人乙","text":"适合散步"}]},{"title":"小店","author":"路人丙","content":"新开了一家面馆"}]}' } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   await store.replaceForum([{ id: 'old', title: '旧帖' }]);
   const service = createForumService({ store, contextReader: createContextReader({ target, store }), modelClient: createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) }) });
@@ -81,7 +82,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: forum requests te
       forum: { posts: [{ id: 'old', title: 'OLD_FORUM_TITLE', author: '旧作者', content: 'OLD_FORUM_BODY', comments: [{ author: '旧回复', text: 'OLD_FORUM_COMMENT' }] }] },
       social: { npcs: [{ id: 'public', name: '公开路人' }], posts: [{ id: 'public-ins', authorId: 'public', text: 'PUBLIC_PHONE_CONTEXT', comments: [] }] },
       liangshi: { accounts: [], posts: [], feedIds: [], topics: [] } } },
-    settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'mock', model: 'mock-model' }] } },
+    settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'mock', model: 'mock-model' }] } },
     completion: { choices: [{ message: { content: JSON.stringify({ posts }) } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target }), before = structuredClone(store.read());
   const service = createForumService({ store, contextReader: createContextReader({ target, store, qqjBridgeProvider: () => { throw Error('no private actor recall'); } }), modelClient: createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) }) });
@@ -93,6 +94,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: forum requests te
   assert.ok(JSON.stringify(input.phoneContext).includes('PUBLIC_PHONE_CONTEXT')); assert.equal(input.storyBackground[0].text, '最新一楼公开背景。');
   assert.equal('max_tokens' in wire, false); assert.equal('max_completion_tokens' in wire, false);
   assert.equal(result.length, 10); assert.deepEqual(result.map(({ id, publishedAt, createdAt, comments, ...post }) => ({ ...post, comments: comments.map(({ id, publishedAt, createdAt, ...row }) => row) })), posts);
-  assert.deepEqual(store.read(), { ...before, forum: { posts: result } }); assert.equal(service.getPost('old'), undefined);
+  const { notifications, ...contentState } = store.read(); const { notifications: priorNotifications, ...beforeContent } = before;
+  assert.deepEqual(contentState, { ...beforeContent, forum: { posts: result } }); assert.equal(notifications.items[0].kind, 'forum'); assert.equal(service.getPost('old'), undefined);
   assert.deepEqual(createPhoneStore({ target }).read().forum.posts, result); assert.deepEqual(h.persistedMetadata, { foreign: '保留', pocketPhone: store.read() });
 });

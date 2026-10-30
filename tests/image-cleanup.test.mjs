@@ -4,11 +4,12 @@ import { createHarness } from './harness.mjs';
 import { createPhoneStore } from '../src/store.js';
 import { createPhoneImageService } from '../src/phone-images.js';
 import { createImageFiles } from '../src/image-files.js';
+import { readAlbumPhotos } from '../src/album.js';
 
 const photo = (id, path, key = 'now') => ({ id, role: 'assistant', type: 'image', image: { description: `照片${id}`, path, seed: 1 }, batch: { key } });
 const path = id => `/user/images/柏宝绘_朋友/bbi_abc_0_hash-${id}.png`;
 
-for (const hostKind of ['native', 'luker']) test(`${hostKind}: delete and clear save first, then remove only the discarded photos`, async () => {
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: deleting and clearing source messages preserves paid photos in the same save`, async () => {
   const h = createHarness({ hostKind }), removed = [];
   const store = createPhoneStore({ target: h.host.captureChat(), removeImages: async paths => {
     assert.deepEqual(h.persistedMetadata.pocketPhone, store.read());
@@ -17,13 +18,13 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: delete and clear 
   await store.upsertContacts([{ id: 'a', name: '朋友' }]);
   await store.appendMessages('a', [photo('old', path('old'), 'past'), photo('one', path('one')), photo('two', path('two'))]);
   await store.deleteMessage('a', 'one');
-  assert.deepEqual(removed, [path('one')]);
+  assert.deepEqual(removed, []); assert.ok(readAlbumPhotos(store.read()).some(photo => photo.path === path('one')));
   await store.clearConversation('a', { key: 'now' });
-  assert.deepEqual(removed, [path('one'), path('two')]);
+  assert.deepEqual(removed, []); assert.ok(readAlbumPhotos(store.read()).some(photo => photo.path === path('two')));
   assert.deepEqual(store.read().conversations.a.map(message => message.id), ['old']);
 });
 
-test('deleting a contact also cleans their private, group and social photos while preserving other people', async () => {
+test('deleting a contact or group keeps its photos and still removes the intended source content', async () => {
   const h = createHarness(), removed = [];
   const store = createPhoneStore({ target: h.host.captureChat(), removeImages: async paths => removed.push(...paths) });
   await store.upsertContacts([{ id: 'a', name: '甲' }, { id: 'b', name: '乙' }]);
@@ -32,13 +33,14 @@ test('deleting a contact also cleans their private, group and social photos whil
   await store.appendMessages(group.id, [{ ...photo('group', path('group')), speakerId: 'a' }, { ...photo('keep', path('keep')), speakerId: 'b' }]);
   await store.updateSocial(social => ({ ...social, posts: [{ id: 'post', authorId: 'a', image: { description: '咖啡', path: path('social') } }] }));
   await store.deleteContact('a');
-  assert.deepEqual(new Set(removed), new Set([path('private'), path('group'), path('social')]));
+  assert.deepEqual(removed, []);
+  for (const name of ['private', 'group', 'social']) assert.ok(readAlbumPhotos(store.read()).some(photo => photo.path === path(name)));
   assert.deepEqual(store.read().conversations[group.id].map(message => message.id), ['keep']);
   await store.deleteGroup(group.id);
-  assert.equal(removed.at(-1), path('keep'));
+  assert.deepEqual(removed, []); assert.ok(readAlbumPhotos(store.read()).some(photo => photo.path === path('keep')));
 });
 
-test('replacement cleans retired photos once, retains still-used files and does not clean after a failed save', async () => {
+test('replacement archives photos once, retains shared files and rolls back after a failed save', async () => {
   const h = createHarness(), removed = [];
   const store = createPhoneStore({ target: h.host.captureChat(), removeImages: async paths => removed.push(...paths) });
   await store.upsertContacts([{ id: 'a', name: '甲' }]);
@@ -51,20 +53,21 @@ test('replacement cleans retired photos once, retains still-used files and does 
   assert.deepEqual(removed, []);
   h.saveFailure = null;
   await store.updateSocial(social => ({ ...social, posts: [] }), { cleanImages: true });
-  assert.deepEqual(removed, [path('retired')]);
+  assert.deepEqual(removed, []); assert.equal(store.read().albumPhotos.filter(photo => photo.path === path('retired')).length, 1);
   await store.replaceForum([{ id: 'forum-photo', image: { path: path('forum') } }]);
   await store.replaceForum([{ id: 'new', content: '新帖子' }]);
-  assert.deepEqual(removed, [path('retired'), path('forum')]);
+  assert.deepEqual(removed, []); assert.ok(readAlbumPhotos(store.read()).some(photo => photo.path === path('forum')));
 });
 
-test('a cleanup error reports the saved deletion without pretending that content was restored', async () => {
+test('source deletion never delegates physical file deletion and preserves the photo', async () => {
   const h = createHarness();
   const store = createPhoneStore({ target: h.host.captureChat(), removeImages: async () => { throw new Error('offline'); } });
   await store.upsertContacts([{ id: 'a', name: '甲' }]);
   await store.appendMessage('a', photo('one', path('one')));
-  await assert.rejects(store.deleteMessage('a', 'one'), /内容已保存.*图片.*清理失败/);
+  await store.deleteMessage('a', 'one');
   assert.deepEqual(store.read().conversations.a, []);
   assert.deepEqual(h.persistedMetadata.pocketPhone.conversations.a, []);
+  assert.equal(store.read().albumPhotos[0].path, path('one'));
 });
 
 test('confirmed missing files lose every current-chat reference but keep their descriptions and never generate', async () => {
@@ -147,11 +150,12 @@ test('a past photo description can be drawn manually without adding or changing 
   assert.deepEqual(store.read().conversations.a, [{ ...saved, image: { ...saved.image, path: path('redrawn'), seed: 5 } }]);
 });
 
-test('Liangshi replacement removes only retired images and missing files clear all current App references', async () => {
+test('Liangshi replacement preserves retired images and real missing files clear live and asset references', async () => {
   const h = createHarness(), removed = [], store = createPhoneStore({ target: h.host.captureChat(), removeImages: async values => removed.push(...values) });
   await store.upsertContacts([{ id: 'a', name: '甲' }]); await store.appendMessage('a', photo('shared', path('shared')));
   await store.updateLiangshi(() => ({ accounts: [], topics: [], posts: [{ id: 'retired', image: { description: '旧图', path: path('retired') } }, { id: 'shared', image: { description: '共享图', path: path('shared'), seed: 2 } }] }));
   h.saveFailure = new Error('offline'); await assert.rejects(store.updateLiangshi(current => ({ ...current, posts: [] }), { cleanImages: true }), /保存失败/); assert.deepEqual(removed, []);
-  h.saveFailure = null; await store.updateLiangshi(current => ({ ...current, posts: current.posts.filter(post => post.id === 'shared') }), { cleanImages: true }); assert.deepEqual(removed, [path('retired')]);
+  h.saveFailure = null; await store.updateLiangshi(current => ({ ...current, posts: current.posts.filter(post => post.id === 'shared') }), { cleanImages: true }); assert.deepEqual(removed, []); assert.ok(readAlbumPhotos(store.read()).some(photo => photo.path === path('retired')));
   await store.clearImagePaths([path('shared')]); assert.deepEqual(store.read().liangshi.posts[0].image, { description: '共享图' }); assert.deepEqual(store.read().conversations.a[0].image, { description: '照片shared' });
+  assert.equal(store.read().albumPhotos.some(photo => photo.path === path('shared')), false);
 });

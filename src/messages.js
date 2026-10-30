@@ -59,8 +59,8 @@ export function createMessageService({ target, store, contextReader, modelClient
         return { ...record('assistant', content.text, clock, content.translation, context.batch), ...content };
       });
       const messages = indexedMessages.filter(Boolean);
-      for (const item of actions) await store.respondTransfer(id, item.transferId, item.status, id, context.batch, identityOwners);
-      if (messages.length) await store.appendMessages(id, messages, { identityOwners });
+      for (const [index, item] of actions.entries()) await store.respondTransfer(id, item.transferId, item.status, id, context.batch, identityOwners, !messages.length && index === actions.length - 1 ? answer.remarkForUser : undefined);
+      if (messages.length) await store.appendMessages(id, messages, { identityOwners, remarkForUser: answer.remarkForUser });
       return messages;
     },
   };

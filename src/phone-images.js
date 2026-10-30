@@ -5,7 +5,7 @@ import { createImageProviders } from './image-providers.js';
 import { getLiangshiContact, liangshiInteractions } from './liangshi.js';
 import { forumComments } from './forum.js';
 import { identityOwnerId } from './identities.js';
-import { contentImagePaths, imagePath } from './image-files.js';
+import { findAlbumPhoto } from './album.js';
 
 const IMAGE_PROMPT = SENTENCE_RULE + '把手机照片描述转为绘图提示。结合sender辨明“我/自拍”的人物；只描述这张照片，不补写剧情。人物外观和衣着由柏宝绘角色库提供，prompt不自行编写这些特征。必须列出所有画面人物，库中缺少人物也要返回其姓名，不能为绕过缺档而省略。只输出JSON：{"prompt":"场景、动作、构图的英文danbooru短标签，非空","nl":"可选画面描述","characters":["画面中人物的准确姓名；有对应库条目时用库内姓名，无人物时为空"],"size":"portrait或landscape"}。不输出说明或图片地址。';
 
@@ -61,16 +61,21 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
     if (!result.path) throw new Error(`图片已生成，但${label}没有保存成功。请检查图库保存状态。`);
     return { path: result.path, ...(result.seed !== undefined ? { seed: result.seed } : {}) };
   }
-  async function attach(image, save) {
-    try { assertEnabled(); await save(); }
-    catch (error) {
-      const path = imagePath(image.path), state = await store.readSaved();
-      if (path && !contentImagePaths(state).has(path) && files?.remove) {
-        try { await files.remove([path]); }
-        catch (cleanupError) { throw new AggregateError([error, cleanupError], `${error.message}；新生成图片及附带文件清理失败。`); }
-      }
-      throw error;
-    }
+  async function attach(image, originalState, app, original, change) {
+    const replace = row => {
+      if (row === original) return { ...row, image: { ...row.image, ...image } };
+      let next = row;
+      for (const collection of ['comments', 'reposts']) if (Array.isArray(row[collection]) && row[collection].includes(original)) next = { ...next, [collection]: row[collection].map(replace) };
+      return next;
+    };
+    const material = app === 'messages'
+      ? { ...originalState, conversations: Object.fromEntries(Object.entries(originalState.conversations).map(([id, rows]) => [id, rows.map(replace)])) }
+      : { ...originalState, [app]: { ...originalState[app], posts: originalState[app].posts.map(replace) } };
+    const photo = findAlbumPhoto(material, image.path);
+    if (!photo) throw new Error('图片已生成，但保存路径无法用于相册，请在生图插件图库查看。');
+    // Validation controls attachment, while the paid provider result is retained
+    // in the same save even if its original source changed during generation.
+    await store.saveGeneratedPhoto(photo, state => { assertEnabled(); return change(state); });
   }
   async function generateNested(app, postId, collection, rowId) {
     assertEnabled();
@@ -80,15 +85,15 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
     if (!original?.image) throw new Error('这条回复或转发配图已不存在。');
     if (original.image.path) return original.image;
     const identity = actor(state, app, original), image = await draw(original.image.description, identity.sender, identity.sceneryOnly, { anonymous: identity.anonymous });
-    const update = app === 'forum' ? 'updateForum' : 'updateLiangshi';
-    await attach(image, () => store[update](data => {
+    await attach(image, state, app, original, current => {
+      const data = current[app];
       const actual = data.posts.find(item => item.id === postId), rows = actual?.[collection] || [];
       // Legacy index IDs identify this exact retained object, never a replacement row.
       const position = original.id ? rows.findIndex(row => row.id === original.id) : rows.indexOf(original), row = rows[position];
-      if (!row || row.image?.description !== original.image.description || actor(store.read(), app, row).key !== identity.key) throw new Error('回复、作者或配图已更新，图片未关联。');
+      if (!row || row.image?.description !== original.image.description || actor(current, app, row).key !== identity.key) throw new Error('回复、作者或配图已更新，图片未关联。');
       const saved = { ...row, id: row.id || globalThis.crypto.randomUUID(), image: { ...row.image, ...image } };
-      return { ...data, posts: data.posts.map(post => post.id === postId ? { ...post, [collection]: rows.map((item, index) => index === position ? saved : item) } : post) };
-    }));
+      return { ...current, [app]: { ...data, posts: data.posts.map(post => post.id === postId ? { ...post, [collection]: rows.map((item, index) => index === position ? saved : item) } : post) } };
+    });
     return { ...original.image, ...image };
   }
   return {
@@ -100,27 +105,31 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
     },
     async generate(id, messageId) {
       assertEnabled();
-      const message = store.read().conversations[id]?.find(item => item.id === messageId);
+      const state = store.read(), message = state.conversations[id]?.find(item => item.id === messageId);
       if (!message || message.type !== 'image') throw new Error('这条图片消息已不存在。');
       if (message.image.path) return message.image;
-      const identity = messageActor(store.read(), id, message);
+      const identity = messageActor(state, id, message);
       const image = await draw(message.image.description, identity.sender);
-      await attach(image, () => store.updateImage(id, messageId, image, message.image.description, (state, current) => {
-        if (messageActor(state, id, current).key !== identity.key) throw new Error('图片作者归属已变化，图片未关联。');
-      }));
+      await attach(image, state, 'messages', message, current => {
+        const actual = current.conversations[id]?.find(row => row.id === messageId);
+        if (!actual || actual.type !== 'image') throw new Error('这条图片消息已删除，无法保存图片。');
+        if (actual.image.description !== message.image.description) throw new Error('这条图片描述已修改，请重新点击生成。');
+        if (messageActor(current, id, actual).key !== identity.key) throw new Error('图片作者归属已变化，图片未关联。');
+        return { ...current, conversations: { ...current.conversations, [id]: current.conversations[id].map(row => row.id === messageId ? { ...row, image: { ...row.image, ...image } } : row) } };
+      });
       return { ...message.image, ...image };
     },
     async generateForum(postId, commentId) {
       if (commentId) return generateNested('forum', postId, 'comments', commentId);
-      assertEnabled(); const post = store.read().forum?.posts.find(row => row.id === postId);
+      assertEnabled(); const state = store.read(), post = state.forum?.posts.find(row => row.id === postId);
       if (!post?.image) throw new Error('这条帖子配图已不存在。');
       if (post.image.path) return post.image;
       const image = await draw(post.image.description, null, true, { anonymous: true });
-      await attach(image, () => store.updateForum(current => {
-        const actual = current.posts.find(row => row.id === postId);
+      await attach(image, state, 'forum', post, current => {
+        const actual = current.forum.posts.find(row => row.id === postId);
         if (!actual || actual.image?.description !== post.image.description) throw new Error('帖子或配图已更新，图片未关联。');
-        return { ...current, posts: current.posts.map(row => row.id === postId ? { ...row, image: { ...row.image, ...image } } : row) };
-      }));
+        return { ...current, forum: { ...current.forum, posts: current.forum.posts.map(row => row.id === postId ? { ...row, image: { ...row.image, ...image } } : row) } };
+      });
       return { ...post.image, ...image };
     },
     async generateLiangshi(postId, { collection = 'comments', id } = {}) {
@@ -133,13 +142,13 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
       if (!account) throw new Error('这位微博作者已不存在。');
       const identity = actor(state, 'liangshi', post);
       const image = await draw(post.image.description, identity.sender, identity.sceneryOnly, { anonymous: identity.anonymous });
-      await attach(image, () => store.updateLiangshi(current => {
-        const actual = current.posts.find(item => item.id === postId);
+      await attach(image, state, 'liangshi', post, current => {
+        const actual = current.liangshi.posts.find(item => item.id === postId);
         if (!actual) throw new Error('这条微博已删除，无法保存图片。');
-        if (actor(store.read(), 'liangshi', actual).key !== identity.key) throw new Error('图片作者归属已变化，图片未关联。');
+        if (actor(current, 'liangshi', actual).key !== identity.key) throw new Error('图片作者归属已变化，图片未关联。');
         if (actual.image?.description !== post.image.description) throw new Error('这条微博配图描述已修改，请重新点击生成。');
-        return { ...current, posts: current.posts.map(item => item.id === postId ? { ...item, image: { ...item.image, ...image } } : item) };
-      }));
+        return { ...current, liangshi: { ...current.liangshi, posts: current.liangshi.posts.map(item => item.id === postId ? { ...item, image: { ...item.image, ...image } } : item) } };
+      });
       return { ...post.image, ...image };
     },
     async generatePost(postId) {
@@ -151,13 +160,14 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
       if (!sender) throw new Error('这位动态作者已不存在。');
       const identity = actor(state, 'social', post);
       const image = await draw(post.image.description, identity.sender, identity.sceneryOnly, { anonymous: identity.anonymous });
-      await attach(image, () => store.updateSocial(social => {
+      await attach(image, state, 'social', post, current => {
+        const social = current.social;
         const actual = social.posts.find(item => item.id === postId);
         if (!actual) throw new Error('这条动态已删除，无法保存图片。');
-        if (actor(store.read(), 'social', actual).key !== identity.key) throw new Error('图片作者归属已变化，图片未关联。');
+        if (actor(current, 'social', actual).key !== identity.key) throw new Error('图片作者归属已变化，图片未关联。');
         if (actual.image?.description !== post.image.description) throw new Error('这条动态配图描述已修改，请重新点击生成。');
-        return { ...social, posts: social.posts.map(item => item.id === postId ? { ...item, image: { ...item.image, ...image } } : item) };
-      }));
+        return { ...current, social: { ...social, posts: social.posts.map(item => item.id === postId ? { ...item, image: { ...item.image, ...image } } : item) } };
+      });
       return { ...post.image, ...image };
     },
   };

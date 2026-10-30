@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createAppearanceSettings } from '../src/appearance.js';
 import { createApiSettings, createModelClient, parsePayload } from '../src/api.js';
 import { createHarness } from './harness.mjs';
 import { BASE_PROCESSING_PROMPT } from '../src/shared-processing-prompt.js';
@@ -25,8 +26,8 @@ for (const hostKind of ['native','luker']) test(`${hostKind}: changing shared pr
   assert.equal(api.resolve().model,'manual-custom');assert.equal(api.resolve().url,'https://manual.invalid/v1');
 });
 
-test('reselecting the same effective implicit or embedded fallback preset keeps the saved custom model', async () => {
-  const settings={pocketPhone:{apiModel:'implicit-custom'},twoMoreThingsEmbedded:{apiModel:'embedded-custom'},'schedule-planner':{apiPresets:[{id:'only',url:'https://only.invalid/v1',key:'key',model:'default'}]}};
+test('reselecting the same explicit or inherited embedded preset keeps the saved custom model', async () => {
+  const settings={pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'only'},apiModel:'implicit-custom'},twoMoreThingsEmbedded:{apiModel:'embedded-custom'},'schedule-planner':{apiPresets:[{id:'only',url:'https://only.invalid/v1',key:'key',model:'default'}]}};
   const h=createHarness({settings}),ref={kind:'shared-preset',presetId:'only'},api=createApiSettings({host:h.host});
   await api.select(ref);assert.equal(api.readDraft().model,'implicit-custom');
   const embedded=createApiSettings({host:{...h.host,phoneSettingsKey:'twoMoreThingsEmbedded'}});
@@ -47,7 +48,7 @@ test('manual model discovery needs only URL and key, normalizes the list, and do
 test('choosing an API source preserves floating and QR preferences', async () => {
   const h = createHarness({ settings: { pocketPhone: { fabShow: false, qrShow: true }, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'test', model: 'm' }] } } });
   await createApiSettings({ host: h.host }).select({ kind: 'shared-preset', presetId: 'test' });
-  assert.deepEqual(h.context.extensionSettings.pocketPhone, { fabShow: false, qrShow: true, apiSourceRef: { kind: 'shared-preset', presetId: 'test' } });
+  assert.deepEqual(h.context.extensionSettings.pocketPhone, { fabShow: false, qrShow: true, apiSourceRef: { kind: 'shared-preset', presetId: 'test' }, apiModel: 'm' });
 });
 
 test('model discovery reports an empty list and request errors without reflecting credentials', async () => {
@@ -60,7 +61,7 @@ test('model discovery reports an empty list and request errors without reflectin
 });
 
 test('reads the selected shared source fresh without changing other plugins', async () => {
-  const settings = { qianqianjie: { apiMode: 'seven-preset', selectedSevenDaysPresetId: 'p' }, 'schedule-planner': { apiPresetActiveId: 'other', apiPresets: [{ id: 'p', name: '日常', url: 'https://example.invalid/v1', key: 'test-key', model: 'first', qqjTemperature: 0.3 }] } };
+  const settings = { pocketPhone: { apiSourceRef: { kind: 'shared-preset', presetId: 'p' } }, qianqianjie: { apiMode: 'seven-preset', selectedSevenDaysPresetId: 'p' }, 'schedule-planner': { apiPresetActiveId: 'other', apiPresets: [{ id: 'p', name: '日常', url: 'https://example.invalid/v1', key: 'test-key', model: 'first', qqjTemperature: 0.3 }] } };
   const h = createHarness({ settings });
   const api = createApiSettings({ host: h.host });
   const client = createModelClient({ host: h.host, sourceProvider: api });
@@ -78,7 +79,7 @@ test('reads the selected shared source fresh without changing other plugins', as
 });
 
 test('every actual request uses the latest shared prompt, preserving custom text and resolving blank to the built-in default', async () => {
-  const settings = { qianqianjie: { apiUrl: 'https://example.invalid', apiKey: 'test', apiModel: 'm', processingPrompt: '旧自定义不应回灌' }, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'test', model: 'm' }], processingPrompt: '  自定义前缀\n保持原文  ' } };
+  const settings = { pocketPhone: { apiSourceRef: { kind: 'shared-preset', presetId: 'test' } }, qianqianjie: { apiUrl: 'https://example.invalid', apiKey: 'test', apiModel: 'm', processingPrompt: '旧自定义不应回灌' }, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'test', model: 'm' }], processingPrompt: '  自定义前缀\n保持原文  ' } };
   const h = createHarness({ settings }), client = createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) });
   await client.complete({ system: '任务', messages: [] });
   settings['schedule-planner'].processingPrompt = ' \n ';
@@ -118,7 +119,7 @@ test('extracts formal answers and keeps valid parts without inventing attributio
 });
 
 test('reports request failure without reflecting provider credentials into the UI', async () => {
-  const h = createHarness({ settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'test-secret', model: 'm' }] } } });
+  const h = createHarness({ settings: { pocketPhone: { apiSourceRef: { kind: 'shared-preset', presetId: 'test' } }, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid', key: 'test-secret', model: 'm' }] } } });
   h.host.request = async () => Response.json({ error: 'Bearer test-secret https://example.invalid' }, { status: 401 });
   const client = createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) });
   await assert.rejects(client.complete({ system: 'test', messages: [] }), error => /401/.test(error.message) && !/test-secret|example.invalid/.test(error.message));
@@ -145,7 +146,46 @@ test('draft fill and model-list selection do not save until the local model is e
 });
 
 test('a blank shared model still permits model discovery using the selected live URL and key', async () => {
-  const h = createHarness({ settings: { 'schedule-planner': { apiPresets: [{ id: 'p', url: 'https://shared.invalid', key: 'key', model: '' }] } }, completion: { data: [{ id: 'available' }] } }); const api = createApiSettings({ host: h.host });
+  const h = createHarness({ settings: { pocketPhone: { apiSourceRef: { kind: 'shared-preset', presetId: 'p' } }, 'schedule-planner': { apiPresets: [{ id: 'p', url: 'https://shared.invalid', key: 'key', model: '' }] } }, completion: { data: [{ id: 'available' }] } }); const api = createApiSettings({ host: h.host });
   assert.equal(typeof api.readDraft, 'function'); assert.equal(api.readDraft().model, ''); assert.throws(api.resolve, /模型|补全/);
   assert.deepEqual(await api.fetchModels(api.readDraft(), api.getSelected()), ['available']); assert.equal(h.modelRequests[0].body.reverse_proxy, 'https://shared.invalid/v1'); assert.equal(h.modelRequests[0].body.proxy_password, 'key'); assert.equal(h.settingsSaves, 0);
+});
+
+for (const settingsKey of ['pocketPhone', 'twoMoreThingsEmbedded']) test(`shared rename preserves latest fields and all independent phone settings (${settingsKey})`, async () => {
+  const settings = { pocketPhone: { apiSourceRef: { kind: 'shared-preset', presetId: 'p' }, apiModel: 'native-own', qrShow: false }, twoMoreThingsEmbedded: { apiSourceRef: { kind: 'shared-preset', presetId: 'p' }, apiModel: 'embedded-own' }, 'schedule-planner': { apiPresetActiveId: 'p', utilityPresetId: 'p', other: true, apiPresets: [{ id: 'p', name: '旧名', url: 'https://saved.invalid', key: 'saved', model: 'shared-default', excludeParams: ['seed'], timeoutSec: 70, stream: true, extra: { stable: true } }] } };
+  const h = createHarness({ settings }), api = createApiSettings({ host: { ...h.host, phoneSettingsKey: settingsKey } });
+  assert.equal(typeof api.renamePreset, 'function');
+  const draft = api.readDraft(); draft.url = '非法但未保存地址'; draft.key = 'unsaved'; draft.model = 'unsaved';
+  await assert.rejects(api.renamePreset({ kind: 'shared-preset', presetId: 'p' }, ' '), /名称/); assert.equal(h.settingsSaves, 0);
+  settings['schedule-planner'].apiPresets[0] = { ...settings['schedule-planner'].apiPresets[0], key: 'late-key', lateField: { keep: 2 } };
+  const before = structuredClone(settings);
+  await api.renamePreset({ kind: 'shared-preset', presetId: 'p' }, ' 新名称 ');
+  before['schedule-planner'].apiPresets[0].name = '新名称';
+  assert.deepEqual(settings, before); assert.equal(h.settingsSaves, 1); assert.equal(h.modelRequests.length, 0);
+  assert.equal(api.listSources()[0].label, '新名称'); assert.equal(draft.model, 'unsaved');
+  settings['schedule-planner'].apiPresets = [];
+  await assert.rejects(api.renamePreset({ kind: 'shared-preset', presetId: 'p' }, '不可复活'), /不存在/);
+  assert.deepEqual(settings['schedule-planner'].apiPresets, []); assert.equal(h.settingsSaves, 1);
+});
+
+test('failed shared rename restores its own pool edit without touching phone preferences', async () => {
+  const settings = { pocketPhone: { apiModel: 'own' }, 'schedule-planner': { apiPresets: [{ id: 'p', name: '旧名', url: 'https://saved.invalid', model: 'saved', key: 'saved' }] } };
+  const before = structuredClone(settings), api = createApiSettings({ host: { readSettings: () => settings, saveSettings: async () => { throw Error('offline'); } } });
+  await assert.rejects(api.renamePreset({ kind: 'shared-preset', presetId: 'p' }, '新名'), /重命名.*失败/);
+  assert.deepEqual(settings, before);
+});
+
+test('overview editing is enabled only for a live selected shared connection', async () => {
+ const {renderSettings}=await import('../src/ui/settings.js');
+ const source={ref:{kind:'shared-preset',presetId:'p'},label:'连接'};
+ const render=selected=>renderSettings({theme:'day'},{ui:{drawers:{connection:true}},busy:new Set(),apiSettings:{listSources:()=>[source],getSelected:()=>selected},entries:{read:()=>({})},appearance:createAppearanceSettings({host:{readSettings:()=>({})}}),control:{isEnabled:()=>true},mode:'plugin'});
+ assert.doesNotMatch(render(source.ref).match(/<button[^>]*data-action="api-edit"[^>]*>/u)[0],/disabled/);
+ for(const selected of [null,{kind:'shared-preset',presetId:'gone'}]) assert.match(render(selected).match(/<button[^>]*data-action="api-edit"[^>]*>/u)[0],/disabled/);
+});
+
+test('API overview exposes only source/edit and one global add, keeping connection fields inside the modal',async()=>{
+ const {renderSettings}=await import('../src/ui/settings.js');const source={ref:{kind:'shared-preset',presetId:'p'},label:'连接'};
+ const ui={manual:false,apiDraft:{url:'https://draft.invalid',key:'draft',model:'draft'},models:[],modelSearch:'',sourcesOpen:false,drawers:{connection:true},defaultUser:'我'};
+ const html=renderSettings({theme:'day'},{ui,busy:new Set(),apiSettings:{listSources:()=>[source],getSelected:()=>source.ref},entries:{read:()=>({})},appearance:createAppearanceSettings({host:{readSettings:()=>({})}}),control:{isEnabled:()=>true},mode:'plugin'});
+ assert.match(html,/data-action="api-edit"/);assert.equal((html.match(/data-action="api-new"/g)||[]).length,1);assert.doesNotMatch(html,/id="api-(?:url|key|model)"/);assert.doesNotMatch(html,/data-action="api-(?:rename|save-as|delete)"/);
 });

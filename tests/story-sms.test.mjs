@@ -4,8 +4,22 @@ import { createHarness } from './harness.mjs';
 import { createPhoneStore } from '../src/store.js';
 import { createContextReader, createBackflowService } from '../src/context.js';
 import { createMessageService } from '../src/messages.js';
-import { syncStorySms, parseStorySms } from '../src/story-sms.js';
+import { syncStorySms, parseStorySms, storySmsRegex, removeAcceptedStorySms } from '../src/story-sms.js';
 import { readContactAvatars } from '../src/contact-avatars.js';
+
+test('main-story SMS theme reuses one scoped style and leaves regex output unchanged', async () => {
+  const { syncStorySmsTheme, storySmsRegex } = await import('../src/story-sms.js');
+  assert.equal(typeof syncStorySmsTheme, 'function');
+  let writes = 0;
+  const styles = [], documentRef = { getElementById: id => styles.find(style => style.id === id), createElement: () => ({ dataset: {}, set textContent(value) { this.content = value; writes++; }, get textContent() { return this.content; } }), head: { append: style => styles.push(style) } };
+  const regex = storySmsRegex();
+  syncStorySmsTheme(documentRef, 'night');
+  assert.equal(styles.length, 1); assert.match(styles[0].textContent, /^\.tmt-main-sms\{/); assert.match(styles[0].textContent, /--pp-surface:#162d3a/); assert.match(styles[0].textContent, /--pp-ink:#f2efdc/);
+  syncStorySmsTheme(documentRef, 'night'); assert.equal(writes, 1, 'same theme does not rewrite the style');
+  syncStorySmsTheme(documentRef, 'day');
+  assert.equal(styles.length, 1); assert.equal(writes, 2); assert.match(styles[0].textContent, /--pp-surface:#fbfaf6/); assert.match(styles[0].textContent, /--pp-ink:#222a29/);
+  assert.deepEqual(storySmsRegex(), regex, 'existing installed regex need not be changed');
+});
 
 function setup() {
   const h = createHarness({ messages: [{ is_user: false, mes: '[tmt|朋友甲|朋友甲]晚上八点见。[/tmt][tmt|朋友甲|我]收到[/tmt][tmt|群:读书群|朋友乙]我带书。[/tmt][tmt|群:读书群|我]好[/tmt]<!-- QQJ-end | date=2031/4/8 | time=09:30 -->' }] });
@@ -139,6 +153,35 @@ function wrappedStory(raw, wrappers = draftWrappers) {
   return { h, target, store, wrapperSettingsProvider: () => wrappers };
 }
 
+test('an unclosed draft SMS opener cannot swallow the formal SMS in parse, display, accepted removal or import', async () => {
+  const raw = '<content><draft>复查：短信保留[tmt|甲|甲]结构，内容完整。</draft>正式正文。[tmt|甲|甲]晚上见。[/tmt]</content>';
+  assert.deepEqual(parseStorySms(raw), [{ index: 0, name: '甲', sender: '甲', text: '晚上见。', group: false }]);
+  const rule = storySmsRegex(), end = rule.findRegex.lastIndexOf('/');
+  const pattern = new RegExp(rule.findRegex.slice(1, end), rule.findRegex.slice(end + 1));
+  const matches = [...raw.matchAll(pattern)];
+  assert.deepEqual(matches.map(row => row.slice(1)), [['甲', '甲', '晚上见。']], 'display keeps exactly the original three capture groups');
+  const rendered = raw.replace(pattern, rule.replaceString), formal = rendered.split('</draft>')[1];
+  assert.ok(formal.includes('class="tmt-main-sms-bubble">晚上见。</div>')); assert.equal(formal.includes('[tmt|'), false);
+  assert.equal(removeAcceptedStorySms(raw, new Set([0])), '<content><draft>复查：短信保留[tmt|甲|甲]结构，内容完整。</draft>正式正文。</content>');
+  const s = wrappedStory(raw); await syncStorySms(s);
+  const state = s.store.read(), person = state.contacts.find(row => row.name === '甲');
+  assert.deepEqual(state.conversations[person.id].map(row => [row.text, row.source.block]), [['晚上见。', 0]]);
+  assert.equal(s.target.messages[0].mes, raw); assert.equal(s.h.metadataSaves, 1); assert.equal(s.h.modelRequests.length, 0);
+  const reader = createContextReader({ target: s.target, store: s.store, qqjBridgeProvider: () => null, wrapperSettingsProvider: s.wrapperSettingsProvider });
+  assert.deepEqual((await reader.readForContact(person.id)).story.map(row => row.text), ['正式正文。']);
+});
+
+test('an invalid opener consumes no block index while closed draft blocks and repeated formal originals keep theirs', async () => {
+  const text = '  正式原话，保留  两格与换行。\n提到部分结构[tmt|，原样保留。  ';
+  const sms = `[tmt|甲|我]${text}[/tmt]`, raw = `<content><draft>[tmt|甲|甲]合法草稿。[/tmt]复查[tmt|甲|甲]保持格式。</draft>正式正文。${sms}${sms}</content>`;
+  assert.deepEqual(parseStorySms(raw).map(row => [row.index, row.text]), [[0, '合法草稿。'], [1, text], [2, text]]);
+  const s = wrappedStory(raw); await syncStorySms(s);
+  const person = s.store.read().contacts.find(row => row.name === '甲'), rows = s.store.read().conversations[person.id];
+  assert.deepEqual(rows.map(row => [row.id, row.source.block, row.text, row.role]), [['story:0:1', 1, text, 'user'], ['story:0:2', 2, text, 'user']]);
+  await syncStorySms(s); assert.equal(s.h.metadataSaves, 1); assert.equal(s.h.modelRequests.length, 0);
+  assert.equal(s.target.messages[0].mes, raw);
+});
+
 test('three draft SMS copies are excluded while the formal copy keeps its original raw block index', async () => {
   const s = wrappedStory(draftStory);
   await syncStorySms(s);
@@ -185,4 +228,95 @@ test('excluded-only or no SMS body performs no import or save and failed formal 
   }
   const s = wrappedStory(draftStory), before = structuredClone(s.target.metadata); s.h.saveFailure = new Error('save unavailable');
   await assert.rejects(syncStorySms(s), /手机内容保存失败/); assert.deepEqual(s.target.metadata, before); assert.equal(s.target.messages[0].mes, draftStory); assert.equal(s.h.modelRequests.length, 0);
+});
+
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: separated contact labels route both private ends to the existing account without changing its profile`, async () => {
+  for (const [name, nickname, conversation, sender] of [
+    ['张三', '', '老板-张三', '张三（老板）'],
+    ['张三', '', '【张三】', '张三'],
+    ['老板-张三', '', '张三', '张三'],
+    ['张三（老板）', '', '张三', '张三'],
+    ['张三', '小张', '同事-小张', '小张（同事）'],
+    ['老板-张三', '张三（同事）', '张三', '张三'],
+    ['A', '', '主管-A', 'A'],
+    ['明', '', '明（店员）', '明'],
+    ['Mary Jane', '', '同事—Mary Jane', 'Mary Jane'],
+    ['张三', '', '📞张三📞', '张三'],
+    ['A+B', '', '老板-A+B', 'A+B'],
+    ['王(三)', '', '同事-王(三)', '王(三)'],
+  ]) {
+    const h = createHarness({ hostKind, messages: [{ is_user: false, mes: `[tmt|${conversation}|${sender}]  完整原话。\n第二行！  [/tmt][tmt|${conversation}|我]收到。[/tmt]` }] });
+    const target = h.host.captureChat(), store = createPhoneStore({ target });
+    await store.upsertContacts([{ id: 'a', name, nickname, expression: '人工习惯', language: '粤语', remarkForUser: '原备注' }]);
+    const profiles = structuredClone(store.read().contacts), before = h.metadataSaves, raw = target.messages[0].mes;
+    await syncStorySms({ target, store });
+    assert.deepEqual(store.read().contacts, profiles, `${conversation}/${sender}: routing does not rename or add aliases`);
+    assert.deepEqual(store.read().conversations.a.map(row => [row.role, row.speakerId, row.text]), [['assistant', 'a', '  完整原话。\n第二行！  '], ['user', '@user', '收到。']]);
+    assert.deepEqual(store.read().conversations.a.map(row => [row.source.floor, row.source.block, row.read]), [[0, 0, true], [0, 1, true]]);
+    assert.equal(target.messages[0].mes, raw); assert.equal(h.metadataSaves, before + 1); assert.equal(h.modelRequests.length, 0);
+    await syncStorySms({ target, store }); assert.equal(h.metadataSaves, before + 1, 'same floor imports once');
+  }
+});
+
+test('continuous longer names and words remain distinct people in either containment direction', async () => {
+  for (const [name, label] of [['张三', '张三丰'], ['张三丰', '张三'], ['A', 'Amy'], ['Amy', 'A'], ['明', '阿明'], ['阿明', '明'], ['张三', '老板张三'], ['张三', '张三经理']]) {
+    const s = setup(); await s.store.upsertContacts([{ id: 'a', name }]);
+    s.target.messages[0].mes = `[tmt|${label}|${label}]新人的原话。[/tmt]`;
+    await syncStorySms(s);
+    const added = s.store.read().contacts.find(row => row.name === label);
+    assert.ok(added && added.id !== 'a', `${name}/${label}: no continuous substring merge`);
+    assert.equal(s.store.read().conversations.a, undefined);
+    assert.equal(s.store.read().conversations[added.id][0].text, '新人的原话。');
+    assert.equal(s.h.modelRequests.length, 0);
+  }
+});
+
+test('exact names and nicknames win before decorated candidates; ambiguous IDs are not merged by owner', async () => {
+  const s = setup();
+  await s.store.upsertContacts([{ id: 'a', name: '张三', nickname: '小张' }, { id: 'b', name: '老板-张三', nickname: '同事-小张' }, { id: 'x', name: '同名' }, { id: 'y', name: '同名' }]);
+  await s.store.saveContact('b', { ...s.store.read().contacts.find(row => row.id === 'b'), identityOwnerId: 'a' });
+  assert.equal(s.store.read().contacts.find(row => row.id === 'b').identityOwnerId, 'a');
+  const profiles = structuredClone(s.store.read().contacts);
+  s.target.messages[0].mes = '[tmt|张三|张三]精确姓名。[/tmt][tmt|小张|小张]精确昵称。[/tmt][tmt|老板-张三（朋友）|老板-张三（朋友）]包装歧义。[/tmt][tmt|同名|同名]精确歧义。[/tmt]';
+  await syncStorySms(s);
+  assert.deepEqual(s.store.read().contacts, profiles);
+  assert.deepEqual(s.store.read().conversations.a.map(row => row.text), ['精确姓名。', '精确昵称。']);
+  for (const id of ['b', 'x', 'y']) assert.equal(s.store.read().conversations[id], undefined);
+  assert.equal(s.h.modelRequests.length, 0);
+});
+
+test('private labels and non-user senders must independently resolve to the same unique account', async () => {
+  const s = setup();
+  await s.store.upsertContacts([{ id: 'a', name: '张三' }, { id: 'b', name: '李四' }, { id: 'c', name: '张三', nickname: '另一号' }]);
+  const profiles = structuredClone(s.store.read().contacts);
+  s.target.messages[0].mes = '[tmt|另一号|老板-李四]不同人。[/tmt][tmt|另一号|老板-张三]发信人歧义。[/tmt][tmt|另一号|张三经理]发信人未匹配。[/tmt][tmt|另一号（朋友）|我]本人发信。[/tmt]';
+  await syncStorySms(s);
+  assert.deepEqual(s.store.read().contacts, profiles);
+  assert.equal(s.store.read().conversations.a, undefined); assert.equal(s.store.read().conversations.b, undefined);
+  assert.ok(s.store.read().conversations.c, 'the independently unique wrapped conversation must receive the user message');
+  assert.deepEqual(s.store.read().conversations.c.map(row => [row.role, row.speakerId, row.text]), [['user', '@user', '本人发信。']]);
+  assert.equal(s.h.modelRequests.length, 0);
+});
+
+test('group sender decoration reuses the existing ID and freezes old scope while group names stay exact', async () => {
+  const s = setup(); await s.store.upsertContacts([{ id: 'a', name: '张三' }, { id: 'old', name: '旧成员' }]);
+  const group = await s.store.saveGroup('', { name: '读书群', memberIds: ['old'], userIsMember: true });
+  await s.store.appendMessage(group.id, { id: 'old-msg', role: 'assistant', speakerId: 'old', text: '旧消息。' });
+  const profiles = structuredClone(s.store.read().contacts);
+  s.target.messages[0].mes = '[tmt|群:读书群|老板-张三]新消息。[/tmt][tmt|群:老板-读书群|张三（老板）]另一个群。[/tmt]';
+  await syncStorySms(s);
+  const state = s.store.read(), other = state.groups.find(row => row.name === '老板-读书群');
+  assert.deepEqual(state.contacts, profiles); assert.equal(state.groups.length, 2); assert.notEqual(other.id, group.id);
+  assert.deepEqual(state.conversations[group.id].map(row => [row.speakerId, row.knownToIds]), [['old', ['old', '@user']], ['a', ['old', 'a', '@user']]]);
+  assert.equal(state.conversations[other.id][0].speakerId, 'a'); assert.equal(s.h.modelRequests.length, 0);
+});
+
+test('a failed decorated import rolls back the existing contact and leaves the floor available for a manual retry', async () => {
+  const s = setup(); await s.store.upsertContacts([{ id: 'a', name: '张三', nickname: '小张' }]);
+  s.target.messages[0].mes = '[tmt|老板-张三|小张（同事）]原话。[/tmt]';
+  const before = structuredClone(s.target.metadata); s.h.saveFailure = new Error('fixture save unavailable');
+  await assert.rejects(syncStorySms(s), /手机内容保存失败/); assert.deepEqual(s.target.metadata, before);
+  s.h.saveFailure = null; await syncStorySms(s);
+  assert.equal(s.store.read().contacts.length, 1); assert.ok(s.store.read().conversations.a, 'manual retry routes to the original contact'); assert.equal(s.store.read().conversations.a[0].text, '原话。');
+  assert.equal(s.h.modelRequests.length, 0);
 });

@@ -18,7 +18,7 @@ test('editing a name protects that field while AI can still refine an untouched 
 });
 
 test('a legacy edited contact can explicitly regenerate style for review without overwriting saved profile', async () => {
-  const h = createHarness({ settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } }, metadata: { pocketPhone: { schemaVersion: 1, contacts: [{ id: 'lin', name: '林舟', edited: true, expression: '烦躁时敲桌面', personality: '不耐烦', language: '粤语' }], conversations: {}, forum: { posts: [] } } }, completion: { choices: [{ message: { content: '{"contacts":[{"sourceId":"lin","name":"林舟","expression":"短句，烦躁时只回问号"}]}' } }] } });
+  const h = createHarness({ settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } }, metadata: { pocketPhone: { schemaVersion: 1, contacts: [{ id: 'lin', name: '林舟', edited: true, expression: '烦躁时敲桌面', personality: '不耐烦', language: '粤语' }], conversations: {}, forum: { posts: [] } } }, completion: { choices: [{ message: { content: '{"contacts":[{"sourceId":"lin","name":"林舟","expression":"短句，烦躁时只回问号"}]}' } }] } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   await store.upsertContacts([{ id: 'lin', name: '覆盖旧资料', expression: '不要盲目覆盖' }]);
   const service = createMessageService({ target, store, modelClient: createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) }) });

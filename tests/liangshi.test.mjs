@@ -10,7 +10,7 @@ import { LIANGSHI_PROMPT } from '../src/prompts.js';
 
 const implementation = await import('../src/liangshi.js').catch(error => { if (error.code === 'ERR_MODULE_NOT_FOUND' && error.url?.endsWith('/src/liangshi.js')) return {}; throw error; });
 const makeService = options => { assert.equal(typeof implementation.createLiangshiService, 'function', 'the Liangshi production service must exist'); return implementation.createLiangshiService(options); };
-const settings = () => ({ 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://fixture.invalid', key: 'mock', model: 'mock-model' }], processingPrompt: 'FIRST SHARED PREFIX' } });
+const settings = () => ({ pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://fixture.invalid', key: 'mock', model: 'mock-model' }], processingPrompt: 'FIRST SHARED PREFIX' } });
 function setup(hostKind = 'native', initial) {
   const h = createHarness({ hostKind, settings: settings(), messages: [{ is_user: false, mes: '城市广场正在布置放映。<!-- QQJ-end | date=2031年4月8日 | time=09:30 -->' }], metadata: { foreign: 'keep', ...(initial ? { pocketPhone: initial } : {}) } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
@@ -19,6 +19,29 @@ function setup(hostKind = 'native', initial) {
   h.completion = () => ({ choices: [{ message: { content: JSON.stringify(liangshiFeed()) } }] });
   return { h, target, store, contextReader, modelClient };
 }
+
+test('square/following/topic initial comments and more comments/reposts each expose and preserve conditional translations', async () => {
+  const { h, store, contextReader, modelClient } = setup(), service = makeService({ store, contextReader, modelClient, random: () => 0 });
+  const foreign = [{ authorKey: 'a', text: 'Nice view.', translation: '风景真美。' }, { authorKey: 'b', text: '멋진 풍경이에요.', translation: '景色很漂亮。' }];
+  const accounts = [{ key: 'a', name: '山风', handle: 'wind', language: '英语' }, { key: 'b', name: '湖畔', handle: 'lake', language: '韩语' }];
+  const feed = () => ({ accounts, posts: [{ key: 'p', authorKey: 'a', text: '湖畔。', comments: foreign }, { key: 'q', authorKey: 'b', text: '山间。', comments: [{ authorKey: 'a', text: '真好。' }, { authorKey: 'b', text: '🙂' }] }] });
+  h.completion = { choices: [{ message: { content: JSON.stringify(feed()) } }] };
+  for (const [field, action] of [['feedIds', () => service.refresh()], ['followingFeedIds', () => service.refreshFollowing()]]) {
+    const before = h.modelRequests.length; await action(); assert.equal(h.modelRequests.length, before + 1);
+    assert.match(h.modelRequests.at(-1).body.messages[0].content, /"comments":\[\{[^}]*"translation":/);
+    const data = store.read().liangshi, batch = data[field].map(id => data.posts.find(post => post.id === id));
+    assert.deepEqual(batch.find(p => p.text === '湖畔。').comments.map(c => c.translation), ['风景真美。', '景色很漂亮。']);
+  }
+  h.completion = { choices: [{ message: { content: JSON.stringify({ topics: [{ name: '湖边散步', description: '公开日常' }] }) } }] }; await service.refreshHot();
+  h.completion = { choices: [{ message: { content: JSON.stringify(feed()) } }] }; const requests = h.modelRequests.length, topicId = store.read().liangshi.topics[0].id, topicBatch = await service.loadTopic(topicId); assert.equal(h.modelRequests.length, requests + 1);
+  assert.match(h.modelRequests.at(-1).body.messages[0].content, /"comments":\[\{[^}]*"translation":/);
+  assert.deepEqual(topicBatch.map(post => post.id), store.read().liangshi.topics.find(topic => topic.id === topicId).postIds);
+  const post = topicBatch.find(p => p.text === '湖畔。'); assert.deepEqual(post.comments.map(c => c.translation), ['风景真美。', '景色很漂亮。']);
+  h.completion = { choices: [{ message: { content: JSON.stringify({ accounts, comments: [...foreign, { authorKey: 'a', text: '收到了。' }, { authorKey: 'b', text: '✨' }], reposts: [{ authorKey: 'a', text: 'A quiet afternoon.', translation: '安静的午后。' }, { authorKey: 'b', text: '조용한 오후예요.', translation: '这是宁静的午后。' }] }) } }] };
+  const before = h.modelRequests.length; await service.loadMore(post.id); assert.equal(h.modelRequests.length, before + 1);
+  const system = h.modelRequests.at(-1).body.messages[0].content; assert.match(system, /"comments":\[\{[^}]*"translation":/); assert.match(system, /"reposts":\[\{[^}]*"translation":/);
+  const saved = service.getPost(post.id); assert.deepEqual(saved.comments.slice(-4).map(c => c.translation), ['风景真美。', '景色很漂亮。', undefined, undefined]); assert.deepEqual(saved.reposts.map(c => c.translation), ['安静的午后。', '这是宁静的午后。']);
+});
 
 test('old chat and card presets stay empty until the public feed is manually refreshed', () => {
   const { h, store, contextReader, modelClient } = setup();
@@ -41,7 +64,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: one public reques
   assert.ok(saved.accounts.every(account => account.avatar.startsWith('data:image/svg+xml') && account.followed !== true));
   const translated = saved.posts.find(post => post.text === '今日は休み。'); assert.equal(translated.translation, '今天休息。');
   assert.equal(saved.posts[0].comments[0].translation, '真好。');
-  assert.deepEqual(store.read(), { ...initial, liangshi: saved }); assert.deepEqual(h.persistedMetadata, { foreign: 'keep', pocketPhone: store.read() });
+  const { notifications, ...contentState } = store.read(); assert.deepEqual(contentState, { ...initial, liangshi: saved }); assert.equal(notifications.items[0].kind, 'liangshi-feed'); assert.deepEqual(h.persistedMetadata, { foreign: 'keep', pocketPhone: store.read() });
   const payload = JSON.parse(h.modelRequests[0].body.messages[1].content);
   assert.equal(JSON.stringify(payload.phoneContext || []).includes('不公开短信'),false); assert.ok(JSON.stringify(payload.knownContacts.find(row=>row.id==='private-person').phoneContext).includes('不公开短信')); assert.equal(JSON.stringify({...payload,knownContacts:[]}).includes('不公开用户'),false);
   assert.ok(scans[0].includes('微博'));assert.equal(scans[0].includes('城市广场'),true);

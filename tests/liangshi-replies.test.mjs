@@ -19,6 +19,15 @@ function setup() {
 }
 const response = (id, body = 'AI回应') => ({ accounts: [{ key: 'new', name: '林间风', handle: 'lin' }], comments: [{ authorKey: 'new', replyToId: id, text: body }] });
 
+test('generated and regenerated responses keep each English/Korean translation in the original single batch', async () => {
+  const f = setup(), own = await f.service.publishReply('p', { replyToId: 'c1', text: '周末见。' });
+  const payload = (en, ko) => ({ accounts: [{ key: 'a', name: '林间风', handle: 'lin' }, { key: 'b', name: '纸盒', handle: 'box' }], comments: [{ authorKey: 'a', replyToId: own.id, text: en ? 'See you soon.' : 'See you there.', translation: en ? '待会儿见。' : '到时候见。' }, { authorKey: 'b', replyToId: own.id, text: ko ? '또 만나요.' : '거기서 만나요.', translation: ko ? '下次见。' : '在那里见。' }, { authorKey: 'a', replyToId: own.id, text: '收到。' }, { authorKey: 'b', replyToId: own.id, text: '✨' }] });
+  f.answer(payload(false, false)); await f.service.generateReplies('p'); assert.equal(f.calls.length, 1); assert.equal(f.h.metadataSaves, 2); assert.match(f.calls[0].system, /"comments":\[\{[^}]*"translation":/);
+  assert.deepEqual(f.post().comments.slice(-4).map(c => c.translation), ['到时候见。', '在那里见。', undefined, undefined]);
+  f.answer(payload(true, true)); await f.service.generateReplies('p', { regenerate: true }); assert.equal(f.calls.length, 2); assert.equal(f.h.metadataSaves, 3); assert.match(f.calls[1].system, /"comments":\[\{[^}]*"translation":/);
+  assert.deepEqual(f.post().comments.slice(-4).map(c => c.translation), ['待会儿见。', '下次见。', undefined, undefined]);
+});
+
 test('manual replies use the profile account, save once each, then generate one batch for only pending replies', async () => {
   const f = setup(); assert.equal(typeof f.service.publishReply, 'function');
   const a = await f.service.publishReply('p', { replyToId: 'c1', text: '对，就是它。' });

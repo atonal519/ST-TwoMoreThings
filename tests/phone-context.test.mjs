@@ -18,7 +18,7 @@ const past = { key: '[-1]', label: '此前' };
 const message = (id, text, extra = {}) => ({ id, role: 'assistant', text, batch: past, storyDate: '2031/4/8', timeLabel: '09:00', ...extra });
 const lsPost = (id, authorId, text, extra = {}) => ({ id, authorId, text, comments: [], reposts: [], publishedAt: '2031/4/8 09:00', ...extra });
 function setup(hostKind = 'native') {
-  const h = createHarness({ hostKind, messages: [{ is_user: false, mes: '普通场景。<!-- SDC-end | date=2031/4/8 | time=10:00 -->' }], settings: { 'schedule-planner': { apiPresets: [{ id: 'p', url: 'https://fixture.invalid/v1', key: 'mock', model: 'model' }] } }, metadata: { pocketPhone: {
+  const h = createHarness({ hostKind, messages: [{ is_user: false, mes: '普通场景。<!-- SDC-end | date=2031/4/8 | time=10:00 -->' }], settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'p'}}, 'schedule-planner': { apiPresets: [{ id: 'p', url: 'https://fixture.invalid/v1', key: 'mock', model: 'model' }] } }, metadata: { pocketPhone: {
     contacts: [{ id: 'a', name: '甲', expression: '简短' }, { id: 'b', name: '乙' }, { id: 'c', name: '丙' }],
     groups: [{ id: 'ab', name: '甲乙群', memberIds: ['a', 'b'], userIsMember: true }, { id: 'ac', name: '甲丙群', memberIds: ['a', 'c'], userIsMember: false }],
     conversations: { a: [message('a1', 'PRIVATE_A'), message('a2', 'ACTIVE_A')], b: [message('b1', 'PRIVATE_B')],

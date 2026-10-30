@@ -17,7 +17,7 @@ async function setup(count = 15, bridge = null) {
   const h = createHarness({
     metadata: { foreign: { keep: true } },
     messages: [{ name: '林舟', mes: '午后正在街边散步。<!-- QQJ-end | date=2026年10月19日 | weekday=周一 | time=14:20 -->' }],
-    settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } },
+    settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test', model: 'm' }] } },
   });
   const store = createPhoneStore({ target: h.host.captureChat() });
   await store.upsertContacts(Array.from({ length: count }, (_, i) => ({ id: `friend-${i}`, name: `朋友${i}`, nickname: `昵称${i}`, personality: '随和',
@@ -39,6 +39,32 @@ async function setup(count = 15, bridge = null) {
   return { h, store, create, service: create() };
 }
 
+test('feed and author initial comments each request and preserve English/Korean translations in their one original call', async () => {
+  const { h, store, service } = await setup(1);
+  const comments = [{ name: '读者甲', text: 'Lovely light.', translation: '光线真美。' }, { name: '读者乙', text: '빛이 좋아요.', translation: '光线很好。' }];
+  h.completion = (_path, init) => { const input = JSON.parse(JSON.parse(init.body).messages[1].content); return { choices: [{ message: { content: photoReply({ posts: [{ authorId: input.authors[0].id, text: '窗边一景。', publishedAt: input.task === 'feed' ? '2026-10-18 12:00' : '2026-10-17 12:00', comments }] }) } }] }; };
+  const saves = h.metadataSaves;
+  await service.refresh(); const authorId = store.read().social.posts[0].authorId;
+  await service.generateAuthor(authorId);
+  assert.equal(h.modelRequests.length, 2); assert.equal(h.metadataSaves, saves + 2);
+  for (const request of h.modelRequests) assert.match(request.body.messages[0].content, /"comments":\[\{[^}]*"translation":/);
+  for (const post of store.read().social.posts) {
+    assert.deepEqual(post.comments.map(({ text, translation }) => [text, translation]), [['Lovely light.', '光线真美。'], ['빛이 좋아요.', '光线很好。']]);
+  }
+});
+
+test('one Ins comment response translates each foreign reply without a separate translation request', async () => {
+  const { h, store, service } = await setup(1); await service.refresh(); const post = store.read().social.posts[0], saves = h.metadataSaves;
+  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [{ name: '甲', text: 'See you there.', translation: '到时候见。' }, { name: '乙', text: '거기서 만나요.', translation: '在那里见。' }, { name: '丙', text: '好呀。' }] }) } }] };
+  await service.comment(post.id, '真想去看看。');
+  assert.equal(h.modelRequests.length, 2); assert.equal(h.metadataSaves, saves + 2);
+  assert.match(h.modelRequests[1].body.messages[0].content, /"comments":\[\{[^}]*"translation":/);
+  assert.deepEqual(store.read().social.posts.find(p => p.id === post.id).comments.slice(-3).map(({ text, translation }) => [text, translation]), [['See you there.', '到时候见。'], ['거기서 만나요.', '在那里见。'], ['好呀。', undefined]]);
+  h.completion = { choices: [{ message: { content: JSON.stringify({ comments: [{ name: '丙', text: '下次见。' }, { name: '丁', text: '✨' }] }) } }] };
+  await service.comment(post.id, '下次再聊。'); assert.equal(h.modelRequests.length, 3); assert.equal(h.metadataSaves, saves + 4);
+  assert.deepEqual(store.read().social.posts.find(p => p.id === post.id).comments.slice(-2).map(({ text, translation }) => [text, translation]), [['下次见。', undefined], ['✨', undefined]]);
+});
+
 test('feed chooses fifteen friends, replaces the previous batch and its profile history, and preserves other metadata', async () => {
   const { h, store, service } = await setup(17);
   const before = h.metadataSaves;
@@ -50,7 +76,7 @@ test('feed chooses fifteen friends, replaces the previous batch and its profile 
   assert.equal(h.modelRequests.length, 1);
   assert.equal(h.metadataSaves, before + 1);
   assert.ok(h.modelRequests[0].body.messages[0].content.includes('两者均省略译文字段'));
-  assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"translation":'));
+  assert.match(h.modelRequests[0].body.messages[0].content, /"comments":\[\{[^}]*"translation":/, '初始评论对象明确条件译文字段');
   assert.equal(JSON.parse(h.modelRequests[0].body.messages[1].content).authors.length, 15);
   assert.equal(first[0].publishedAt, '2026-10-19 14:10');
   assert.equal(first[0].batch.clock.time, '14:20', '生成卡口不随发布时间移动');
@@ -198,7 +224,7 @@ test('replacement public feed omits its prior draft and private SMS while keepin
   assert.equal(input.story[0].text, '午后正在街边散步。'); assert.ok(input.character.includes('普通城市')); assert.equal(input.worldbook, 'FIXED_WORLD');
   assert.equal(input.clock.time, '14:20');
   assert.equal(store.read().social.posts.length, 15); assert.ok(store.read().social.posts.every(post => post.text === (post.authorId === 'friend-0' ? 'B_OLD_CAPTION' : 'B_OLD_CAPTION.')));
-  assert.equal(store.read().conversations['friend-0'].filter(message => message.text === 'SAVED_PROACTIVE_SMS').length, 2);
+  assert.equal(store.read().conversations['friend-0'].filter(message => message.text === 'SAVED_PROACTIVE_SMS').length, 0);
   assert.equal('todos' in store.read(), false);
   const beforeMore = h.metadataSaves;
   await service.generateAuthor('friend-0');
@@ -343,7 +369,7 @@ test('shared social context stays public and each author keeps only its own priv
   assert.equal(input.authors.filter(author => author.id !== 'friend-0').some(author => JSON.stringify(author).includes('不应进入动态的私信')), false);
 });
 
-test('comment uses one model call after publishing the user comment, then saves replies and unread SMS together', async () => {
+test('comment uses one model call after publishing the user comment and ignores retired SMS fields while saving replies', async () => {
   const { h, store, service } = await setup(2);
   await service.refresh();
   const post = store.read().social.posts[0];
@@ -355,13 +381,15 @@ test('comment uses one model call after publishing the user comment, then saves 
       { authorId: 'friend-0', text: '私も行きたい。', translation: '我也想去。' },
       { authorId: 'invented', text: '不应保存。' },
     ],
-    proactiveMessages: [{ contactId: post.authorId, messages: [{ text: '你刚才的留言我看到了。' }] }],
+    proactiveMessages: [{ contactId: post.authorId, messages: [{ text: '你刚才的留言我看到了。' }, { type: 'image', image: { description: '退役渠道照片。' } }] }],
+    proactive: [{ contactId: 'friend-0', messages: [{ text: '旧别名也不发送。' }] }],
   }) } }] };
   const before = h.metadataSaves;
   const result = await service.comment(post.id, '我也喜欢这里。');
   assert.equal(h.modelRequests.length, 2);
   assert.ok(h.modelRequests[1].body.messages[0].content.includes('两者均省略译文字段'));
-  assert.ok(!h.modelRequests[1].body.messages[0].content.includes('"translation":'));
+  assert.match(h.modelRequests[1].body.messages[0].content, /"comments":\[\{[^}]*"translation":/, '逐条回应对象明确条件译文字段');
+  assert.doesNotMatch(h.modelRequests[1].body.messages[0].content, /proactiveMessages|主动短信/);
   assert.equal(h.metadataSaves, before + 2);
   const saved = store.read().social.posts.find(item => item.id === post.id);
   assert.equal(saved.commentsCount, 6, 'virtual count 3 plus user comment and two accepted replies');
@@ -370,9 +398,8 @@ test('comment uses one model call after publishing the user comment, then saves 
     { name: '昵称1', text: '看到啦。', authorId: 'friend-1' },
     { name: '昵称0', text: '私も行きたい。', translation: '我也想去。', authorId: 'friend-0' },
   ]);
-  assert.equal(store.read().conversations[post.authorId].length, 1);
-  assert.equal(store.read().conversations[post.authorId][0].read, false);
-  assert.equal('translation' in store.read().conversations[post.authorId][0], false);
+  assert.deepEqual(store.read().conversations, {});
+  assert.ok(store.read().notifications.items.every(item => item.kind !== 'message'));
   assert.equal(result.id, post.id);
   const userComment = saved.comments.at(-3);
   assert.ok(userComment.id);
@@ -453,31 +480,35 @@ test('only actual new comment replies create unread notifications and reading ke
   assert.deepEqual(unreadSocialReplies(store.read()), []);
 });
 
-test('historical author generation ignores optional proactive messages', async () => {
+test('historical author generation ignores retired text, image and alias SMS fields', async () => {
   const { h, store, service } = await setup(1);
   await service.refresh();
   const authorId = store.read().social.posts[0].authorId;
-  h.completion = { choices: [{ message: { content: photoReply({ posts: [{ authorId, text: '旧日常。' }], proactiveMessages: [{ contactId: authorId, messages: [{ text: '不应发出。' }] }] }) } }] };
+  h.completion = { choices: [{ message: { content: photoReply({ posts: [{ authorId, text: '旧日常。' }], proactiveMessages: [{ contactId: authorId, messages: [{ text: '不应发出。' }, { type: 'image', image: { description: '不应发的旧照片。' } }] }], proactive: [{ contactId: authorId, messages: [{ text: '旧别名不应发出。' }] }] }) } }] };
   await service.generateAuthor(authorId);
   assert.equal(store.read().conversations[authorId], undefined);
+  assert.equal(h.modelRequests.length, 2);
+  assert.ok(store.read().social.posts.some(post => post.text === '旧日常。'));
+  assert.doesNotMatch(h.modelRequests[1].body.messages[0].content, /proactiveMessages|主动短信/);
 });
 
-test('feed accepts proactive text only once and rejects a contact not present in returned posts', async () => {
+test('feed preserves existing SMS and ignores retired text, image and alias fields in its original save', async () => {
   const { h, store, service } = await setup(2);
+  await store.appendMessage('friend-0', { id: 'existing', role: 'assistant', text: '原有短信。', read: true });
+  const conversations = structuredClone(store.read().conversations), before = h.metadataSaves;
   h.completion = { choices: [{ message: { content: photoReply({ posts: [{ authorId: 'friend-0', text: '新动态。' }], proactiveMessages: [
     { contactId: 'friend-1', messages: [{ text: '不应因为未出现在动态中而发送。' }] },
-    { contactId: 'friend-0', messages: [{ text: 'あとで写真を送るね。', translation: '晚点把照片发给你。' }] },
-  ] }) } }] };
+    { contactId: 'friend-0', messages: [{ text: 'あとで写真を送るね。', translation: '晚点把照片发给你。' }, { type: 'image', image: { description: '退役的图片短信。' } }] },
+  ], proactive: [{ contactId: 'friend-0', messages: [{ text: '旧别名不发。' }] }] }) } }] };
   await service.refresh();
   assert.equal(h.modelRequests.length, 1);
-  assert.equal(store.read().conversations['friend-0'].length, 1);
-  assert.equal(store.read().conversations['friend-0'][0].text, 'あとで写真を送るね。');
-  assert.equal(store.read().conversations['friend-0'][0].translation, '晚点把照片发给你。');
-  assert.equal(store.read().conversations['friend-1'], undefined);
+  assert.equal(h.metadataSaves, before + 1);
+  assert.deepEqual(store.read().conversations, conversations);
+  assert.doesNotMatch(h.modelRequests[0].body.messages[0].content, /proactiveMessages|主动短信/);
+  const saved = structuredClone(store.read());
   h.saveFailure = new Error('save failed');
   await assert.rejects(service.refresh());
-  assert.equal(store.read().social.posts[0].text, '新动态。');
-  assert.equal(store.read().conversations['friend-0'].length, 1, 'failed replacement keeps the existing post and SMS together');
+  assert.deepEqual(store.read(), saved, 'failed replacement preserves its original content and existing SMS');
 });
 
 test('comment supplies saved publication and photo context and can answer an anonymous commenter by exact name', async () => {
@@ -504,7 +535,7 @@ test('comment with an explicit empty comments array still saves the user comment
   assert.equal(store.read().social.posts.find(item => item.id === post.id).comments.at(-1).text, '今天也来看看。');
 });
 
-test('an identified existing commenter can send a private SMS without adding a public reply', async () => {
+test('an empty comment response cannot use a retired alias to send a private SMS', async () => {
   const { h, store, service } = await setup(2);
   await service.refresh();
   const post = store.read().social.posts.find(item => item.authorId === 'friend-1');
@@ -512,14 +543,13 @@ test('an identified existing commenter can send a private SMS without adding a p
     ? { ...item, comments: [{ authorId: 'friend-0', name: '昵称0', text: '那家书店不错。' }] } : item) }));
   await store.appendMessage('friend-0', { id: 'existing', role: 'user', text: '保留原短信。' });
   h.completion = { choices: [{ message: { content: photoReply({ comments: [],
-    proactiveMessages: [{ contactId: 'friend-0', messages: [{ text: '我私下把地址发给你。' }] }],
+    proactive: [{ contactId: 'friend-0', messages: [{ text: '我私下把地址发给你。' }, { type: 'image', image: { description: '不应发送的图片。' } }] }],
   }) } }] };
   const before = h.metadataSaves, calls = h.modelRequests.length;
   await service.comment(post.id, '在哪儿？');
-  assert.equal(h.metadataSaves, before + 2);
+  assert.equal(h.metadataSaves, before + 1, 'only the user comment changes content when no reply is returned');
   assert.equal(h.modelRequests.length, calls + 1);
-  assert.deepEqual(store.read().conversations['friend-0'].map(item => item.text), ['保留原短信。', '我私下把地址发给你。']);
-  assert.equal(store.read().conversations['friend-0'].at(-1).read, false);
+  assert.deepEqual(store.read().conversations['friend-0'].map(item => item.text), ['保留原短信。']);
   assert.equal(store.read().social.posts.find(item => item.id === post.id).comments.at(-1).text, '在哪儿？');
 });
 

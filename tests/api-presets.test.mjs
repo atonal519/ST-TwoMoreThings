@@ -74,3 +74,31 @@ test('all three mutations restore the previous shared pool and local selection w
     assert.equal(typeof api[method], 'function'); await assert.rejects(api[method](...args), /保存失败|删除失败/); assert.deepEqual(settings, old);
   }
 });
+
+for (const embedded of [false,true]) test(`modal create does not bind or borrow keys, captured edit keeps original target and local-model ownership (${embedded})`,async()=>{
+ const {settings,api,h,key}=setup('native',embedded),before=structuredClone(settings),ref={kind:'shared-preset',presetId:'a'};
+ assert.equal(typeof api.createPreset,'function');
+ await assert.rejects(api.createPreset({url:'https://new.invalid',key:'',model:'new'},'新增'),/密钥|连接/);assert.equal(h.settingsSaves,0);
+ const created=await api.createPreset({url:'https://new.invalid',key:'new-key',model:'new'},' 新连接 ');
+ assert.deepEqual(settings[key],before[key]);assert.deepEqual(settings[embedded?'pocketPhone':'twoMoreThingsEmbedded'],before[embedded?'pocketPhone':'twoMoreThingsEmbedded']);assert.equal(settings['schedule-planner'].apiPresetActiveId,'a');
+ assert.equal(api.listSources().find(p=>p.ref.presetId===created.presetId).label,'新连接');
+ await api.saveCurrent({url:'https://edited.invalid',key:'',model:'edited-local'},ref,'已改名称');
+ assert.equal(settings['schedule-planner'].apiPresets.find(p=>p.id==='a').name,'已改名称');assert.equal(settings['schedule-planner'].apiPresets.find(p=>p.id==='a').model,'shared-default');assert.equal(settings[key].apiModel,'edited-local');
+ await api.select(created);const local=structuredClone(settings[key]);
+ await api.saveCurrent({url:'https://old-target.invalid',key:'',model:'must-not-rebind'},ref,'旧目标仍编辑');
+ assert.deepEqual(settings[key],local);assert.equal(settings['schedule-planner'].apiPresets.find(p=>p.id==='a').url,'https://old-target.invalid/v1');
+ settings['schedule-planner'].apiPresets=settings['schedule-planner'].apiPresets.filter(p=>p.id!=='a');await assert.rejects(api.saveCurrent({url:'https://stale.invalid',key:'key',model:'m'},ref,'不可复活'),/不存在/);
+});
+
+test('modal mutation failure restores only owned fields and preserves concurrent pool/instance changes',async()=>{
+ const {settings,api,h,key}=setup();h.host.saveSettings=async()=>{const p=settings['schedule-planner'].apiPresets.find(p=>p.id==='a');p.name='外部名称';p.unknown={late:true};settings['schedule-planner'].apiPresets.push({id:'other',name:'外部新增'});settings[key].fabShow=true;throw Error('offline');};
+ await assert.rejects(api.saveCurrent({url:'https://draft.invalid',key:'',model:'draft'},api.getSelected(),'本轮名称'),/保存失败/);
+ const p=settings['schedule-planner'].apiPresets.find(p=>p.id==='a');assert.equal(p.url,'https://a.invalid/v1');assert.equal(p.name,'外部名称');assert.deepEqual(p.unknown,{late:true});assert.equal(settings[key].apiModel,'native-custom');assert.equal(settings[key].fabShow,true);assert.ok(settings['schedule-planner'].apiPresets.some(p=>p.id==='other'));
+});
+
+test('the first global connection stays unselected after fresh service reads until an explicit choice',async()=>{
+ const settings={pocketPhone:{apiModel:'previous-local'}},h=createHarness({settings}),api=createApiSettings({host:h.host});assert.equal(api.getSelected(),null);
+ const created=await api.createPreset({url:'https://first.invalid',key:'first-key',model:'first-model'},'首套连接');
+ assert.deepEqual(settings.pocketPhone,{apiModel:'previous-local'});assert.equal(api.getSelected(),null);assert.equal(createApiSettings({host:h.host}).getSelected(),null);assert.throws(api.resolve,/选择|连接/);
+ await api.select(created);assert.equal(api.resolve().key,'first-key');assert.equal(api.resolve().model,'first-model');
+});

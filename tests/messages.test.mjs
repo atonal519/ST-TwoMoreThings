@@ -7,7 +7,7 @@ import { createContextReader } from '../src/context.js';
 import { createMessageService } from '../src/messages.js';
 
 export async function serviceHarness(options = {}) {
-  const h = createHarness({ settings: { 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test-key', model: 'm' }] } }, ...options });
+  const h = createHarness({ settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test-key', model: 'm' }] } }, ...options });
   const target = h.host.captureChat();
   const store = createPhoneStore({ target });
   await store.upsertContacts([{ id: 'lin', name: '林舟', personality: '温和', expression: '说话简短' }]);
@@ -15,6 +15,53 @@ export async function serviceHarness(options = {}) {
   const modelClient = createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) });
   return { h, target, store, reader, modelClient, service: createMessageService({ target, store, contextReader: reader, modelClient }) };
 }
+
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: a normal private reply creates and updates only that contact's remark in its original request and save`, async () => {
+  const { h, target, store, service } = await serviceHarness({ hostKind, completion: { choices: [{ message: { content: JSON.stringify({ messages: [{ text: '书给你留好了。' }], remarkForUser: '  书友 📚  ' }) } }] } });
+  const before = h.metadataSaves;
+  await service.continueChat('lin');
+  assert.equal(h.modelRequests.length, 1);
+  assert.equal(h.metadataSaves, before + 1);
+  assert.equal(store.read().contacts[0].remarkForUser, '书友 📚');
+  assert.equal(h.persistedMetadata.pocketPhone.contacts[0].remarkForUser, '书友 📚');
+  assert.equal(store.read().conversations.lin.at(-1).text, '书给你留好了。');
+  assert.equal(createPhoneStore({ target }).read().contacts[0].remarkForUser, '书友 📚');
+  h.completion = { choices: [{ message: { content: JSON.stringify({ messages: [{ text: '下周也一起逛。' }], remarkForUser: '周末逛书店搭子' }) } }] };
+  await service.continueChat('lin');
+  assert.equal(JSON.parse(h.modelRequests[1].body.messages[1].content).contact.remarkForUser, '书友 📚');
+  assert.equal(store.read().contacts[0].remarkForUser, '周末逛书店搭子');
+  assert.equal(h.modelRequests.length, 2);
+  assert.equal(h.metadataSaves, before + 2);
+});
+
+test('missing, blank or invalid private reply remarks preserve the old remark while saving usable messages', async () => {
+  for (const remarkForUser of [undefined, '', '   ', null, 12, { text: '不能转成字符串' }]) {
+    const { h, store, service } = await serviceHarness({ metadata: { pocketPhone: { contacts: [{ id: 'lin', name: '林舟', remarkForUser: '旧备注' }], conversations: {} } }, completion: { choices: [{ message: { content: JSON.stringify({ messages: [{ text: '收到。' }], remarkForUser }) } }] } });
+    const before = h.metadataSaves;
+    await service.continueChat('lin');
+    assert.equal(store.read().contacts[0].remarkForUser, '旧备注');
+    assert.equal(store.read().conversations.lin.at(-1).text, '收到。');
+    assert.equal(h.metadataSaves, before + 1); assert.equal(h.modelRequests.length, 1);
+  }
+});
+
+test('a failed reply save preserves both the old remark and the original messages', async () => {
+  const { h, store, service } = await serviceHarness({ metadata: { pocketPhone: { contacts: [{ id: 'lin', name: '林舟', remarkForUser: '旧备注' }], conversations: { lin: [{ id: 'original', role: 'user', text: '保留这条。' }] } } }, completion: { choices: [{ message: { content: '{"messages":[{"text":"新回复"}],"remarkForUser":"新备注"}' } }] } });
+  const before = structuredClone(store.read()); h.saveFailure = new Error('模拟保存失败');
+  await assert.rejects(service.continueChat('lin'), /保存失败/);
+  assert.deepEqual(store.read(), before); assert.equal(h.modelRequests.length, 1);
+});
+
+test('a transfer-action-only private reply saves its remark with the existing transfer save', async () => {
+  const { h, store, service } = await serviceHarness();
+  await service.sendCard('lin', { type: 'transfer', transfer: { amount: '8', currency: 'CNY' } });
+  const transferId = store.read().conversations.lin[0].id, before = h.metadataSaves;
+  h.completion = { choices: [{ message: { content: JSON.stringify({ messages: [], transferActions: [{ transferId, status: 'accepted' }], remarkForUser: '一起买书的人' }) } }] };
+  assert.deepEqual(await service.continueChat('lin'), []);
+  assert.equal(store.read().conversations.lin[0].transfer.status, 'accepted');
+  assert.equal(store.read().contacts[0].remarkForUser, '一起买书的人');
+  assert.equal(h.metadataSaves, before + 1); assert.equal(h.modelRequests.length, 1);
+});
 
 test('send and continue are separate and do not write any main floor', async () => {
   const main = [{ mes: '约好今晚去书店。', is_user: false }];

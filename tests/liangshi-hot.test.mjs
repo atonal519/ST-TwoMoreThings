@@ -10,7 +10,7 @@ const state = liangshi => ({ schemaVersion:1, contacts:[], groups:[], conversati
 const account = {id:'a',name:'旧作者',handle:'old',avatar:'KEEP_AVATAR'};
 const oldPost = {id:'old',authorId:'a',text:'OLD_POST_SENTINEL',topic:'同名话题',publishedAt:'2031/4/8 09:00',image:{description:'OLD_IMAGE_SENTINEL',path:'/user/images/old.png'},comments:[],reposts:[],userLiked:true};
 function setup(initial, hostKind='native') {
- const h=createHarness({hostKind,metadata:{pocketPhone:state(initial)},settings:{'schedule-planner':{apiPresets:[{id:'test',url:'https://fixture.invalid',key:'mock',model:'m'}]}},messages:[{is_user:false,mes:'LATEST_STORY_SENTINEL<!-- QQJ-end | date=2031/4/8 | time=13:00 -->'}]});
+ const h=createHarness({hostKind,metadata:{pocketPhone:state(initial)},settings:{pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner':{apiPresets:[{id:'test',url:'https://fixture.invalid',key:'mock',model:'m'}]}},messages:[{is_user:false,mes:'LATEST_STORY_SENTINEL<!-- QQJ-end | date=2031/4/8 | time=13:00 -->'}]});
  const target=h.host.captureChat(),removed=[],store=createPhoneStore({target,removeImages:async paths=>removed.push(...paths)}),reader=createContextReader({target,store,qqjBridgeProvider:()=>{throw Error('no private memory')} ,wrapperSettingsProvider:()=>({})});
  const modelClient=createModelClient({host:h.host,sourceProvider:createApiSettings({host:h.host})}),service=implementation.createLiangshiService({store,contextReader:reader,modelClient,random:()=>0});
  const inputs=[];let answer;
@@ -51,14 +51,14 @@ for(const kind of ['native','luker'])test(`${kind}: independent hot and topic re
  assert.equal(h.modelRequests.length,4);assert.deepEqual(h.persistedMetadata.pocketPhone,store.read());
 });
 
-test('square and hot replacement retain cross-page quote dependencies and clean only discarded files/authors',async()=>{
+test('square and hot replacement retain quote dependencies and photos while removing unused authors',async()=>{
  const hotPost={id:'hot',authorId:'hot-author',text:'HOT_BODY',quoteId:'old',image:{description:'河边',path:'/user/images/hot.png'},comments:[{authorId:'interactor',text:'互动'}],reposts:[],userLiked:true};
  const {store,service,answer,removed,inputs}=setup({accounts:[account,{id:'hot-author',name:'热榜作者'},{id:'interactor',name:'互动者'}],posts:[oldPost,hotPost],feedIds:['old'],topics:[{id:'topic',name:'独立话题',description:'摘要',postIds:['hot']}],promoCountdown:3});
  answer(batch('SQUARE'));await service.refresh();const data=store.read().liangshi;
  assert.equal(inputs[0].recipe.topics,undefined);assert.ok(!data.feedIds.includes('hot'));assert.equal(data.feedIds.length,2);assert.equal(service.getPost('hot').userLiked,true);assert.equal(service.getPost('old').image.path,'/user/images/old.png');
  assert.ok(data.accounts.some(item=>item.id==='interactor'));assert.deepEqual(removed,[]);
  answer({topics:[{name:'新热榜',description:'简短摘要'}]});await service.refreshHot();
- assert.equal(service.getPost('hot'),undefined);assert.equal(service.getPost('old'),undefined);assert.deepEqual(new Set(removed),new Set(['/user/images/old.png','/user/images/hot.png']));
+ assert.equal(service.getPost('hot'),undefined);assert.equal(service.getPost('old'),undefined);assert.deepEqual(removed,[]);for(const path of ['/user/images/old.png','/user/images/hot.png'])assert.ok(store.read().albumPhotos.some(photo=>photo.path===path));
  assert.ok(store.read().liangshi.accounts.every(item=>!['a','hot-author','interactor'].includes(item.id)));assert.equal(implementation.readLiangshiFeed(store.read().liangshi).length,2);
 });
 

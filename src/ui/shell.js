@@ -26,7 +26,7 @@ export function renderShell({ content, view, enabled, weather, feedback, photo, 
     ${action('close', '关闭手机', 'phone-close', 'icon-button close-button lock-close')}` : renderNavigation(view, enabled)}
   </footer>`;
 
-  return `${renderStatusBar()}
+  return `${renderStatusBar({ notificationsEnabled: enabled && !conflict && !photo })}
     <main class="phone-main view-${view}${themed ? lockStyle === 'rounded' ? ' is-rounded' : ' is-stacked' : locked ? ' is-classic' : ''}">${content}${locked ? footer : ''}</main>
     ${conflict ? '' : renderFeedback(feedback)}
     ${settingsVersion}

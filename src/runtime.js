@@ -28,7 +28,7 @@ import { createEmbeddedUpdates } from './embedded-updates.js';
 import { UPDATE_NOTICE_PATH } from './release.js';
 import { VERSION } from './version.js';
 import { createMemorySources } from './memory-sources.js';
-import { createStorySmsInstaller, syncStorySms } from './story-sms.js';
+import { createStorySmsInstaller, syncStorySms, syncStorySmsTheme } from './story-sms.js';
 export { createPhoneControl, createPhoneImageService };
 
 export function initialize({ mode = 'standalone', host = createHostAdapter({ mode }), documentRef = document, qqjBridgeProvider, preset, coreUrl, release, updateError, replaceCore } = {}) {
@@ -41,12 +41,14 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
   const files = createImageFiles({ host });
   const imageProviders = createImageProviders({ host });
   const appearance = createAppearanceSettings({ host, documentRef });
-  const makeStore = (target, options = {}) => createPhoneStore({ target, initialState, removeImages: files.remove, ...options });
+  const makeStore = (target, options = {}) => createPhoneStore({ target, initialState, ...options });
   let phone, phoneTarget, phoneStore, activeRequests = 0;
+  function syncStoryTheme() { syncStorySmsTheme(documentRef, (host.captureChat().metadata.pocketPhone || initialState)?.theme); }
+  syncStoryTheme();
   const entries = createPhoneEntries({ host, documentRef, open, defaults: preset?.entries,
     isEnabled: () => createPhoneControl({ host, target: host.captureChat() }).isEnabled(),
     toggle: () => phone?.isOpen && phone.isFrontmost ? phone.close() : open() });
-  const unsubscribeEntries = host.onChatChanged?.(entries.refreshVisibility);
+  const unsubscribeEntries = host.onChatChanged?.(() => { syncStoryTheme(); entries.refreshVisibility(); phone?.invalidateAlbum(); phone?.invalidateNotifications(); });
   const onBusyChange = value => { activeRequests += value ? 1 : -1; entries.fab.setBusy(activeRequests > 0); };
   const unsubscribe = host.onBeforeMainGeneration(async (type, _params, dryRun) => {
     if (dryRun || ['quiet', 'impersonate'].includes(type)) return;
@@ -77,6 +79,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
   });
   function open() {
     const target = host.captureChat();
+    syncStorySmsTheme(documentRef, (target.metadata.pocketPhone || initialState)?.theme);
     // 宿主首次加载聊天会替换 metadata 根；重开时让窗口绑定实际载入的档案。
     if (boundTo(target)) {
       phone.open();
@@ -87,7 +90,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
     phoneTarget = target;
     const control = createPhoneControl({ host, target });
     let currentPhone;
-    const store = makeStore(target, { assertEnabled: control.assertEnabled, isReading: id => currentPhone?.isReading(id), onIncomingMessage: id => currentPhone?.notifyMessage(id) });
+    const store = makeStore(target, { assertEnabled: control.assertEnabled, isReading: id => boundTo(host.captureChat()) && currentPhone?.isReading(id), onNotifications: records => { if (boundTo(target) && boundTo(host.captureChat())) currentPhone?.notifyNotifications(records); } });
     phoneStore = store;
     const apiSettings = createApiSettings({ host, onBusyChange });
     const client = createModelClient({ host, sourceProvider: apiSettings, onBusyChange });
@@ -100,7 +103,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
       groups: createGroupService({ target, store, contextReader, modelClient }),
       directory: createDirectoryService({ store, contextReader, modelClient }),
       forum: createForumService({ store, contextReader, modelClient }), apiSettings, calendar, storySmsInstaller: createStorySmsInstaller({ host }),
-      social: createSocialService({ store, contextReader, modelClient, defaultUser: target.user, isReadingPost: id => currentPhone?.isReadingSocial(id) }),
+      social: createSocialService({ store, contextReader, modelClient, defaultUser: target.user, isReadingPost: id => boundTo(host.captureChat()) && currentPhone?.isReadingSocial(id) }),
       liangshi: createLiangshiService({ store, contextReader, modelClient }),
       wallpaper: createWallpaperService({ host, store }), entries, appearance, authoring: createAuthoringService({ host, store, readEntries: entries.read }), mode: host.mode,
       updates, renderUpdateMarkdown, notifyUpdate: notification => {
@@ -110,8 +113,11 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
       },
       control, imageProviders, images: createPhoneImageService({ store, modelClient, files, providers: imageProviders, assertEnabled: control.assertEnabled, onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
       onContextChange: () => host.setPrompt(''),
+      onThemeChange: theme => { if (boundTo(target) && boundTo(host.captureChat())) syncStorySmsTheme(documentRef, theme); },
       onEnable: () => { void synchronizeStory(target, store, currentPhone); },
       onClose: () => entries.focus(),
+      onOpenAlbum: () => { if (!boundTo(host.captureChat())) open(); phone.openAlbum(); },
+      onOpenNotifications: () => { if (!boundTo(host.captureChat())) open(); phone.openNotifications(); },
     });
     phone = currentPhone;
     // 先建立唯一组件，入口连续点击仍复用同一store；保存完成只刷新本组件。

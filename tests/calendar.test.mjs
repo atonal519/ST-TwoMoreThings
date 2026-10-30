@@ -5,6 +5,8 @@ import { createPhoneStore } from '../src/store.js';
 import { createContextReader } from '../src/context.js';
 import { createMessageService } from '../src/messages.js';
 import { createGroupService } from '../src/groups.js';
+import { createCalendarReader } from '../src/calendar.js';
+import { renderCalendar } from '../src/ui/calendar.js';
 
 test('calendar reference reaches private and group generation once, without entering forum context or saving another calendar', async () => {
   const h = createHarness({ messages: [{ is_user: false, mes: '你和林舟谈起明天的新年庆典。' }] });
@@ -36,4 +38,22 @@ test('without Gouhua no calendar reference is fabricated', async () => {
   const reader = createContextReader({ target, store });
   const context = await reader.readForContact(store.read().contacts[0].id);
   assert.ok(!context.calendar);
+});
+
+test('calendar cards label all four date types without adding schedules to the month layout', () => {
+  const calendar = { yearLabel: '城历2026年', monthName: '五月', weekdays: [], leading: 0, columns: 7,
+    days: [{ day: 1, label: '五月一日', items: ['festival', 'birthday', 'anniversary', 'custom'].map((type, i) => ({ id: String(i), name: type, type, date: '五月一日', days: 1 })) }] };
+  const before = structuredClone(calendar), html = renderCalendar({}, { ui: {}, calendar });
+  for (const label of ['节日', '生日', '纪念日', '日程']) assert.ok(html.includes(`<small>${label}</small>`), label);
+  assert.deepEqual(calendar, before);
+});
+
+test('calendar reader forwards the captured chat ID while remaining compatible with event-only v1 providers', () => {
+  const event = { today: '五月一日', events: [{ name: '节日', type: 'festival' }] };
+  let seen;
+  const reader = createCalendarReader({ apiProvider: () => ({ apiVersion: 1, getPhoneCalendarContext(options) { seen = options; return event; }, getPhoneCalendar: () => null }) });
+  assert.equal(reader.context('节日', 'captured-A'), event);
+  assert.deepEqual(seen, { query: '节日', expectedChatId: 'captured-A', includeSchedules: true });
+  assert.equal(reader.month(), null);
+  assert.equal(createCalendarReader({ apiProvider: () => null }).context('节日', 'captured-A'), null);
 });

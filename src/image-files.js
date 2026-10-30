@@ -10,7 +10,7 @@ export function imageSource(value) {
   return path ? path.split('/').map(encodeURIComponent).join('/') : value;
 }
 
-// 只收集当前手机内容引用的生成图，不扫描图库或其他聊天，也不接管头像和背景。
+// 当前聊天的内容与稳定照片引用，不扫描图库，也不接管头像和背景。
 export function contentImagePaths(state) {
   const paths = new Set();
   const add = item => { const path = imagePath(item.image?.path); if (path) paths.add(path); };
@@ -19,6 +19,7 @@ export function contentImagePaths(state) {
     add(post);
     if (app !== state.social) for (const row of [...(post.comments || []), ...(Array.isArray(post.reposts) ? post.reposts : [])]) add(row);
   }
+  for (const photo of state.albumPhotos || []) { const path = imagePath(photo.path); if (path) paths.add(path); }
   return paths;
 }
 

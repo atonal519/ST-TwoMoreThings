@@ -27,7 +27,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: a history batch d
   assert.deepEqual(store.read().conversations.zhou.map(message => message.id), ['other']);
   assert.deepEqual(store.read().conversations.friends.map(message => message.id), ['group']);
   assert.deepEqual([store.read().contacts, store.read().groups], people);
-  assert.deepEqual(removed, ['/user/images/pocket-phone/removed.png']);
+  assert.deepEqual(removed, []); assert.ok(store.read().albumPhotos.some(photo => photo.path === '/user/images/pocket-phone/removed.png'));
   assert.equal(store.read().storySmsImportedFloor, 6);
   await store.importStorySms({ floor: 6, blocks: [{ name: '林舟', sender: '林舟', text: '已删除的主楼导入', index: 0 }], batch: selected });
   assert.deepEqual(h.persistedMetadata.pocketPhone.conversations.lin.map(message => message.id), ['next'], 'opening the same imported floor does not add the deleted messages back');

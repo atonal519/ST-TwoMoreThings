@@ -103,7 +103,7 @@ export function renderAttachments(state, ui, busy, contact, isGroup) {
 export function renderPhotoViewer(photo) {
   return photo ? `<div class="photo-viewer" role="dialog" aria-label="查看图片" aria-modal="true">
     ${action('close-photo', '关闭图片', 'close', 'icon-button')}
-    <img data-phone-image="${escape(photo.path)}" src="${escape(imageSource(photo.path))}" alt="${escape(photo.description)}">
+    <img ${photo.derived ? '' : `data-phone-image="${escape(photo.path)}"`} src="${escape(imageSource(photo.path))}" alt="${escape(photo.description)}">
     <p>${escape(photo.description)}</p>
   </div>` : '';
 }

@@ -4,6 +4,18 @@ import { createCameoAvatar, isCameoAvatar } from '../src/cameo-avatar.js';
 import { createPhoneStore } from '../src/store.js';
 import { createHarness } from './harness.mjs';
 
+test('saving profile fields preserves a newer reply remark and does not copy it across same-owner accounts', async () => {
+  const h = createHarness({ metadata: { pocketPhone: { contacts: [{ id: 'lin', name: '林舟', nickname: '舟', remarkForUser: '旧备注' }, { id: 'alias', name: '别号', identityOwnerId: 'lin', remarkForUser: '别号自己的备注' }], groups: [], conversations: {} } } });
+  const store = createPhoneStore({ target: h.host.captureChat() });
+  const oldDraft = { ...store.read().contacts[0], nickname: '新的公开网名' };
+  await store.appendMessages('lin', [{ id: 'new', role: 'assistant', text: '正常回复' }], { remarkForUser: '最新私有备注' });
+  await store.saveContact('lin', oldDraft);
+  assert.equal(store.read().contacts[0].remarkForUser, '最新私有备注');
+  assert.equal(store.read().contacts[0].nickname, '新的公开网名');
+  assert.equal(store.read().contacts[1].remarkForUser, '别号自己的备注');
+  assert.equal(h.metadataSaves, 2);
+});
+
 for (const hostKind of ['native', 'luker']) test(`preserves foreign metadata and sent messages through ${hostKind} save entry`, async () => {
   const originalMessages = [{ mes: '他们刚约好晚餐。', is_user: false, extra: { foreign: 1 } }];
   const h = createHarness({ hostKind, metadata: { foreign: { keep: '原样' }, integrity: 'test-version' }, messages: originalMessages });
@@ -49,10 +61,12 @@ test('incoming message notices refer only to the messages this operation actuall
   assert.deepEqual(notices, []);
   await Promise.all([
     store.appendMessages('lin', [{ id: 'reply-1', role: 'assistant', text: '来了。' }, { id: 'reply-2', role: 'assistant', text: '晚点见。' }]),
-    store.updateSocial(social => social, { incomingMessages: [{ contactId: 'zhou', messages: [{ id: 'reply-3', role: 'assistant', text: '我也在。' }] }] }),
+    store.appendMessages('zhou', [{ id: 'reply-3', role: 'assistant', text: '我也在。' }]),
   ]);
   assert.deepEqual(notices, ['lin', 'zhou']);
-  await store.updateSocial(social => ({ ...social, feedIds: [] }));
+  const conversations = structuredClone(store.read().conversations);
+  await store.updateSocial(social => ({ ...social, feedIds: [] }), { incomingMessages: [{ contactId: 'zhou', messages: [{ id: 'retired', role: 'assistant', text: '退役渠道不能保存。' }] }] });
+  assert.deepEqual(store.read().conversations, conversations);
   assert.deepEqual(notices, ['lin', 'zhou'], 'a separate social save never repeats another task’s SMS notice');
   h.saveFailure = new Error('保存失败');
   await assert.rejects(store.appendMessage('lin', { id: 'failed', role: 'assistant', text: '没存成。' }));

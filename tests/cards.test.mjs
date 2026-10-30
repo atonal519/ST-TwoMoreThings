@@ -30,7 +30,7 @@ test('social photo generation is explicit, updates the existing post and reuses 
     apiVersion: 1,
     getBackendStatus: () => ({ configured: true, supportsCharacters: true }),
     getCharacters: () => ({ characters: [{ name: '林舟', tag: 'black hair, white shirt', nl: '黑发白衬衫' }] }),
-    generate: async request => { calls.push('draw'); drawings.push(request); return { path: '/images/social-selfie.png', seed: 789 }; },
+    generate: async request => { calls.push('draw'); drawings.push(request); return { path: '/user/images/social-selfie.png', seed: 789 }; },
   }) });
   assert.deepEqual(calls, [], 'creating the service and reading posts do not generate images');
   assert.deepEqual(store.read(), before);
@@ -42,10 +42,12 @@ test('social photo generation is explicit, updates the existing post and reuses 
   assert.deepEqual(drawings[0].characters, [{ name: '林舟', tag: 'black hair, white shirt', nl: '黑发白衬衫' }]);
   assert.equal(drawings[0].save, true);
   const expected = structuredClone(before);
-  Object.assign(expected.social.posts[0].image, { path: '/images/social-selfie.png', seed: 789 });
-  assert.deepEqual(store.read(), expected, 'only the canonical post image changes; feed IDs and other records remain intact');
+  Object.assign(expected.social.posts[0].image, { path: '/user/images/social-selfie.png', seed: 789 });
+  const { albumPhotos, ...content } = store.read();
+  assert.deepEqual(content, expected, 'only the canonical post image changes; feed IDs and other records remain intact');
+  assert.deepEqual(albumPhotos, [{ path: '/user/images/social-selfie.png', description: '我在窗边的自拍', timeLabel: '', dateLabel: '', sources: [{ kind: 'social', id: 'photo-post', label: 'Ins · 舟', publishedAt: '', dateLabel: '', createdAt: '', authorId: 'lin' }] }]);
   assert.deepEqual(result, expected.social.posts[0].image);
-  assert.deepEqual(h.persistedMetadata.pocketPhone, expected);
+  assert.deepEqual(h.persistedMetadata.pocketPhone, { ...expected, albumPhotos });
   assert.equal(h.metadataSaves, saves + 1);
   assert.deepEqual(await service.generatePost('photo-post'), result);
   assert.deepEqual(calls, ['recipe', 'draw'], 'an existing image needs neither prompt preparation nor another drawing');
@@ -65,7 +67,7 @@ test('NPC social photos reject people before drawing and accept an explicit scen
     apiVersion: 1,
     getBackendStatus: () => ({ configured: true, supportsCharacters: true }),
     getCharacters: () => ({ characters: [{ name: '林舟', tag: 'black hair' }] }),
-    generate: async request => { drawings.push(request); return { path: '/images/plant.png', seed: 321 }; },
+    generate: async request => { drawings.push(request); return { path: '/user/images/plant.png', seed: 321 }; },
   }) });
   await assert.rejects(service.generatePost('npc-photo'), /包含人物.*未生成/);
   assert.deepEqual(drawings, []);
@@ -75,7 +77,7 @@ test('NPC social photos reject people before drawing and accept an explicit scen
   await service.generatePost('npc-photo');
   assert.equal(drawings.length, 1);
   assert.deepEqual(drawings[0].characters, []);
-  assert.equal(store.read().social.posts[0].image.path, '/images/plant.png');
+  assert.equal(store.read().social.posts[0].image.path, '/user/images/plant.png');
   assert.deepEqual(store.read().contacts, [], 'a photo does not turn its NPC author into a contact');
   assert.equal(h.metadataSaves, saves + 1);
 });
@@ -109,12 +111,12 @@ test('an explicit empty character list generates and saves a photo without peopl
     apiVersion: 1,
     getBackendStatus: () => ({ configured: true, supportsCharacters: true }),
     getCharacters: () => ({ characters: [] }),
-    generate: async request => { requests.push(request); return { path: '/images/coffee.png', seed: 456 }; },
+    generate: async request => { requests.push(request); return { path: '/user/images/coffee.png', seed: 456 }; },
   }) });
   await service.generate('lin', 'photo');
   assert.deepEqual(requests, [{ prompt: 'coffee, window', nl: '', characters: [], size: 'landscape', save: true }]);
   assert.equal(h.metadataSaves, saves + 1);
-  assert.deepEqual(store.read().conversations.lin[0].image, { description: '窗边的一杯咖啡', path: '/images/coffee.png', seed: 456 });
+  assert.deepEqual(store.read().conversations.lin[0].image, { description: '窗边的一杯咖啡', path: '/user/images/coffee.png', seed: 456 });
 });
 
 test('model message parser keeps sticker, location, transfer and photo semantics without accepting arbitrary sticker URLs', () => {

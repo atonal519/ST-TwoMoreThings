@@ -22,6 +22,21 @@ function setup() {
   return { h, target, store, reader, removed, calls, queries, modelClient, service, answer: value => { answer = value; }, post: () => service.getPost('p') };
 }
 
+test('forum initial and continued foreign floors carry individual translations and preserve old/batch reply targets', async () => {
+  const f = setup();
+  f.answer({ posts: [{ title: '书店', author: '开帖人', content: '聊聊旧书。', comments: [{ author: '甲', text: 'A good place.', translation: '好地方。' }, { author: '乙', text: '좋은 곳이에요.', translation: '是个好地方。' }] }] });
+  await f.service.refresh(); const post = f.store.read().forum.posts[0];
+  assert.match(f.calls[0].system, /"comments":\[\{[^}]*"translation":/);
+  assert.deepEqual(post.comments.map(c => c.translation), ['好地方。', '是个好地方。']);
+  const own = await f.service.publishComment(post.id, { text: '周末去看看。', replyToId: post.comments[0].id });
+  f.answer({ comments: [{ key: 'english', author: '丙', text: 'Enjoy the visit.', translation: '祝你逛得开心。', replyToId: own.id }, { author: '丁', text: '즐겁게 다녀오세요.', translation: '祝你玩得愉快。', replyToId: 'english' }, { author: '戊', text: '周末见。' }, { author: '己', text: '👍' }] });
+  await f.service.loadMore(post.id); assert.equal(f.calls.length, 2); assert.equal(f.h.metadataSaves, 3);
+  assert.match(f.calls[1].system, /"comments":\[\{[^}]*"translation":/);
+  const rows = f.service.getPost(post.id).comments.slice(-4);
+  assert.deepEqual(rows.map(c => [c.text, c.translation]), [['Enjoy the visit.', '祝你逛得开心。'], ['즐겁게 다녀오세요.', '祝你玩得愉快。'], ['周末见。', undefined], ['👍', undefined]]);
+  assert.equal(rows[0].replyToId, own.id); assert.equal(rows[1].replyToId, rows[0].id);
+});
+
 test('anonymous manual comments save once without generation or read-time migration, and publish only anonymous relations', async () => {
   const f = setup(); assert.equal(typeof f.service.publishComment, 'function');
   const before = structuredClone(f.store.read()), post = f.post(); assert.ok(post.comments[0].id); assert.deepEqual(f.store.read(), before); assert.equal(f.h.metadataSaves, 0);
@@ -72,7 +87,7 @@ test('forum pictures are opt-in anonymous scenery and shared image lifecycle sur
   const recipe = JSON.parse(f.calls[1].messages[0].content); for (const marker of ['PRIVATE_PROFILE','PRIVATE_NICK','PRIVATE_LIBRARY_NAME']) assert.equal(JSON.stringify(recipe).includes(marker), false);
   const projection = readPhoneContext(f.store.read(), { publicOnly: true }).find(row => row.source.id === post.id);
   assert.deepEqual(projection.image, { description: '河边的旧长椅' }); assert.equal(JSON.stringify(projection).includes('/user/images/'), false); assert.equal('personId' in projection.author, false);
-  await f.store.replaceForum([]); assert.deepEqual(f.removed, ['/user/images/forum.png']);
+  await f.store.replaceForum([]); assert.deepEqual(f.removed, []); assert.ok(f.store.read().albumPhotos.some(photo => photo.path === '/user/images/forum.png'));
 });
 
 test('more waits for the existing save queue and never sends a manual comment whose save rolls back', async () => {
