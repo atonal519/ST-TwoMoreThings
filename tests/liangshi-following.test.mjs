@@ -37,13 +37,13 @@ for(const kind of ['native','luker'])test(`${kind}: Following reads live user pe
   assert.deepEqual(target.metadata,before);assert.equal(h.metadataSaves,0);assert.equal(h.modelRequests.length,0);
 });
 
-test('Following public projection counts complete JSON while all private threads remain excluded',async()=>{
+test('Following public projection keeps complete JSON while all private threads remain excluded',async()=>{
   const {target,reader,h}=setup(),state=target.metadata.pocketPhone;
   state.conversations.lin=[{id:'huge',role:'user',text:'PRIVATE_LONG'.repeat(4000)}];
   state.social={npcs:[],feedIds:[],posts:Array.from({length:20},(_,i)=>({id:`p${i}`,authorId:'lin',text:'完整公开动态'.repeat(50)+i,publishedAt:`2031/4/8 ${String(i).padStart(2,'0')}:00`,comments:[]}))};
   state.social.posts.push({id:'huge',authorId:'lin',text:'公开长文'.repeat(4000),comments:[]});
-  const c=await reader.readForLiangshiFollowing();assert.ok(JSON.stringify(c.phoneContext).length<=6000);assert.ok(c.phoneContext.length>0&&c.phoneContext.length<=20);assert.equal('userConversations' in c,false);assert.equal(JSON.stringify(c).includes('PRIVATE_LONG'),false);
-  for(const row of c.phoneContext)assert.ok(state.social.posts.some(post=>post.id===row.source.id&&(post.text===row.text||row.excerpted&&row.text.startsWith('[节选]'))));assert.equal(h.metadataSaves,0);
+  const c=await reader.readForLiangshiFollowing();assert.equal(c.phoneContext.length,21);assert.equal(c.phoneContext.find(r=>r.source.id==='huge').text,'公开长文'.repeat(4000));assert.equal('userConversations' in c,false);assert.equal(JSON.stringify(c.phoneContext).includes('PRIVATE_LONG'),false);assert.equal(c.knownContacts.find(p=>p.id==='lin').phoneContext.find(r=>r.source.id==='huge').text,'PRIVATE_LONG'.repeat(4000));
+  for(const row of c.phoneContext)assert.ok(state.social.posts.some(post=>post.id===row.source.id&&(post.text===row.text)));assert.equal(h.metadataSaves,0);
 });
 
 test('empty user persona and conversations still permit one ordinary Following generation without inventing a stored profile',async()=>{

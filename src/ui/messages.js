@@ -1,3 +1,5 @@
+import { captureFavorite, favoriteFor } from '../favorites.js';
+import { favoriteAction } from './favorites.js';
 import { action, avatar, empty, escape, icon, pageHeading, renderBilingual, renderEmojiText, renderMentionText } from './shared.js';
 import { displayName } from '../profiles.js';
 import { partitionHistory } from '../timeline.js';
@@ -68,10 +70,17 @@ export function renderInboxMenu(busy) {
 
 function renderMessage(message, previous, next, { contact, user, selected, deleting, isGroup, busy, readOnly = false, state, ui, conversationId }) {
   const mine = message.role === 'user';
-  const party = item => item && (item.speakerId || item.role);
+  const party = item => item && item.type !== 'pat' && (item.speakerId || item.role);
   const hasPrev = party(previous) === party(message), hasNext = party(next) === party(message);
   const grouped = `${hasPrev ? ' grouped-top' : ''}${hasNext ? ' grouped-bottom' : ''}${previous && !hasPrev ? ' group-start' : ''}`;
   const chosen = selected === message.id;
+  const ref = { app: 'messages', kind: 'message', conversationId, messageId: message.id, batchKey: message.batch?.key ?? 'legacy' };
+  const favorite = chosen ? favoriteAction(ref, favoriteFor(state, captureFavorite(state, ref, { defaultUser: ui.defaultUser })), busy.has(`favorite-add:${JSON.stringify(ref)}`), { message: true }) : '';
+  if (message.type === 'pat') return `<div data-message-id="${escape(message.id)}" class="message-row pat-row${chosen ? ' is-selected' : ''}">
+    <div class="pat-copy"><button type="button" class="pat-message" data-message="${escape(message.id)}" aria-label="拍一拍：${escape(messageText(message))}" aria-expanded="${chosen}">${renderBilingual(message.text, message.translation, renderEmojiText)}</button>
+      ${chosen ? `<div class="message-actions" role="group" aria-label="短信操作">${favorite}</div>` : ''}
+    </div>
+  </div>`;
   const bubbleAttributes = message.type === 'image'
     ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" aria-busy="${busy.has(`image:${message.id}`)}" ${busy.has(`image:${message.id}`) ? 'disabled' : ''}`
     : `data-message="${escape(message.id)}" aria-label="短信：${escape(messageText(message))}" aria-expanded="${chosen}"`;
@@ -80,13 +89,17 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
     : '';
   const groupPeople = isGroup ? [{ ...user, id: '@user', name: user.name || ui.defaultUser || '我' }, ...(state.contacts || []).filter(person => contact.memberIds?.includes(person.id))] : [];
   const sender = isGroup && !mine ? state.contacts?.find(person => person.id === message.speakerId) || { name: '群成员' } : null;
-  const messageAvatar = isGroup && !mine && sender?.id ? `<button type="button" class="mention-avatar" data-mention-id="${escape(sender.id)}" aria-label="提及${escape(displayName(sender))}">${avatar(sender, true)}</button>` : avatar(mine ? { tone: 'lilac', ...user } : contact, true);
+  const avatarPerson = mine ? { tone: 'lilac', ...user } : isGroup ? sender : contact;
+  const avatarId = mine ? '@user' : isGroup ? sender?.id : contact.id;
+  const canPat = avatarId && (!isGroup || contact.userIsMember && (avatarId === '@user' || contact.memberIds.includes(avatarId)));
+  const mentionId = isGroup && !mine ? sender?.id : '';
+  const messageAvatar = canPat || mentionId ? `<button type="button" class="message-avatar${mentionId ? ' mention-avatar' : ''}" ${canPat ? `data-pat-target="${escape(avatarId)}"` : ''} ${mentionId ? `data-mention-id="${escape(mentionId)}"` : ''} aria-label="${mentionId ? `提及${escape(displayName(avatarPerson))}` : `双击拍一拍${mine ? '自己' : escape(displayName(avatarPerson))}`}"${canPat ? ' title="双击拍一拍"' : ''}>${avatar(avatarPerson, true)}</button>` : avatar(avatarPerson, true);
   const reply = isGroup ? replyContext(message, state.conversations?.[conversationId] || []) : undefined;
   const replyName = reply && !reply.missing ? displayName(reply.role === 'user' ? user : state.contacts.find(person => person.id === reply.speakerId) || { name: '已移除联系人' }) : '';
   const renderText = text => renderMentionText(text, groupPeople);
   const replyBlock = reply ? `<div class="message-reply${reply.missing ? ' is-missing' : ''}"><small>引用${replyName ? ` ${escape(replyName)}` : ''}</small>${reply.missing ? '<span>原消息已删除</span>' : renderBilingual(reply.messageText, reply.translation, renderText)}</div>` : '';
   const body = !message.type ? renderBilingual(message.text, message.translation, renderText) : renderCardBody(message, busy.has(`image:${message.id}`));
-  return `<div class="message-row ${mine ? 'is-mine' : 'is-theirs'}${chosen ? ' is-selected' : ''}${!hasNext && message.timeLabel ? ' has-time' : ''}${grouped}">
+  return `<div data-message-id="${escape(message.id)}" class="message-row ${mine ? 'is-mine' : 'is-theirs'}${chosen ? ' is-selected' : ''}${!hasNext && message.timeLabel ? ' has-time' : ''}${grouped}">
     ${messageAvatar}
     <div class="message-body">
       <div class="message-copy">
@@ -94,6 +107,7 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
         <div class="bubble-line">
           <button type="button" class="bubble ${message.type ? `${message.type}-message` : ''}" ${bubbleAttributes}>${replyBlock}${body}</button>
           ${chosen ? `<div class="message-actions" role="group" aria-label="短信操作">
+            ${favorite}
             ${isGroup && !readOnly ? `<button type="button" class="message-action message-reply-action" data-action="reply-message" data-message-target="${escape(message.id)}">${icon('message-reply')}<span>引用</span></button>` : ''}
             <button type="button" class="message-action message-delete danger" data-action="delete-message" data-message-target="${escape(message.id)}" aria-label="删除这条短信" ${deleting ? 'disabled' : ''}>${icon('message-delete')}<span>删除</span></button>
           </div>` : ''}
@@ -138,13 +152,6 @@ export function renderChat(state, { ui, busy }) {
     </section>`);
   }
   const pastCount = past.reduce((sum, group) => sum + group.messages.length, 0);
-  const clearConfirmation = ui.confirmClear ? `<section class="clear-confirm" role="alert">
-    <p>清空当前主楼时间点之后的消息及草稿，同时删除相关生成图片；过去的记录保留。</p>
-    <div>
-      ${action('cancel-clear', '取消', '', 'quiet-button')}
-      ${action('confirm-clear', '确认清空', '', 'quiet-button danger', busy.has(`clear:${contact.id}`))}
-    </div>
-  </section>` : '';
   const composer = observer ? `<div class="composer observer-composer">
     <span>旁观群聊</span>
     ${action('continue', '继续', 'refresh', 'continue-button', generating || cannotReply)}
@@ -169,7 +176,6 @@ export function renderChat(state, { ui, busy }) {
         <button type="button" class="icon-button" data-action="chat-menu" aria-label="聊天选项" aria-haspopup="menu" aria-expanded="${ui.chatMenu}">${icon('more')}</button>
       </div>
     </header>
-    ${clearConfirmation}
     <div class="chat-stage ${contact.background && !contact.background.startsWith('color:') ? 'has-wallpaper' : ''}" style="${escape(chatBackgroundStyle(contact.background, state.theme))}">
       <div class="message-feed" role="log" aria-label="短信记录" aria-live="polite">
         ${pastCount ? `<button type="button" class="history-fold" data-action="history" aria-expanded="${ui.historyOpen}"><span>${ui.historyOpen ? '收起过去' : '查看过去'}</span></button>` : ''}

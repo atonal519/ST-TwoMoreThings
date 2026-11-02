@@ -20,11 +20,11 @@ for(const kind of ['native','luker'])test(`${kind}: four primary requests share 
  const {h,target,store,reader,queries,requests,service}=setup(kind),raw=structuredClone(target.messages);
  await service.refresh();await service.refreshFollowing();await service.refreshHot();const topicId=store.read().liangshi.topics[0].id;await service.loadTopic(topicId);
  for(let i=0;i<4;i++){
-  const {input,system}=requests[i];assert.equal(input.story.length,1);assert.ok(JSON.stringify(input.story).length<=6000);assert.ok(input.story[0].text.includes('LATEST_PUBLIC_EVENT'));assert.equal(input.story[0].text.isWellFormed(),true);assert.equal(JSON.stringify(input.story).includes('IMPORTED_SMS_NO_DUPLICATION'),false);assert.equal(JSON.stringify(input.phoneContext || []).includes('IMPORTED_SMS_NO_DUPLICATION'),false);
+  const {input,system}=requests[i];assert.equal(input.story.length,1);assert.equal(input.story[0].text,'当楼叙事😀'.repeat(1800)+'明确已发布的公开消息 LATEST_PUBLIC_EVENT');assert.equal('storyProgress' in input,false);assert.ok(input.story[0].text.includes('LATEST_PUBLIC_EVENT'));assert.equal(input.story[0].text.isWellFormed(),true);assert.equal(JSON.stringify(input.story).includes('IMPORTED_SMS_NO_DUPLICATION'),false);assert.equal(JSON.stringify(input.phoneContext || []).includes('IMPORTED_SMS_NO_DUPLICATION'),false);
   for(const word of ['EARLIER_FLOOR_ONLY','HIDDEN_REASONING','IMPORTED_SMS_NO_DUPLICATION','OLD_A_BODY','OLD_A_IMAGE','OLD_AUTHOR_ONLY'])assert.equal(JSON.stringify(input).includes(word),false,word);
-  assert.ok(system.includes(prompts.PUBLIC_STORY_RULE));if(i!==1)assert.equal('phoneContext'in input,false);
+  if(i!==2)assert.ok(queries[i].scanText.includes(input.story[0].text));assert.ok(system.includes(prompts.PUBLIC_STORY_RULE));if(i!==1)assert.equal('phoneContext'in input,false);
  }
- assert.equal(queries[2],undefined,'Hot still reads the full bounded static book');assert.equal(requests[2].input.worldbook,'ALL_STATIC_PEOPLE');
+ assert.equal(queries[2],undefined,'Hot still reads the full static book');assert.equal(requests[2].input.worldbook,'ALL_STATIC_PEOPLE');
  for(const i of [0,1,3]){assert.ok(queries[i].scanText.includes('LATEST_PUBLIC_EVENT'));assert.equal(queries[i].scanText.includes('HIDDEN_REASONING'),false);assert.equal(queries[i].scanText.includes('IMPORTED_SMS_NO_DUPLICATION'),false);}
  await service.loadTopic(topicId);assert.equal(requests.length,4);assert.equal(h.metadataSaves,4);
  const post=store.read().liangshi.posts.find(p=>p.id===store.read().liangshi.topics[0].postIds[0]);await service.loadMore(post.id);

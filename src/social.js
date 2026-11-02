@@ -1,5 +1,4 @@
 import { finishGeneratedText, hasStyleReference } from './generated-text.js';
-import { clipProjection } from './context-budget.js';
 import { parseJsonObject } from './api.js';
 import { createCameoAvatar } from './cameo-avatar.js';
 import { LANGUAGE_RULE, STORY_MEMORY_RULE, CONVERSATION_CONTINUITY_RULE, AUTHOR_PHONE_RULE, PUBLIC_STORY_RULE, KNOWLEDGE_BOUNDARY_RULE } from './prompts.js';
@@ -211,7 +210,7 @@ export function createSocialService({ store, contextReader, modelClient, random 
       if (!content) throw new Error('请先写下评论。');
       const author = getSocialAuthor(state, post.authorId);
       if (!author) throw new Error('这条动态的作者已不存在，请返回动态列表。');
-      const selectedComments = socialComments(post).slice(-10);
+      const selectedComments = socialComments(post);
       const commenters = selectedComments.map(item => item.authorId).filter(Boolean).map(id => getSocialAuthor(state, id)).filter(Boolean);
       const authors = [...new Map([author, ...commenters].filter(item => !isUserIdentity(state, item.id)).map(item => [item.id, item])).values()];
       const userName = text(state.userProfile?.nickname || state.userProfile?.name || defaultUser) || '我';
@@ -224,7 +223,7 @@ export function createSocialService({ store, contextReader, modelClient, random 
         return { ...social, posts: social.posts.map(item => item.id === postId ? saved : item) };
       });
       onPosted(structuredClone(userComment));
-      const continuation = clipProjection({ post: { authorId: post.authorId, text: post.text, translation: post.translation, publishedAt: post.publishedAt || '', ...(post.image?.description ? { image: { description: post.image.description } } : {}), comments: selectedComments.map(({ id, name, text, translation, authorId, role }) => ({ id, name, text, ...(translation ? { translation } : {}), ...(authorId ? { authorId } : {}), ...(role ? { role } : {}) })) }, userComment: { name: userName, text: content }, existingCommenters: authors.map(item => ({ id: item.id, name: item.name, nickname: item.nickname || '' })) }, 8000);
+      const continuation = { post: { authorId: post.authorId, text: post.text, translation: post.translation, publishedAt: post.publishedAt || '', ...(post.image?.description ? { image: { description: post.image.description } } : {}), comments: selectedComments.map(({ id, name, text, translation, authorId, role }) => ({ id, name, text, ...(translation ? { translation } : {}), ...(authorId ? { authorId } : {}), ...(role ? { role } : {}) })) }, userComment: { name: userName, text: content }, existingCommenters: authors.map(item => ({ id: item.id, name: item.name, nickname: item.nickname || '' })) };
       let context, answer;
       try {
         context = await contextReader.readForSocial(authors);

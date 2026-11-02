@@ -4,12 +4,14 @@
 
 默认系列为 **Solar Broken**；锁屏指纹按用户要求保留原图。原指纹的确切图标库来源尚未确认，不署为 Solar。已点赞状态使用同一 Solar 图标集配套的 `heart-bold`，保留红色实心反馈；它仅用于状态切换。表情、贴纸、头像、壁纸及锁屏艺术背景不属于这份图标清单。
 
-SVG 随插件本地提供，原始几何不改绘。内联图标位于 `src/ui/shared.js`；短信、论坛图标位于本目录的 SVG 文件，以现有 CSS 掩膜着色。尺寸由使用位置的样式决定，颜色沿用 `currentColor`。
+SVG 随插件本地提供；除下述本地实心收藏状态派生外，原始几何不改绘。内联图标位于 `src/ui/shared.js`；短信、论坛图标位于本目录的 SVG 文件，以现有 CSS 掩膜着色。尺寸由使用位置的样式决定，颜色沿用 `currentColor`。
 
-Yesicon 标明图标数据来自 Iconify；下列 Solar 条目的 SVG 使用其 [Solar 上游数据](https://github.com/iconify/icon-sets/blob/master/json/solar.json)。本地只调整 SVG 外层尺寸、无障碍标记和打包方式，SVG body 与上游条目一致。
+Yesicon 标明图标数据来自 Iconify；下列 Solar 条目的 SVG 使用其 [Solar 上游数据](https://github.com/iconify/icon-sets/blob/master/json/solar.json)。本地只调整 SVG 外层尺寸、无障碍标记和打包方式，未派生条目的SVG body 与上游条目一致。
 
 | 本地名称 | Yesicon 条目 | 用途说明 |
 | --- | --- | --- |
+| `favorites-active` | 本地派生，基于下列 `bookmark-broken` | 闭合左侧缺口并填充原外轮廓，保留顶部镂空短线；用于已收藏状态，不作为官方bold条目署名 |
+| `favorites` | [`solar:bookmark-broken`](https://yesicon.app/solar/bookmark-broken) | 收藏夹及收藏消息；SVG body取上述官方Iconify Solar数据 |
 | `liangshi` | [`solar:hashtag-square-broken`](https://yesicon.app/solar/hashtag-square-broken) | 两事微博 |
 | `social` | [`solar:camera-square-broken`](https://yesicon.app/solar/camera-square-broken) |  |
 | `like` | [`solar:like-broken`](https://yesicon.app/solar/like-broken) | 论坛赞；SVG body取上述官方Iconify Solar数据 |

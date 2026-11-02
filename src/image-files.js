@@ -19,6 +19,7 @@ export function contentImagePaths(state) {
     add(post);
     if (app !== state.social) for (const row of [...(post.comments || []), ...(Array.isArray(post.reposts) ? post.reposts : [])]) add(row);
   }
+  for (const entry of state.favorites || []) { add(entry.snapshot); if (entry.snapshot.quote) add(entry.snapshot.quote); }
   for (const photo of state.albumPhotos || []) { const path = imagePath(photo.path); if (path) paths.add(path); }
   return paths;
 }

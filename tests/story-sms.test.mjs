@@ -117,8 +117,7 @@ test('story progress removes accepted SMS from each floor in its existing narrat
   await syncStorySms({ target, store });
   const reader = createContextReader({ target, store, qqjBridgeProvider: () => null });
   const context = await reader.readForContact('a');
-  assert.deepEqual(context.storyProgress.messages.map(row => row.text), ['第一楼剧情。[tmt|同名|同名]歧义短信保留[/tmt]', '第二楼剧情。']);
-  assert.equal(context.storyProgress.complete, true);
+  assert.deepEqual(context.story.map(row=>row.text),['第二楼剧情。']);assert.equal('storyProgress' in context,false);assert.equal(JSON.stringify(context.story).includes('第一楼剧情'),false);
 });
 
 test('new story people use unique reader QQJ identities and display avatars without copying them into storage', async () => {

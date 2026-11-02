@@ -1,3 +1,5 @@
+import { normalizeStoryReferenceFloors } from './story-reference.js';
+import { captureFavorite, favoriteFor } from './favorites.js';
 import { cleanProfile } from './profiles.js';
 import { createCameoAvatar, isCameoAvatar } from './cameo-avatar.js';
 import { messageText } from './content.js';
@@ -56,6 +58,23 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   const store = {
     read,
     readSaved: () => saving.then(read),
+    addFavorite(ref, options) {
+      const candidate = captureFavorite(read(), ref, options);
+      return update(state => {
+        assertEnabled();
+        if (!candidate) throw new Error('原内容已移除，无法收藏。');
+        if (favoriteFor(state, candidate)) return state;
+        const entry = { id: globalThis.crypto.randomUUID(), savedAt: new Date().toISOString(), ...candidate };
+        return { ...state, favorites: [...(state.favorites || []), entry] };
+      });
+    },
+    removeFavorite(id) {
+      return update(state => {
+        assertEnabled();
+        const favorites = (state.favorites || []).filter(item => item.id !== id);
+        return favorites.length === (state.favorites || []).length ? state : { ...state, favorites };
+      });
+    },
     saveGeneratedPhoto(photo, change) {
       let sourceError;
       return update(state => {
@@ -157,17 +176,34 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       }, cleanImages, notice && [notice]);
     },
     appendMessage(id, message) { return store.appendMessages(id, [message]); },
-    appendMessages(id, messages, { identityOwners, remarkForUser } = {}) {
+    togglePat(id, message) { return store.appendMessages(id, [message], { toggleUserPat: true }); },
+    appendMessages(id, messages, { identityOwners, remarkForUser, toggleUserPat = false } = {}) {
       return update(state => {
         assertEnabled();
         if (!state.contacts.some(person => person.id === id) && !state.groups?.some(group => group.id === id)) throw new Error('这个会话已删除，无法保存新消息。');
         assertIdentitySnapshot(state, identityOwners);
         const group = state.groups?.find(item => item.id === id);
+        for (const message of messages.filter(message => message.type === 'pat')) {
+          const audience = group ? groupAudience(group) : [id, '@user'];
+          const speaker = message.role === 'user' ? '@user' : id;
+          if (!text(message.text) || !audience.includes(message.pat?.targetId)) throw new Error('拍一拍对象已不在这个会话中。');
+          if (!['user', 'assistant'].includes(message.role) || (group ? !audience.includes(message.speakerId) || (message.role === 'user' ? message.speakerId !== '@user' : message.speakerId === '@user') : message.speakerId !== speaker)) throw new Error('拍一拍发起人无法对应这个会话。');
+        }
         if (messages.some(message => message.role === 'assistant' && isUserIdentity(state, group ? message.speakerId : id))) throw new Error('本人账号不能由AI代发消息。');
         if (group && messages.some(message => message.role === 'assistant' && !group.memberIds.includes(message.speakerId))) throw new Error('群成员已经移出，无法保存这次回复，请重新点继续。');
         if (group && messages.some(message => message.type === 'transfer' && !(group.memberIds.includes(message.transfer.recipientId) || message.transfer.recipientId === '@user' && group.userIsMember))) throw new Error('收款人已不在群中，无法保存这条转账。');
+        const thread = state.conversations[id] || [];
+        if (toggleUserPat) {
+          const message = messages[0];
+          if (messages.length !== 1 || message.type !== 'pat' || message.role !== 'user' || message.speakerId !== '@user') throw new Error('只能撤回本人刚发出的拍一拍。');
+          // Decide inside the save queue; another gesture or reply may have changed the tail.
+          const index = thread.findLastIndex(row => row.batch?.key === message.batch?.key), last = thread[index];
+          if (last?.type === 'pat' && last.role === 'user' && last.speakerId === '@user' && last.pat?.targetId === message.pat.targetId) {
+            return { ...state, conversations: { ...state.conversations, [id]: thread.filter((_, rowIndex) => rowIndex !== index) } };
+          }
+        }
         const savedMessages = messages.map(message => ({ ...message, ...(message.role === 'assistant' ? { read: Boolean(isReading(id)) } : {}), ...(group ? { knownToIds: groupAudience(group) } : {}) }));
-        return withContactRemark({ ...state, conversations: { ...state.conversations, [id]: [...(state.conversations[id] || []), ...savedMessages] } }, id, group ? undefined : remarkForUser);
+        return withContactRemark({ ...state, conversations: { ...state.conversations, [id]: [...thread, ...savedMessages] } }, id, group ? undefined : remarkForUser);
       }, false, [{ kind: 'message', id }]).then(state => { if (messages.some(message => message.role === 'assistant')) onIncomingMessage(id); return state; });
     },
     markRead(id) {
@@ -198,6 +234,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
             const { path, seed, ...image } = item.image;
             next = { ...item, image };
           }
+          if (item.quote) { const quote = clear(item.quote); if (quote !== item.quote) next = { ...next, quote }; }
           if (children) for (const key of ['comments', 'reposts']) if (Array.isArray(item[key])) {
             const rows = item[key].map(row => clear(row));
             if (rows.some((row, index) => row !== item[key][index])) next = { ...next, [key]: rows };
@@ -208,9 +245,10 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         const social = state.social && { ...state.social, posts: state.social.posts.map(row => clear(row, false)) };
         const forum = state.forum && { ...state.forum, posts: state.forum.posts.map(row => clear(row)) };
         const liangshi = state.liangshi && { ...state.liangshi, posts: state.liangshi.posts.map(row => clear(row)) };
+        const favorites = state.favorites?.map(entry => { const snapshot = clear(entry.snapshot); return snapshot === entry.snapshot ? entry : { ...entry, snapshot }; });
         const albumPhotos = state.albumPhotos?.filter(photo => !missing.has(imagePath(photo.path)));
         if (albumPhotos?.length !== state.albumPhotos?.length) changed = true;
-        return changed ? { ...state, conversations, ...(social ? { social } : {}), ...(forum ? { forum } : {}), ...(liangshi ? { liangshi } : {}), ...(albumPhotos ? { albumPhotos } : {}) } : state;
+        return changed ? { ...state, conversations, ...(social ? { social } : {}), ...(forum ? { forum } : {}), ...(liangshi ? { liangshi } : {}), ...(albumPhotos ? { albumPhotos } : {}), ...(favorites ? { favorites } : {}) } : state;
       });
     },
     respondTransfer(id, messageId, status, actorId, batch, identityOwners, remarkForUser) {
@@ -333,6 +371,14 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
     },
     setTheme(theme) { return update(state => ({ ...state, theme: theme === 'night' ? 'night' : 'day' })); },
     setDefaultLanguage(value) { return update(state => { assertEnabled(); return { ...state, defaultLanguage: String(value || '').trim() }; }); },
+    setStoryReferenceFloors(value) {
+      return update(state => {
+        assertEnabled();
+        const count = normalizeStoryReferenceFloors(value);
+        if (count === undefined) throw new Error('参考正文楼请输入非负整数。');
+        return { ...state, storyReferenceFloors: count };
+      });
+    },
     setLockStyle(lockStyle) { return update(state => ({ ...state, lockStyle: ['stacked', 'rounded'].includes(lockStyle) ? lockStyle : 'classic' })); },
     setWallpaper(theme, path) { const value = cleanBackground(path); return update(state => ({ ...state, wallpapers: { ...state.wallpapers, [theme === 'night' ? 'night' : 'day']: value } })); },
     setChatBackground(id, value) {

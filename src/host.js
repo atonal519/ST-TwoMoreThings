@@ -87,7 +87,6 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       }));
       const names = [...new Set([target.character?.world, target.personaWorld, ...(bindings.getNames?.(target) || [])].filter(Boolean))];
       const parts = [];
-      let remaining = 24000;
       for (const name of names) {
         const book = await bindings.load(name);
         if (!book) throw new Error('关联世界书读取失败，请检查世界书是否可用。');
@@ -95,9 +94,7 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
         const entries = scanText === undefined ? rows : selectWorldEntries(rows, scanText, { defaults: bindings.defaults, user: target.user, char: target.character?.name });
         for (const entry of entries) {
           if (entry.disable || entry.extensions?.twoMoreThings?.storySms === true || typeof entry.content !== 'string') continue;
-          const text = `${entry.comment || ''}\n${entry.content}`.slice(0, remaining);
-          parts.push(text); remaining -= text.length;
-          if (!remaining) return parts.join('\n\n');
+          parts.push(`${entry.comment || ''}\n${entry.content}`);
         }
       }
       return parts.join('\n\n');

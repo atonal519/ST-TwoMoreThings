@@ -5,6 +5,7 @@ import { readTimeline } from './timeline.js';
 import { normalizeContent, RICH_MESSAGES_PROMPT } from './content.js';
 import { CALENDAR_PROMPT } from './calendar.js';
 import { identityProfile, isUserIdentity, identitySource, identitySnapshot, assertIdentitySnapshot } from './identities.js';
+import { displayName } from './profiles.js';
 
 export function record(role, text, clock, translation, batch) {
   const now = new Date();
@@ -18,6 +19,13 @@ export function record(role, text, clock, translation, batch) {
 
 export function createMessageService({ target, store, contextReader, modelClient }) {
   return {
+    async pat(id, targetId) {
+      const person = store.read().contacts.find(person => person.id === id);
+      if (!person) throw new Error('这个联系人已不存在，请返回短信重新选择。');
+      if (![id, '@user'].includes(targetId)) throw new Error('拍一拍对象不在这个会话中。');
+      const batch = readTimeline(target.messages);
+      await store.togglePat(id, { ...record('user', `你拍了拍${targetId === '@user' ? '自己' : displayName(person)}`, batch.clock, '', batch), type: 'pat', speakerId: '@user', pat: { targetId } });
+    },
     async sendCard(id, draft) {
       const content = normalizeContent(draft);
       if (!content?.type) throw new Error('消息卡内容不完整，请检查后发送。');
@@ -55,8 +63,9 @@ export function createMessageService({ target, store, contextReader, modelClient
       const actions = Array.isArray(answer.transferActions) ? answer.transferActions : [];
       const indexedMessages = parsePayload(reply, 'messages', { allowEmpty: actions.length > 0, indexed: true, preserveStyle: hasStyleReference(context.contact) || Boolean(context.related?.trim()) }).map(content => {
         if (!content) return null;
+        if (content.type === 'pat' && ![id, '@user'].includes(content.pat.targetId)) return null;
         if (content.type === 'transfer') content.transfer.recipientId = '@user';
-        return { ...record('assistant', content.text, clock, content.translation, context.batch), ...content };
+        return { ...record('assistant', content.text, clock, content.translation, context.batch), ...content, ...(content.type === 'pat' ? { speakerId: id } : {}) };
       });
       const messages = indexedMessages.filter(Boolean);
       for (const [index, item] of actions.entries()) await store.respondTransfer(id, item.transferId, item.status, id, context.batch, identityOwners, !messages.length && index === actions.length - 1 ? answer.remarkForUser : undefined);

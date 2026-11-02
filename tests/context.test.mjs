@@ -57,7 +57,7 @@ function continuityHarness(hostKind = 'native') {
   return { h, target, store, reader };
 }
 
-test('group references preserve member knowledge, full message projection and later story evidence without todos or writes', async () => {
+test('group references preserve member knowledge, full message projection and only the latest story without todos or writes', async () => {
   const { h, target, store, reader } = continuityHarness();
   const before = structuredClone(target.metadata);
   const context = await reader.readForContact('lin');
@@ -72,8 +72,8 @@ test('group references preserve member knowledge, full message projection and la
   assert.deepEqual(context.phoneContext.find(row => row.conversationId === 'observer').knownToIds, ['lin', 'other']);
   assert.equal(JSON.stringify(context).includes('/secret/'), false);
   assert.equal(JSON.stringify(context).includes('无关群秘密'), false);
-  assert.deepEqual(context.storyProgress.messages.map(row => row.text), ['后来约定已取消，改成休息。', '此刻在家。']);
-  assert.equal(context.storyProgress.complete, true);
+  assert.deepEqual(context.story.map(row => row.text), ['此刻在家。']);
+  assert.equal('storyProgress' in context, false);assert.equal(JSON.stringify(context).includes('后来约定已取消'),false);
   const group = await reader.readForGroup('current');
   assert.deepEqual([...new Set(group.phoneContext.map(row => row.conversationId))], ['plans']);
   assert.equal(group.previousMessages.filter(row => row.text === '当前群不重复').length, 1);
@@ -96,12 +96,12 @@ test('shared public material excludes private groups while known authors keep th
   assert.deepEqual(target.metadata, before);
 });
 
-test('real private arrangements retain later story progress and remain scoped to the participating contact', async () => {
+test('real private arrangements retain their full saved history and remain scoped to the participating contact', async () => {
   const { h, target, store, reader } = continuityHarness();
   target.metadata.pocketPhone.conversations.lin = [{ id: 'private-agreement', role: 'assistant', text: '明天把书带给你。', batch: { key: '[0]' } }];
   const lin = await reader.readForContact('lin'), zhou = await reader.readForContact('zhou');
   assert.equal(lin.previousMessages[0].text, '明天把书带给你。');
-  assert.ok(JSON.stringify(lin.storyProgress).includes('约定已取消'));
+  assert.equal('storyProgress' in lin,false);assert.deepEqual(lin.story.map(row=>row.text),['此刻在家。']);
   assert.equal(JSON.stringify(zhou).includes('明天把书带给你'), false);
   const group = await reader.readForGroup('current');
   assert.equal(JSON.stringify(group).includes('明天把书带给你'), false);
@@ -112,7 +112,7 @@ test('real private arrangements retain later story progress and remain scoped to
   assert.equal(h.metadataSaves, 0); assert.equal(h.modelRequests.length, 0);
 });
 
-test('group reference budget counts the complete projected JSON including long replies and preserves whole recent messages', async () => {
+test('group references preserve all projected messages and complete long quotes', async () => {
   const { h, target, reader } = continuityHarness();
   const state = target.metadata.pocketPhone;
   state.conversations.plans = [
@@ -120,23 +120,23 @@ test('group reference budget counts the complete projected JSON including long r
     ...Array.from({ length: 10 }, (_, index) => ({ id: `m-${index}`, speakerId: 'zhou', text: `${index}:${'整句'.repeat(60)}`, timeLabel: `16:${index}`, batch: { key: '[0]' }, ...(index === 9 ? { replyToId: 'outside' } : {}) })),
   ];
   let context = await reader.readForContact('lin');
-  assert.ok(JSON.stringify(context.phoneContext).length <= 6000);
-  assert.ok(context.phoneContext.some(row => row.source.id === 'm-9' && row.excerpted && row.replyTo.messageText.startsWith('[节选]')), 'the recent message keeps a bounded quote excerpt');
+  assert.ok(JSON.stringify(context.phoneContext).length > 6000);
+  assert.equal(context.phoneContext.find(row=>row.source.id==='m-9').replyTo.messageText,'引用'.repeat(4000));assert.equal(context.phoneContext.some(row=>row.excerpted),false);
   delete state.conversations.plans.at(-1).replyToId;
   context = await reader.readForContact('lin');
   const plans = context.phoneContext.filter(row => row.conversationId === 'plans');
-  assert.equal(plans.length, 8);
-  assert.deepEqual(new Set(plans.map(row => row.text)), new Set(state.conversations.plans.slice(-8).map(row => row.text)));
-  assert.ok(JSON.stringify(context.phoneContext).length <= 6000);
+  assert.equal(plans.length, 11);
+  assert.deepEqual(new Set(plans.map(row => row.text)), new Set(state.conversations.plans.map(row => row.text)));
+  assert.ok(JSON.stringify(context.phoneContext).length > 6000);
   for (let index = 0; index < 12; index++) {
     const id = `extra-${index}`;
     state.groups.push({ id, name: `群${index}`, memberIds: ['lin'], userIsMember: false });
     state.conversations[id] = [{ id, speakerId: 'lin', text: '完整长句'.repeat(200), batch: { key: '[0]' } }];
   }
   context = await reader.readForContact('lin');
-  assert.ok(JSON.stringify(context.phoneContext).length <= 6000, 'one budget covers all groups together');
-  assert.ok(new Set(context.phoneContext.map(row => row.conversationId)).size < state.groups.length - 1);
-  for (const row of context.phoneContext.filter(row => row.conversationId.startsWith('extra-'))) assert.ok(row.text === '完整长句'.repeat(200) || row.excerpted && row.text.startsWith('[节选]'));
+  assert.ok(JSON.stringify(context.phoneContext).length > 6000);
+  assert.equal(new Set(context.phoneContext.filter(row=>row.conversationId.startsWith('extra-')).map(row=>row.conversationId)).size,12);
+  for (const row of context.phoneContext.filter(row => row.conversationId.startsWith('extra-'))) assert.equal(row.text,'完整长句'.repeat(200));
   assert.equal(h.metadataSaves, 0); assert.equal(h.modelRequests.length, 0);
 });
 
@@ -148,7 +148,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: actual SMS/group/
   await createMessageService({ target, store, contextReader: reader, modelClient }).continueChat('lin');
   assert.equal(h.modelRequests.length, 1); assert.equal(h.metadataSaves, 1);
   assert.ok(requestInput().phoneContext.some(row => row.conversationId === 'plans'));
-  assert.ok(JSON.stringify(requestInput().storyProgress).includes('约定已取消'));
+  assert.equal('storyProgress' in requestInput(),false);assert.deepEqual(requestInput().story.map(row=>row.text),['此刻在家。']);
   h.completion = { choices: [{ message: { content: '{"anchor":{"memberIds":["lin","zhou","@user"],"speakerIds":["lin"]},"messages":[{"speakerId":"lin","text":"知道，改日再约。"}],"todoSuggestions":[]}' } }] };
   await createGroupService({ target, store, contextReader: reader, modelClient }).continueChat('current');
   assert.equal(h.modelRequests.length, 2); assert.equal(h.metadataSaves, 2);
@@ -181,13 +181,13 @@ test('剧情正文副本共用包裹规则，短信自身文本和原始时间�
   const reader = createContextReader({ target, store, qqjBridgeProvider: () => null, wrapperSettingsProvider: () => ({ keepTags: 'content', extraTags: '[[...]]' }) });
   const context = await reader.readForContact('lin');
   assert.equal(context.story[0].text, '正式正文');
-  assert.equal(context.storyProgress.messages[0].text, '正式正文');
+  assert.equal('storyProgress' in context,false);
   assert.match(JSON.stringify(context.previousMessages), /短信自身文字/);
   assert.equal(target.messages[0].mes, raw);
   assert.match(context.batch.key, /2026-10-18/);
 });
 
-test('进展范围只考察近期6条候选，清空不回找旧楼且净文字计量', async () => {
+test('最新一楼清空后不回找旧楼，也不附加进展材料', async () => {
   const messages = [{ is_user: false, mes: '<content>不应回找的旧楼</content>' },
     ...Array.from({ length: 6 }, () => ({ is_user: false, mes: '[[草稿]]' }))];
   messages.at(-1).mes += '<!-- SDC-end | date=2026-10-18 | time=15:30 -->';
@@ -195,11 +195,11 @@ test('进展范围只考察近期6条候选，清空不回找旧楼且净文字�
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   const reader = createContextReader({ target, store, qqjBridgeProvider: () => null, wrapperSettingsProvider: () => ({ keepTags: 'content', extraTags: '[[...]]' }) });
   const result = await reader.readForContact('lin');
-  assert.deepEqual(result.storyProgress.messages, []);
-  assert.equal(result.storyProgress.complete, false);
+  assert.deepEqual(result.story, []);
+  assert.equal('storyProgress' in result,false);
 });
 
-test('进展6000完整JSON预算计算净正文，保留来源时间且后续读取新共享值', async () => {
+test('最新一楼净正文完整保留，来源时间及共享清洗规则照常读取', async () => {
   const messages = [
     { is_user: false, mes: `[[${'草'.repeat(20000)}]]<content>${'甲'.repeat(9000)}</content>` },
     { is_user: false, mes: `<content>${'乙'.repeat(9000)}</content><!-- QQJ-end | date=2026-10-18 | time=15:30 -->` },
@@ -209,8 +209,7 @@ test('进展6000完整JSON预算计算净正文，保留来源时间且后续读
   let wrappers = { keepTags: 'content', extraTags: '[[...]]' };
   const reader = createContextReader({ target, store, qqjBridgeProvider: () => null, wrapperSettingsProvider: () => wrappers });
   const result = await reader.readForContact('lin');
-  assert.ok(JSON.stringify(result.storyProgress).length <= 6000); assert.equal(result.storyProgress.messages.length, 2); assert.ok(result.storyProgress.messages[0].text.endsWith('甲')); assert.ok(result.storyProgress.messages[1].text.endsWith('乙')); assert.equal(JSON.stringify(result.storyProgress).includes('草'), false);
-  assert.equal(result.storyProgress.complete, false);
+  assert.deepEqual(result.story.map(row=>row.text),['乙'.repeat(9000)]);assert.equal('storyProgress' in result,false);assert.equal(JSON.stringify(result.story).includes('甲'),false);assert.equal(JSON.stringify(result.story).includes('草'),false);
   assert.equal(result.clock.time, '15:30');
   wrappers = { keepTags: '', extraTags: '' };
   assert.deepEqual((await reader.readForForum()).storyBackground, []);
@@ -281,7 +280,7 @@ test('SMS receives saved public feed posts across story floors without image fil
   assert.equal(h.modelRequests.length, 0);
 });
 
-test('forum receives one story background and setting without user identity or private recall', async () => {
+test('forum receives the selected user story with role while retaining private identity and recall isolation', async () => {
   const latest = '周予经过广场。<!-- QQJ-end | date=2026-10-18 | time=18:00 -->';
   const h = createHarness({ messages: [
     { is_user: false, mes: '上一楼，不作为论坛背景。' },
@@ -298,27 +297,27 @@ test('forum receives one story background and setting without user identity or p
   const before = structuredClone(target.metadata), saves = h.metadataSaves;
   const context = await reader.readForForum();
   assert.deepEqual(Object.keys(context).sort(), ['clock', 'defaultLanguage', 'phoneContext', 'setting', 'storyBackground', 'worldbook']);
-  assert.deepEqual(context.storyBackground, [{ speaker: '叙述', text: '周予经过广场。' }]);
+  assert.deepEqual(context.storyBackground, [{ role: 'user', speaker: '用户', text: '随后用户的私下发言。' }]);
   assert.ok(context.setting.includes(target.character.description));
   assert.equal(context.clock.time, '18:00');
-  assert.deepEqual(scans, [{ scanText: '周予经过广场。' }], 'worldbook activation uses the actual latest AI narrative copy');
+  assert.deepEqual(scans, [{ scanText: '随后用户的私下发言。' }], 'worldbook activation uses the actual configured story records');
   const serialized = JSON.stringify(context);
-  for (const privateText of ['用户私有姓名', '用户私有网名', '短信私有内容', '随后用户的私下发言', '上一楼']) assert.equal(serialized.includes(privateText), false);
+  for (const privateText of ['用户私有姓名', '用户私有网名', '短信私有内容', '上一楼', '周予经过广场']) assert.equal(serialized.includes(privateText), false);
   assert.deepEqual(target.metadata, before);
   assert.equal(h.metadataSaves, saves);
   assert.equal(h.modelRequests.length, 0);
 });
 
-test('reads one AI floor and a bounded current/past tail without removing saved history', async () => {
+test('reads one AI floor, the full current private segment and full past history without removing saved history', async () => {
   const history = Array.from({ length: 1000 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', text: `短信${i}`, batch: { key: i < 800 ? 'older' : '[999]', label: '时间卡口' }, createdAt: new Date(2026, 9, 1, 0, i).toISOString() }));
   const h = createHarness({ messages: Array.from({ length: 1000 }, (_, i) => ({ mes: `剧情${i}`, is_user: false })), metadata: { pocketPhone: { schemaVersion: 1, contacts: [{ id: 'lin', name: '林舟' }], conversations: { lin: history }, forum: { posts: [] }, injectEnabled: false } } });
   const target = h.host.captureChat(), store = createPhoneStore({ target });
   const reader = createContextReader({ target, store });
   const context = await reader.readForContact('lin');
-  assert.equal(context.history.length, 12);
-  assert.equal(context.history[0].text, '短信988');
-  assert.equal(context.previousMessages.length, 4);
-  assert.equal(context.previousMessages[0].text, '短信796', 'prior context is a bounded tail, without duplicating the current batch');
+  assert.equal(context.history.length, 200);
+  assert.deepEqual(context.history.map(message => message.text), Array.from({ length: 200 }, (_, index) => `短信${800 + index}`));
+  assert.equal(context.previousMessages.length, 800);
+  assert.deepEqual(context.previousMessages.map(row=>row.text),Array.from({length:800},(_,i)=>`短信${i}`));
   assert.equal(context.story.length, 1);
   assert.equal(context.story[0].text, '剧情999');
   assert.equal(store.read().conversations.lin.length, 1000);
@@ -384,7 +383,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: Liangshi primary 
   for(const sentinel of ['PRIVATE_NICKNAME_SENTINEL','PRIVATE_SMS_SENTINEL','PRIVATE_USER_SENTINEL'])assert.equal(scans[0].includes(sentinel),false);assert.ok(scans[0].includes('微博'));assert.ok(scans[0].includes('LATEST_STORY_SENTINEL'));assert.equal(fresh.story[0].text,'LATEST_STORY_SENTINEL');await reader.readForLiangshi({scanText:'MORE_PUBLIC_POST_SENTINEL',includeStory:false});assert.ok(scans[1].includes('MORE_PUBLIC_POST_SENTINEL'));assert.equal(scans[1].includes('LATEST_STORY_SENTINEL'),false);assert.deepEqual(target.metadata,before);assert.equal(h.modelRequests.length,0);assert.equal(h.metadataSaves,0);
 });
 
-for(const hostKind of ['native','luker'])test(`${hostKind}: hot ranking reads all bounded static book material and latest story without private phone history`,async()=>{
+for(const hostKind of ['native','luker'])test(`${hostKind}: hot ranking reads all static book material and latest story without private phone history`,async()=>{
  const h=createHarness({hostKind,messages:[{is_user:false,mes:'HOT_STORY_PRIVATE<!-- QQJ-end | date=2031/4/8 | time=13:00 -->'}],metadata:{pocketPhone:{contacts:[{id:'lin',name:'PRIVATE_PHONE_NAME'}],conversations:{lin:[{text:'PRIVATE_SMS'}]},todos:[{title:'PRIVATE_TODO'}],liangshi:{posts:[{text:'OLD_POST'}],accounts:[{name:'OLD_ACCOUNT'}],topics:[{name:'OLD_TOPIC'}]},defaultLanguage:'日语'}}});
  const target=h.host.captureChat(),store=createPhoneStore({target});target.character.description='设定列出公众人物甲、公共机构乙及普通居民丙。';
  const reader=createContextReader({target,store,qqjBridgeProvider:()=>{throw Error('no private memory');},wrapperSettingsProvider:()=>({})});
@@ -392,4 +391,28 @@ for(const hostKind of ['native','luker'])test(`${hostKind}: hot ranking reads al
  assert.deepEqual(Object.keys(input).sort(),['clock','setting','defaultLanguage','worldbook','story'].sort());assert.ok(input.setting.includes('普通居民丙'));assert.ok(input.worldbook.includes('周予性格爽快'));assert.equal(input.clock.time,'13:00');assert.equal(input.defaultLanguage,'日语');assert.equal(input.story[0].text,'HOT_STORY_PRIVATE');
  for(const marker of ['PRIVATE_PHONE_NAME','PRIVATE_SMS','PRIVATE_TODO','OLD_POST','OLD_ACCOUNT','OLD_TOPIC'])assert.equal(JSON.stringify(input).includes(marker),false,marker);
  assert.equal(h.modelRequests.length,0);assert.equal(h.metadataSaves,0);
+});
+
+test('complete card text and draft/following worldbook queries retain both ends beyond former caps',async()=>{
+ const {target,reader,h}=continuityHarness(),queries=[];const description='CARD_HEAD'+'卡片'.repeat(8000)+'CARD_TAIL',story='STORY_HEAD'+'剧情'.repeat(6000)+'STORY_TAIL',seed='SEED_HEAD'+'素材'.repeat(6000)+'SEED_TAIL';target.character.description=description;target.messages.splice(0,target.messages.length,{is_user:false,mes:story});target.readWorldInfo=async options=>{queries.push(options?.scanText);return '完整世界';};
+ const contact=await reader.readForContact('lin'),group=await reader.readForGroup('current'),following=await reader.readForLiangshiFollowing(),draft=await reader.readForLiangshiDraft({seed,imageSeed:'图种子'});assert.ok(contact.character.includes(description));assert.ok(group.character.includes(description));assert.ok(following.setting.includes(description));assert.ok(draft.setting.includes(description));for(const q of queries)assert.ok(q.includes(story));assert.ok(queries.at(-1).includes(seed));assert.equal(draft.seed,seed);assert.equal('storyProgress' in contact,false);assert.equal(h.metadataSaves,0);assert.equal(h.modelRequests.length,0);
+});
+
+test('story reference selects recent AI and user records with full raw user wrappers, roles and unchanged AI clock',async()=>{
+ const user='<user_input> 真正用户输入😀\n'+'长'.repeat(25000)+'尾 </user_input>',messages=[{name:'角色',is_user:false,mes:'<content>OLD_AI</content>'},{is_system:true,mes:'SYSTEM_NEVER'},{name:'玩家',is_user:true,mes:'<user_input>USER_MIDDLE</user_input>'},{name:'角色',is_user:false,mes:'<analysis>HIDDEN_NEVER</analysis><content>AI_FULL</content><!-- QQJ-end | date=2031年4月8日 | time=09:30 -->'},{role:'system',mes:'SYSTEM_NEVER_TWO'},{name:'玩家',role:'user',mes:user},{is_user:false,mes:''},{mes:42}],h=createHarness({messages,metadata:{pocketPhone:{contacts:[{id:'a',name:'甲'}],groups:[],conversations:{}}}}),target=h.host.captureChat(),store=createPhoneStore({target}),reader=createContextReader({target,store,qqjBridgeProvider:()=>null,wrapperSettingsProvider:()=>({keepTags:'content',extraTags:'analysis'})});
+ const initial=await reader.readForContact('a');assert.deepEqual(initial.story,[{role:'user',speaker:'玩家',text:user}]);assert.equal(initial.clock.time,'09:30');assert.ok(initial.batch.key.startsWith('[3,'));assert.equal(h.metadataSaves,0);assert.equal('storyReferenceFloors' in store.read(),false);
+ store.read().storyReferenceFloors=2;const two=await reader.readForContact('a');assert.deepEqual(two.story,[{role:'assistant',speaker:'角色',text:'AI_FULL'},{role:'user',speaker:'玩家',text:user}]);
+ store.read().storyReferenceFloors=100;assert.deepEqual((await reader.readForContact('a')).story.map(r=>r.text),['OLD_AI','<user_input>USER_MIDDLE</user_input>','AI_FULL',user]);store.read().storyReferenceFloors=0;assert.deepEqual((await reader.readForContact('a')).story,[]);
+ store.read().storyReferenceFloors=1;target.messages.push({name:'角色',mes:'<analysis>ONLY_HIDDEN</analysis>'});assert.deepEqual((await reader.readForContact('a')).story,[],'a selected empty AI record does not refill from outside N');assert.equal(h.metadataSaves,0);assert.equal(h.modelRequests.length,0);assert.equal(h.settingsSaves,0);
+});
+
+test('story reference has no maximum, keeps every configured record and reaches all existing readers and one real service payload',async()=>{
+ const messages=Array.from({length:1205},(_,i)=>({name:i%2?'玩家':'角色',is_user:Boolean(i%2),mes:i%2?'<user_input>USER_'+i+'</user_input>':'AI_'+i})),h=createHarness({messages,metadata:{pocketPhone:{contacts:[{id:'a',name:'甲'}],groups:[{id:'g',name:'群',memberIds:['a'],userIsMember:true}],conversations:{},storyReferenceFloors:1000}}}),target=h.host.captureChat(),store=createPhoneStore({target}),reader=createContextReader({target,store,qqjBridgeProvider:()=>null});const expected=messages.slice(-1000).map(m=>m.mes);
+ for(const input of [await reader.readForContact('a'),await reader.readForGroup('g'),await reader.readForSocial([]),await reader.readDirectorySources(),await reader.readForForum(),await reader.readForLiangshi(),await reader.readForLiangshiHot(),await reader.readForLiangshiFollowing(),await reader.readForLiangshiDraft({seed:'种子',imageSeed:''})])assert.deepEqual((input.story||input.storyBackground).map(r=>r.text),expected);
+ assert.equal('story' in await reader.readForLiangshi({includeStory:false}),false);assert.equal('storyBackground' in await reader.readForForum({continuation:true}),false);store.read().storyReferenceFloors=100;assert.equal((await reader.readForContact('a')).story.length,100);store.read().storyReferenceFloors=1e100;assert.deepEqual((await reader.readForContact('a')).story.map(r=>r.text),messages.map(m=>m.mes));for(const value of [undefined,-1,1.5,'',Infinity,NaN,null]){store.read().storyReferenceFloors=value;assert.equal((await reader.readForContact('a')).story.length,1);}store.read().storyReferenceFloors=2;const calls=[];await createMessageService({target,store,contextReader:reader,modelClient:{complete:async q=>{calls.push(JSON.parse(q.messages[0].content));return JSON.stringify({messages:[{text:'回复。'}]});}}}).continueChat('a');assert.deepEqual(calls[0].story.map(r=>r.text),messages.slice(-2).map(m=>m.mes));assert.deepEqual(calls[0].story.map(r=>r.role),['user','assistant']);assert.equal(calls.length,1);assert.equal(h.metadataSaves,1);assert.equal(h.settingsSaves,0);target.messages.length=0;assert.deepEqual((await reader.readForContact('a')).story,[]);
+});
+
+test('story reference cleans imported SMS per selected AI floor and backflow regeneration selects before the old reply',async()=>{
+ const messages=[{name:'角色',mes:'<content>AI_ZERO[tmt|甲|甲]FIRST_SMS[/tmt]</content>'},{name:'玩家',is_user:true,mes:'<user_input>USER_RAW</user_input>'},{name:'角色',mes:'<content>AI_TWO[tmt|甲|甲]SECOND_SMS[/tmt]</content>'}],h=createHarness({messages,metadata:{pocketPhone:{contacts:[{id:'a',name:'甲'}],groups:[],conversations:{a:[{id:'first',role:'assistant',text:'FIRST_SMS',source:{kind:'main-story',floor:0,block:0},batch:{key:'[0]'}},{id:'second',role:'assistant',text:'SECOND_SMS',source:{kind:'main-story',floor:2,block:0},batch:{key:'[2]'}}]},storyReferenceFloors:3,injectEnabled:true}}}),target=h.host.captureChat(),store=createPhoneStore({target}),reader=createContextReader({target,store,qqjBridgeProvider:()=>null,wrapperSettingsProvider:()=>({keepTags:'content'})});assert.deepEqual((await reader.readForContact('a')).story.map(r=>r.text),['AI_ZERO','<user_input>USER_RAW</user_input>','AI_TWO']);
+ target.messages.push({name:'角色',mes:'OLD_ANSWER_EXCLUDED'});store.read().conversations.a.push({id:'long',role:'user',text:'长'.repeat(4000),batch:{key:'[2]'}});store.read().storyReferenceFloors=2;const calls=[];await createBackflowService({target,store,wrapperSettingsProvider:()=>({keepTags:'content'}),modelClient:{complete:async q=>{calls.push(JSON.parse(q.messages[0].content));return JSON.stringify({summary:'参考。'});}}}).prepare('regenerate');assert.equal(calls.length,1);assert.deepEqual(calls[0].story.map(r=>r.text),['<user_input>USER_RAW</user_input>','AI_TWO']);assert.equal(JSON.stringify(calls[0]).includes('OLD_ANSWER_EXCLUDED'),false);assert.equal(h.metadataSaves,0);
 });

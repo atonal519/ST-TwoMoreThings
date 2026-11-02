@@ -1,3 +1,4 @@
+import { readStoryReferenceFloors } from './story-reference.js';
 import { cleanBackground } from './backgrounds.js';
 import { readRelease, releaseUrlForCore, STABLE_CORE_URL } from './release.js';
 import { phoneUrl } from './paths.js';
@@ -29,7 +30,7 @@ export function stateFromPreset(preset) {
   if (contacts.some(person => person.identityOwnerId && (person.identityOwnerId === person.id || person.identityOwnerId !== '@user' && (!ids.has(person.identityOwnerId) || contacts.find(owner => owner.id === person.identityOwnerId)?.identityOwnerId)))) throw new Error('卡内手机的账号所属人物无法对应，请让作者重新导出。');
   const groups = (preset.groups || []).map(group => ({ id: string(group.id), name: string(group.name), avatar: string(group.avatar), background: cleanBackground(group.background, true), memberIds: [...new Set(group.memberIds || [])], userIsMember: group.userIsMember !== false }));
   if (new Set(groups.map(group => group.id)).size !== groups.length || groups.some(group => !group.id || !group.name.trim() || ids.has(group.id) || group.memberIds.some(id => !ids.has(id)))) throw new Error('卡内手机的群聊资料或成员无法对应，请让作者重新导出。');
-  return { schemaVersion: 1, contacts, groups, conversations: {}, forum: { posts: [] }, injectEnabled: preset.injectEnabled === true, defaultLanguage: string(preset.defaultLanguage).trim(), theme: preset.theme === 'night' ? 'night' : 'day',
+  return { schemaVersion: 1, contacts, groups, conversations: {}, forum: { posts: [] }, injectEnabled: preset.injectEnabled === true, defaultLanguage: string(preset.defaultLanguage).trim(), storyReferenceFloors: readStoryReferenceFloors(preset), theme: preset.theme === 'night' ? 'night' : 'day',
     wallpapers: { day: cleanBackground(preset.wallpapers?.day), night: cleanBackground(preset.wallpapers?.night) },
     ...(['stacked', 'rounded'].includes(preset.lockStyle) ? { lockStyle: preset.lockStyle } : {}),
     ...(preset.userProfile ? { userProfile: profile(preset.userProfile) } : {}),
@@ -101,7 +102,7 @@ export function createAuthoringService({ store, host, readEntries = () => host.r
       const groups = await Promise.all((state.groups || []).map(async (group, index) => ({ id: `card:group-${index + 1}`, name: group.name, avatar: await portable(group.avatar), background: await portable(group.background), memberIds: group.memberIds.map(id => ids.get(id)), userIsMember: group.userIsMember })));
       const userProfile = state.userProfile ? { ...profile(state.userProfile), avatar: await portable(state.userProfile.avatar) } : undefined;
       const preferences = readEntries();
-      const preset = { schemaVersion: 1, theme: state.theme === 'night' ? 'night' : 'day', injectEnabled: state.injectEnabled === true, defaultLanguage: state.defaultLanguage || '', contacts, groups, entries: { fabShow: preferences.fabShow !== false, qrShow: preferences.qrShow === true },
+      const preset = { schemaVersion: 1, theme: state.theme === 'night' ? 'night' : 'day', injectEnabled: state.injectEnabled === true, defaultLanguage: state.defaultLanguage || '', storyReferenceFloors: readStoryReferenceFloors(state), contacts, groups, entries: { fabShow: preferences.fabShow !== false, qrShow: preferences.qrShow === true },
         ...(['stacked', 'rounded'].includes(state.lockStyle) ? { lockStyle: state.lockStyle } : {}),
         wallpapers: { day: await portable(state.wallpapers?.day), night: await portable(state.wallpapers?.night) }, ...(userProfile ? { userProfile } : {}),
       };

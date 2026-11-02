@@ -75,7 +75,7 @@ test('stable message references only resolve against other eligible messages, an
   state.conversations.a[1].replyToId = 'huge';
   state.forum.posts.push({ id: 'huge-post', author: '路人', title: '完整长帖', content: '不可裁断'.repeat(2000), comments: [] });
   rows = project(state, { anchor, targetIds: ['a'] });
-  assert.ok(serialized(rows).length <= 6000); assert.ok(rows.some(row => row.source.id === 'a1' && row.excerpted)); assert.equal(serialized(rows).includes('ACTIVE_A'), false);
+  assert.ok(serialized(rows).length > 6000);assert.equal(rows.find(row=>row.source.id==='a1').replyTo.messageText,'REPLY'.repeat(1300));assert.equal(rows.find(row=>row.source.id==='huge-post').text,'不可裁断'.repeat(2000));assert.equal(rows.some(row=>row.excerpted),false); assert.equal(serialized(rows).includes('ACTIVE_A'), false);
   assert.ok(rows.some(row => row.text === 'GROUP_AB'));
 });
 

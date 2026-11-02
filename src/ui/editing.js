@@ -7,7 +7,7 @@ export function createEditingRenderer(surface) {
   const end = event => composing.delete(event.target);
   root.addEventListener('compositionstart', start);
   root.addEventListener('compositionend', end);
-  const forms = '.composer, .social-comment-form, .forum-comment-form, .ls-reply-form, .ls-compose-form, .profile-form, .group-form, .api-form, .attachment-form';
+  const forms = '.composer, .social-comment-form, .forum-comment-form, .ls-reply-form, .ls-compose-form, .profile-form, .group-form, .api-form, .attachment-form, .story-reference-row';
   const ownerAttributes = ['data-social-comment-form', 'data-forum-post', 'data-liangshi-reply-form', 'data-reply-to'];
   function attributes(current, next, editor = false) {
     for (const { name } of [...current.attributes]) if ((!editor || name !== 'value') && !next.hasAttribute(name)) current.removeAttribute(name);

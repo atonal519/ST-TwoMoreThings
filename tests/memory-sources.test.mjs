@@ -22,7 +22,7 @@ function setup() {
   const bridge = { getStatus: () => ({ status }), async readContext(request) { qqjReads++; return { status: 'ready', actors: [{ entityId: 'qa', memoryText: '甲的私有记忆' }, { entityId: 'qb', memoryText: '乙的私有记忆' }, { entityId: 'other', memoryText: '其他人的记忆' }] }; } };
   const sources = createMemorySources({ target, settingsProvider: h.host.readSettings, qqjBridgeProvider: () => bridge, baiBaiBookProvider: () => api });
   const reader = createContextReader({ target, store, memorySources: sources, qqjBridgeProvider: () => bridge });
-  return { h, settings, target, store, reader, sources, api, nodes, setStatus: value => { status = value; }, counts: () => ({ bbsReads, qqjReads }) };
+  return { h, settings, target, store, reader, sources, api, nodes, bridge, setStatus: value => { status = value; }, counts: () => ({ bbsReads, qqjReads }) };
 }
 
 test('live enabled status selects a single source; BBS history is read once and stays outside actor data', async () => {
@@ -45,16 +45,16 @@ test('live enabled status selects a single source; BBS history is read once and 
   assert.equal((await s.reader.readForContact('a')).related, '');
 });
 
-test('BBS selects bounded whole recent nodes and handles one oversized summary without copying full history', async () => {
+test('BBS keeps every injected node in its original order and full oversized text', async () => {
   const s = setup();
   s.nodes.splice(0, s.nodes.length, { text: '甲'.repeat(1800) }, { text: '乙'.repeat(1800) }, { text: '丙'.repeat(1800) });
   const contact = await s.reader.readForContact('a'), group = await s.reader.readForGroup('g');
-  assert.equal(contact.storyMemory, `${'乙'.repeat(1800)}\n\n${'丙'.repeat(1800)}`);
-  assert.ok(group.storyMemory.length <= 6000);
+  assert.equal(contact.storyMemory, `${'甲'.repeat(1800)}\n\n${'乙'.repeat(1800)}\n\n${'丙'.repeat(1800)}`);
+  assert.equal(group.storyMemory,contact.storyMemory);
   assert.equal(group.storyMemory.includes('甲'), true);
   s.nodes.splice(0, s.nodes.length, { text: '长'.repeat(15000) });
-  assert.equal((await s.reader.readForContact('a')).storyMemory.length, 4000);
-  assert.equal((await s.reader.readForSocial(s.store.read().contacts)).storyMemory.length, 6000);
+  assert.equal((await s.reader.readForContact('a')).storyMemory.length, 15000);
+  assert.equal((await s.reader.readForSocial(s.store.read().contacts)).storyMemory.length, 15000);
   s.nodes.splice(0, s.nodes.length, { text: '现代节点', timeStart: '2031/4/7 08:00', timeEnd: '2031/4/7 09:00' });
   assert.equal((await s.reader.readForContact('a')).storyMemory, '【2031/4/7 08:00 → 2031/4/7 09:00】现代节点');
 });
@@ -131,3 +131,9 @@ test('a true dual-enabled conflict stops memory generation before saves or model
   assert.deepEqual(s.counts(), { bbsReads: 0, qqjReads: 0 });
   await s.reader.readForForum();
 });
+
+test('QQJ requests keep complete queries without TMT maxCharacters and preserve the complete returned actor text',async()=>{
+ const s=setup(),requests=[];s.settings.baibai_book.enabled=false;s.setStatus('ready');const story='QUERY_HEAD'+'剧情'.repeat(7000)+'QUERY_TAIL',related='STATE_HEAD'+'状态'.repeat(4000)+'STATE_TAIL\n'+'MEMORY_HEAD'+'记忆'.repeat(4000)+'MEMORY_TAIL';s.target.messages[0].mes=story;s.bridge.readContext=async request=>{requests.push(request);return{status:'ready',actors:[{entityId:'qa',stateText:related.split('\n')[0],memoryText:related.split('\n')[1]},{entityId:'qb',memoryText:'乙的记忆'}]};};
+ const contact=await s.reader.readForContact('a'),group=await s.reader.readForGroup('g'),social=await s.reader.readForSocial(s.store.read().contacts);assert.equal(contact.related,related);assert.equal(group.group.members.find(p=>p.id==='a').related,related);assert.equal(social.authors.find(p=>p.id==='a').related,related);for(const q of requests){assert.deepEqual(Object.keys(q).sort(),['entityIds','query']);assert.ok(q.query.includes(story));}assert.equal(requests.length,3);assert.equal(s.h.metadataSaves,0);assert.equal(s.h.settingsSaves,0);
+});
+test('BBS text responses are returned complete without an extra character slice',async()=>{const s=setup(),text='  HEAD'+ '摘要'.repeat(12000)+'TAIL  ';s.api.getInjectedHistory=()=>({text});assert.equal((await s.reader.readForContact('a')).storyMemory,text);assert.equal(s.h.metadataSaves,0);});

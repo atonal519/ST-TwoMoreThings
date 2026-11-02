@@ -58,12 +58,12 @@ test('one anonymous more call links old and earlier same-batch floors and does n
   const a = f.post().comments.at(-2), b = f.post().comments.at(-1); assert.equal(a.text, '可以去街角公园。'); assert.equal(a.replyToId, own.id); assert.equal(b.replyToId, a.id); assert.ok(a.publishedAt);
 });
 
-test('reply requests preserve complete routing IDs inside 8k and public phone 20/6k without truncating saved text', async () => {
+test('reply requests preserve complete post and long reply text with their routing IDs', async () => {
   const f = setup(); f.h.context.chatMetadata.pocketPhone.forum.posts[0].content = '长正文'.repeat(5000);
   const own = await f.service.publishComment('p', { text: '😂'.repeat(5000), replyToId: f.post().comments[0].id });
   f.answer({ comments: [{ author: '路人', text: '正常回应。', replyToId: own.id }] }); await f.service.loadMore('p');
-  const input = JSON.parse(f.calls[0].messages[0].content); assert.ok(JSON.stringify(input.continuation).length <= 8000); assert.equal(input.continuation.comments.find(c => c.id === own.id).id, own.id); assert.ok(input.continuation.comments.every(c => c.text.isWellFormed()));
-  assert.ok(input.phoneContext.length <= 20); assert.ok(JSON.stringify(input.phoneContext).length <= 6000); assert.equal(f.post().comments.find(c => c.id === own.id).text.length, 10000);
+  const input = JSON.parse(f.calls[0].messages[0].content); assert.equal(input.continuation.post.content,'长正文'.repeat(5000));assert.equal(input.continuation.comments.find(c=>c.id===own.id).text,'😂'.repeat(5000)); assert.equal(input.continuation.comments.find(c => c.id === own.id).id, own.id); assert.ok(input.continuation.comments.every(c => c.text.isWellFormed()));
+  assert.equal(input.phoneContext.some(row=>row.excerpted),false); assert.equal(f.post().comments.find(c => c.id === own.id).text.length, 10000);
 });
 
 test('new manual comments and draft-independent post fields survive in-flight results; errors never predelete or revive a refreshed post', async () => {
@@ -135,5 +135,9 @@ test('creation timestamps only break story-time ties and do not replace relation
   ] } };
   const rows = readPhoneContext(state, { publicOnly: true }); assert.deepEqual(rows.map(row => row.source.id), ['future', 'tie-new', 'tie-old', 'self']);
   assert.equal(readPhoneContext(state, { targetIds: ['a'] })[0].source.id, 'self');
-  assert.equal(JSON.stringify(rows).includes('createdAt'), false); assert.ok(rows.length <= 20 && JSON.stringify(rows).length <= 6000);
+  assert.equal(JSON.stringify(rows).includes('createdAt'), false); assert.equal(rows.length,4);
+});
+
+test('forum more includes all floors and all pending targets with unique full parent records',async()=>{
+ const f=setup(),comments=Array.from({length:64},(_,i)=>({id:'full'+i,author:'原作者'+i,text:'FLOOR_'+i+'正文'.repeat(500),...(i?{userAuthored:true,replyToId:'full0'}:{})}));f.store.read().forum.posts[0].comments=comments;f.answer({comments:[{author:'新读者',text:'完整回应。',replyToId:'full63'}]});await f.service.loadMore('p');const input=JSON.parse(f.calls[0].messages[0].content);assert.deepEqual(input.continuation.comments.map(c=>c.id),comments.map(c=>c.id));assert.deepEqual(input.continuation.comments.map(c=>c.text),comments.map(c=>c.text));assert.deepEqual(input.continuation.replyTargets,comments.slice(1).map(c=>c.id));assert.equal(new Set(input.continuation.comments.map(c=>c.id)).size,64);assert.equal(f.calls.length,1);assert.equal(f.h.metadataSaves,1);assert.deepEqual(f.post().comments.slice(0,64),comments);
 });

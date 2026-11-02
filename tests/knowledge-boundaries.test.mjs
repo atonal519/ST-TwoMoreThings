@@ -75,7 +75,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: private request a
   assertKnowledgeContract(system);
   assert.equal(input.contact.name, '同名');
   assert.ok(input.story[0].text.includes('STORY_SECRET'));
-  assert.ok(JSON.stringify(input.storyProgress).includes('OLDER_SECRET'));
+  assert.equal('storyProgress' in input,false);assert.equal(JSON.stringify(input).includes('OLDER_SECRET'),false);
   assert.equal(input.character.includes('CARD_SECRET'), true);
   assert.equal(input.worldbook, 'WORLD_SECRET');
   assert.equal(input.calendar.events[0].note, 'CALENDAR_SECRET');

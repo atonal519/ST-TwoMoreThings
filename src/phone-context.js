@@ -1,6 +1,5 @@
 import { contextMessage } from './content.js';
 import { partitionHistory } from './timeline.js';
-import { fitRows } from './context-budget.js';
 import { identityOwnerId } from './identities.js';
 
 export const groupAudience = group => [...new Set([...(group.memberIds || []), ...(group.userIsMember ? ['@user'] : [])])];
@@ -20,8 +19,8 @@ const name = person => person?.nickname || person?.name || '';
 const time = item => item.publishedAt || [item.storyDate, item.timeLabel].filter(Boolean).join(' ') || item.createdAt || '';
 
 // No writes, identity inference, file paths, or private-source expansion. Permissions
-// precede relationship ranking; the budget counts the actual complete JSON records.
-export function readPhoneContext(state, { anchor, targetIds = [], publicOnly = false, excludeApps = [], excludeConversationId, budget = 6000, limit = 20, defaultUser = '' } = {}) {
+// precede relationship ranking; every eligible record keeps its complete projection.
+export function readPhoneContext(state, { anchor, targetIds = [], publicOnly = false, excludeApps = [], excludeConversationId, defaultUser = '' } = {}) {
   const people = new Map((state.contacts || []).map(person => [person.id, person]));
   const targets = [...new Set(targetIds)];
   const targetOwners = new Set(targets.map(id => identityOwnerId(state, id)));
@@ -46,7 +45,7 @@ export function readPhoneContext(state, { anchor, targetIds = [], publicOnly = f
       if (!thread.group && !targets.every(id => thread.knownToIds.some(member => identityOwnerId(state, member) === identityOwnerId(state, id)))) continue;
       const qualified = thread.group ? readableGroupMessages(state, thread.group, targets) : state.conversations[thread.id] || [];
       const stable = partitionHistory(qualified, anchor).past.flatMap(batch => batch.messages);
-      for (const message of stable.slice(-8)) {
+      for (const message of stable) {
         const content = contextMessage(message, stable), { role, speakerId, ...body } = content;
         const authorId = speakerId || (role === 'user' ? '@user' : thread.id);
         add('messages', thread.kind, message.id, person(authorId), body.text, { ...body, conversationId: thread.id,
@@ -96,7 +95,5 @@ export function readPhoneContext(state, { anchor, targetIds = [], publicOnly = f
       { parentId: post.id, time: time(comment), ...(comment.image?.description ? { image: { description: comment.image.description } } : {}), ...(comment.translation ? { translation: comment.translation } : {}), ...(comment.replyToId ? { replyToId: comment.replyToId } : {}) }, [], comment.createdAt);
   }
   const newest = (a, b) => String(b.row.time).localeCompare(String(a.row.time), undefined, { numeric: true }) || b.createdAt.localeCompare(a.createdAt) || b.index - a.index;
-  const window = candidates.sort(newest).slice(0, 20);
-  window.sort((a, b) => a.rank - b.rank || newest(a, b));
-  return fitRows(window.map(item => item.row), { limit, budget });
+  return candidates.sort((a, b) => a.rank - b.rank || newest(a, b)).map(item => item.row);
 }

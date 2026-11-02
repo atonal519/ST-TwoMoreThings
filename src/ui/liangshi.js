@@ -1,3 +1,4 @@
+import { favoriteButton } from './favorites.js';
 import { action, avatar, empty, escape, icon, renderBilingual, renderContentImage } from './shared.js';
 import { getLiangshiContact, liangshiStatistics, liangshiReplyState, readLiangshiFeed, readLiangshiFollowingFeed, readLiangshiUserPosts, readLiangshiTopics, readLiangshiTopic, isLiangshiFollowingPost, isLiangshiUserPost, liangshiInteractions } from '../liangshi.js';
 import { imageSource } from '../image-files.js';
@@ -45,7 +46,7 @@ export function renderLiangshi(state, { ui, busy }) {
       ${photo}
       ${long && !detail ? `<button type="button" class="ls-expand" data-action="liangshi-expand" data-liangshi-id="${escape(post.id)}">${expanded ? '收起' : '展开全文'}</button>` : ''}
       ${post.quoteId ? quote(posts.get(post.quoteId)) : ''}
-      <div class="ls-post-footer">${detail ? '' : `<div class="ls-stats"><button type="button" data-liangshi-open="${escape(post.id)}" data-liangshi-section="reposts" aria-label="查看转发">${icon('repost')}${totalLabel(totals.repostCount)}</button><button type="button" data-liangshi-open="${escape(post.id)}" data-liangshi-section="comments" aria-label="查看评论">${icon('comment')}${totalLabel(totals.commentCount)}</button>${like(post)}</div>`}
+      <div class="ls-post-footer">${detail ? '' : `<div class="ls-stats"><button type="button" data-liangshi-open="${escape(post.id)}" data-liangshi-section="reposts" aria-label="查看转发">${icon('repost')}${totalLabel(totals.repostCount)}</button><button type="button" data-liangshi-open="${escape(post.id)}" data-liangshi-section="comments" aria-label="查看评论">${icon('comment')}${totalLabel(totals.commentCount)}</button>${like(post)}${favoriteButton(state, { app: 'liangshi', kind: 'post', postId: post.id }, busy, ui.defaultUser)}</div>`}
       ${post.userAuthored && account.ownerId === '@user' ? `<div class="ls-own-actions"><button type="button" class="ls-own-toggle" data-action="liangshi-menu" data-liangshi-id="${escape(post.id)}" aria-label="微博操作" aria-haspopup="menu" aria-expanded="${ui.liangshiMenu === post.id}">${icon('more')}</button></div>` : ''}</div></article>`;
   }
   const comment = (row, post) => {
@@ -56,9 +57,9 @@ export function renderLiangshi(state, { ui, busy }) {
       ${own ? `<button type="button" class="ls-reply-button" data-action="liangshi-reply" data-liangshi-id="${escape(post.id)}" data-liangshi-comment="${escape(row.id)}" aria-label="回复${escape(account.name)}">回复</button>` : ''}
       ${selected ? `<form class="ls-reply-form" data-liangshi-reply-form="${escape(post.id)}" data-reply-to="${escape(draft.replyToId)}"><label class="field-label" for="ls-reply-text">回复 @${escape(account.name)}</label><textarea id="ls-reply-text" name="reply" rows="3" placeholder="写下回复…" required>${escape(draft.text)}</textarea><div class="ls-reply-actions"><button type="button" class="quiet-button" data-action="liangshi-reply-cancel" data-liangshi-id="${escape(post.id)}">取消</button><button type="submit" class="save-button" ${writing ? 'disabled' : ''}>${writing ? '发布中…' : '发布回复'}</button></div></form>` : ''}</div></div>`;
   };
-  const repost = (row, post) => {
+  const repost = (row, post, index) => {
     const account = accounts.get(row.authorId); if (!account) return '';
-    return `<article class="ls-repost">${author(account, '转发了这条微博')}${row.text ? `<p class="ls-copy">${bilingual(row.text, row.translation)}</p>` : ''}${renderContentImage(row.image, { action: 'liangshi-image', data: { 'liangshi-image': post.id, 'liangshi-row': row.id, 'liangshi-collection': 'reposts' }, busy: busy.has(`liangshi-image:${post.id}:${row.id}`), label: '微博转发图片' })}${quote(posts.get(row.quoteId))}</article>`;
+    return `<article class="ls-repost" data-liangshi-repost="${escape(row.id)}">${author(account, '转发了这条微博')}${row.text ? `<p class="ls-copy">${bilingual(row.text, row.translation)}</p>` : ''}${renderContentImage(row.image, { action: 'liangshi-image', data: { 'liangshi-image': post.id, 'liangshi-row': row.id, 'liangshi-collection': 'reposts' }, busy: busy.has(`liangshi-image:${post.id}:${row.id}`), label: '微博转发图片' })}${quote(posts.get(row.quoteId))}<div class="ls-repost-actions">${favoriteButton(state, { app: 'liangshi', kind: 'repost', postId: post.id, ...(post.reposts[index].id ? { rowId: post.reposts[index].id } : { rowIndex: index }) }, busy, ui.defaultUser)}</div></article>`;
   };
   const hotTopic = page.kind === 'hot-topic' ? readLiangshiTopic(data, page.id) : null;
   const refreshing = page.kind === 'compose' || page.kind === 'feed' && page.tab === 'mine' ? '' : page.kind === 'hot-topic'
@@ -82,8 +83,8 @@ export function renderLiangshi(state, { ui, busy }) {
     const post = posts.get(page.id);
     if (!post) return header + empty('这批微博已经更新', '返回上页查看新内容。', 'liangshi');
     const working = busy.has(`liangshi-more:${post.id}`), responding = busy.has(`liangshi-replies:${post.id}`), tab = page.tab || 'comments', totals = liangshiStatistics(post);
-    const tabs = `<div class="ls-detail-stats"><div role="tablist" aria-label="微博互动">${[['reposts','转发',totals.repostCount],['comments','评论',totals.commentCount]].map(([key,label,total]) => `<button type="button" role="tab" data-liangshi-detail-tab="${key}" aria-label="${label}" aria-selected="${tab === key}"><span>${label}</span><strong>${totalLabel(total)}</strong></button>`).join('')}</div>${like(post, true)}</div>`;
-    const list = tab === 'reposts' ? liangshiInteractions(post, 'reposts').map(row => repost(row, post)).join('') : liangshiInteractions(post).map(row => comment(row, post)).join('');
+    const tabs = `<div class="ls-detail-stats"><div role="tablist" aria-label="微博互动">${[['reposts','转发',totals.repostCount],['comments','评论',totals.commentCount]].map(([key,label,total]) => `<button type="button" role="tab" data-liangshi-detail-tab="${key}" aria-label="${label}" aria-selected="${tab === key}"><span>${label}</span><strong>${totalLabel(total)}</strong></button>`).join('')}</div>${like(post, true)}${favoriteButton(state, { app: 'liangshi', kind: 'post', postId: post.id }, busy, ui.defaultUser)}</div>`;
+    const list = tab === 'reposts' ? liangshiInteractions(post, 'reposts').map((row, index) => repost(row, post, index)).join('') : liangshiInteractions(post).map(row => comment(row, post)).join('');
     return `${header}${postMarkup(post, true)}${tabs}${responding ? '<p class="ls-response-status" role="status">正在生成回应…</p>' : ''}<section class="ls-detail-list" role="tabpanel" aria-label="${tab === 'reposts' ? '转发' : '评论'}">${list || `<p class="ls-no-comments">暂无${tab === 'reposts' ? '转发' : '评论'}</p>`}</section><div class="ls-more-area">${action('liangshi-more', working ? '加载中' : '加载更多', '', 'ls-more-button', working || responding)}</div>`;
   }
   if (page.kind === 'hot-topic') {

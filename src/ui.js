@@ -1,3 +1,4 @@
+import { renderFavorites, renderFavoriteDetail } from './ui/favorites.js';
 import { avatar, refKey, renderAvatarMenu } from './ui/shared.js';
 import { renderHome } from './ui/home.js';
 import { createPhoneClock } from './ui/status.js';
@@ -55,6 +56,7 @@ const apps = [
   { id: 'calendar', label: '日历', view: 'calendar' },
   { id: 'album', label: '相册', view: 'album' },
   { id: 'settings', label: '设置', view: 'settings' },
+  { id: 'favorites', label: '收藏夹', view: 'favorites' },
 ];
 const pages = {
   home: renderHome,
@@ -74,9 +76,11 @@ const pages = {
   'social-profile': renderSocialProfile,
   liangshi: renderLiangshi,
   album: renderAlbum,
+  favorites: renderFavorites,
+  'favorite-detail': renderFavoriteDetail,
 };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, social, liangshi, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenNotifications }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, social, liangshi, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenNotifications }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
@@ -111,7 +115,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     contactId: '', groupId: '', postId: '',
     drafts: new Map(), visibleMessages: 60, batch: null,
     historyOpen: false, visibleHistory: 60,
-    inboxMenu: false, chatMenu: false, selectedMessage: '', confirmClear: false,
+    inboxMenu: false, chatMenu: false, selectedMessage: '',
     editor: '', editId: '', profileDraft: {},
     groupEditId: '', groupDraft: {},
     groupMembersOpen: false,
@@ -125,6 +129,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     calendarOffset: 0, calendarDay: null,
     replyToId: '',
     albumPage: 'gallery', albumPath: '', albumScroll: 0,
+    favoriteId: '', favoriteFilter: '', favoriteScroll: 0,
   };
   const actionMenu = createPhoneActionMenu({ root, onClose: () => {
     ui.chatMenu = false; ui.liangshiMenu = ''; ui.inboxMenu = false; ui.avatarMenuOpen = false; ui.selectedMessage = '';
@@ -132,6 +137,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     root.querySelectorAll('[data-message][aria-expanded="true"]').forEach(node => node.setAttribute('aria-expanded', 'false'));
   } });
   const busy = new Set();
+  let clearDialog, favoriteRemoveDialog;
   let renderedRoute = '', apiEditor = 0, renderedApiEditor = 0, photoReturn = null;
   if (!control.isEnabled()) ui.view = 'settings';
   let notificationShade, notificationsSuppressed = false, notificationEpoch = 0;
@@ -139,6 +145,56 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
   let particles = null, avatarCropper = null, lockImageNode = null, lockImageSrc = '', noticeTimer, feedbackTimer;
+  let avatarTimer, pendingAvatar, avatarMentions = [], composingDraft = false;
+  function clearAvatarClick() {
+    doc.defaultView.clearTimeout(avatarTimer);
+    avatarTimer = undefined; pendingAvatar = undefined;
+  }
+  function cancelAvatarGesture() { clearAvatarClick(); avatarMentions = []; }
+  function insertAvatarMentions() {
+    if (composingDraft) return;
+    const mentions = avatarMentions; avatarMentions = [];
+    for (const pending of mentions) {
+      if (element.hidden || !element.isConnected || !isCurrentChat() || renderedRoute !== pending.route || ui.view !== 'group-chat' || conversationId() !== pending.id) continue;
+      const state = store.read(), group = state.groups?.find(group => group.id === pending.id);
+      const person = state.contacts.find(person => person.id === pending.mentionId && group?.memberIds.includes(person.id));
+      const draft = root.querySelector('#sms-draft');
+      if (person && draft && !draft.disabled) {
+        const start = draft.selectionStart ?? draft.value.length, end = draft.selectionEnd ?? start;
+        draft.setRangeText(`@${displayName(person)} `, start, end, 'end');
+        draft.focus({ preventScroll: true }); input({ target: draft });
+      }
+    }
+  }
+  function confirmAvatarMention() {
+    if (pendingAvatar?.mentionId) avatarMentions.push(pendingAvatar);
+    clearAvatarClick(); insertAvatarMentions();
+  }
+  function avatarClick(button, event) {
+    if (!isCurrentChat()) { cancelAvatarGesture(); setFeedback({ error: true, text: '聊天已切换，请重新打开手机。' }); return; }
+    const id = conversationId(), targetId = button.dataset.patTarget, mentionId = button.dataset.mentionId;
+    if (event.detail === 0 || !targetId) {
+      confirmAvatarMention();
+      if (mentionId) { avatarMentions.push({ id, route: renderedRoute, mentionId }); insertAvatarMentions(); }
+      return;
+    }
+    if (pendingAvatar?.id === id && pendingAvatar.targetId === targetId && pendingAvatar.route === renderedRoute && avatarTimer !== undefined) {
+      clearAvatarClick();
+      const service = ui.view === 'group-chat' ? groups : messages;
+      void perform(`pat:${id}:${globalThis.crypto.randomUUID()}`, () => service.pat(id, targetId), onContextChange);
+      return;
+    }
+    confirmAvatarMention();
+    pendingAvatar = { id, route: renderedRoute, targetId, mentionId };
+    avatarTimer = doc.defaultView.setTimeout(confirmAvatarMention, 300);
+  }
+  const avatarPointerDown = event => { if (event.target.closest('.message-avatar')) event.preventDefault(); };
+  const draftCompositionStart = event => { if (event.target.id === 'sms-draft') composingDraft = true; };
+  const draftCompositionEnd = event => {
+    if (event.target.id !== 'sms-draft') return;
+    composingDraft = false;
+    queueMicrotask(insertAvatarMentions);
+  };
   const albumEditor = createAlbumEditor({ root, documentRef: doc,
     readPhoto: path => findAlbumPhoto(store.read(), path, { defaultUser }),
     isActive: () => element.isConnected && !element.hidden && ui.view === 'album' && ui.albumPage === 'editor',
@@ -275,9 +331,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (ui.notice?.key && !store.read().notifications?.items.some(item => item.key === ui.notice.key)) dismissPhoneNotice();
     if (ui.view === 'album' && ui.albumPath && !findAlbumPhoto(store.read(), ui.albumPath, { defaultUser })) { albumEditor.forgetCurrent(ui.albumPath); ui.albumPage = 'gallery'; ui.albumPath = ''; ui.photo = null; }
     if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
-    const route = JSON.stringify([ui.view, ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'post' ? ui.postId : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
+    const route = JSON.stringify([ui.view, ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'favorite-detail' ? ui.favoriteId : ui.view === 'post' ? ui.postId : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
     const sameRoute = route === renderedRoute;
-    if (!sameRoute) actionMenu.close();
+    if (!sameRoute) { cancelClearDialog(); cancelFavoriteRemoval(); actionMenu.close(); cancelAvatarGesture(); composingDraft = false; }
+    if (clearDialog && !isCurrentChat()) cancelClearDialog();
+    if (favoriteRemoveDialog && !isCurrentChat()) cancelFavoriteRemoval();
     const sameEditor = sameRoute && (ui.view !== 'settings' || renderedApiEditor === apiEditor);
     renderedApiEditor = apiEditor;
     renderedRoute = route;
@@ -380,6 +438,63 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       busy.delete(key); render({ bottom: inChat() && (key === 'profile' || key === 'group-profile' || key === `send:${conversationId()}` || key === `continue:${conversationId()}`) });
     }
   }
+  function cancelClearDialog() {
+    if (!clearDialog) return;
+    clearDialog = null;
+    dialog.dispose();
+  }
+  function openClearDialog() {
+    const id = conversationId(), group = ui.view === 'group-chat';
+    if (!inChat() || !isCurrentChat() || busy.has(`send:${id}`) || busy.has(`continue:${id}`)) return;
+    closeActionMenu();
+    const captured = { id, group, anchor: { key: ui.batch.key }, route: renderedRoute, draft: ui.drafts.get(id) };
+    clearDialog = captured;
+    const current = () => clearDialog === captured && !element.hidden && element.isConnected && isCurrentChat() && renderedRoute === captured.route && conversationId() === captured.id && (ui.view === 'group-chat') === captured.group;
+    const content = doc.createElement('p');
+    content.textContent = '删除此会话当前这段消息及其未发送草稿；其他时间段、其他会话、人物资料和相册照片保留。';
+    void dialog.custom({ title: '清空聊天', content, confirmText: '确认清空', cancelText: '取消', danger: true, dismissOnBackdrop: true,
+      onClose: () => { if (clearDialog === captured) clearDialog = null; },
+      submit: async () => {
+        if (!current()) { cancelClearDialog(); return false; }
+        let cleared = false;
+        await perform(`clear:${captured.id}`, () => store.clearConversation(captured.id, captured.anchor), () => {
+          cleared = true;
+          if (current()) {
+            ui.selectedMessage = '';
+            if (ui.drafts.get(captured.id) === captured.draft) ui.drafts.delete(captured.id);
+          }
+          onContextChange();
+        });
+        return cleared;
+      },
+    });
+  }
+  const favoriteRef = button => JSON.parse(decodeURIComponent(button.dataset.favoriteRef));
+  function cancelFavoriteRemoval() {
+    if (!favoriteRemoveDialog) return;
+    favoriteRemoveDialog = null; dialog.dispose();
+  }
+  function removeFavorite(id) {
+    if (!isCurrentChat()) return;
+    const captured = { id, route: renderedRoute };
+    favoriteRemoveDialog = captured;
+    const current = () => favoriteRemoveDialog === captured && isCurrentChat() && !element.hidden && element.isConnected && renderedRoute === captured.route;
+    const content = doc.createElement('p'); content.textContent = '从收藏夹移除这条摘录；原内容和照片保留。';
+    void dialog.custom({ title: '取消收藏', content, confirmText: '取消收藏', cancelText: '保留', danger: true, dismissOnBackdrop: true,
+      onClose: () => { if (favoriteRemoveDialog === captured) favoriteRemoveDialog = null; },
+      submit: async () => {
+        if (!current()) { cancelFavoriteRemoval(); return false; }
+        let removed = false;
+        await perform(`favorite-remove:${id}`, () => store.removeFavorite(id), () => { removed = true; });
+        if (removed && current()) { favoriteRemoveDialog = null; dialog.dispose(); returnFavorites(); }
+        return removed;
+      },
+    });
+  }
+  function returnFavorites() {
+    showPage('favorites');
+    root.querySelector('.phone-main').scrollTop = ui.favoriteScroll;
+  }
   async function recoverImages(paths) {
     if (!paths.length || !images?.recoverMissing || !control.isEnabled()) return [];
     try {
@@ -445,6 +560,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (ui.liangshiPage.kind === 'compose') { ui.liangshiPage = { kind: 'feed', tab: 'mine' }; ui.liangshiTrail = []; }
   }
   function close() {
+    cancelClearDialog();
+    cancelFavoriteRemoval();
+    cancelAvatarGesture();
     notificationShade.close({ immediate: true, restoreFocus: false });
     albumEditor.leave();
     discardLiangshiDraft();
@@ -491,17 +609,18 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
   }
   function showPage(view, { bottom = false, sourceNode } = {}) {
+    cancelAvatarGesture();
     notificationShade.close({ immediate: true, restoreFocus: false });
     if (ui.view === 'album' && view !== 'album') albumEditor.leave();
     if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
     if (view !== 'liangshi') discardLiangshiDraft();
     if (view === 'settings' && ui.view !== 'settings') fillApiDraft();
+    if (ui.view === 'favorites' && view !== 'favorites') ui.favoriteScroll = root.querySelector('.phone-main')?.scrollTop || 0;
     if (ui.view === 'social' && view !== 'social') ui.socialScroll = listPosition(sourceNode);
     dismissMenus();
     if (view !== 'group-chat') ui.replyToId = '';
     ui.view = view;
     setFeedback(null);
-    ui.confirmClear = false;
     ui.attachment = '';
     ui.photo = null;
     render({ bottom });
@@ -514,7 +633,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     notificationShade.close({ immediate: true, restoreFocus: false });
     if (isGroup) { ui.groupId = id; ui.view = 'group-chat'; }
     else { ui.contactId = id; ui.view = 'chat'; }
-    ui.chatMenu = false; ui.inboxMenu = false; ui.confirmClear = false; ui.selectedMessage = ''; ui.visibleMessages = 60; ui.historyOpen = false; ui.visibleHistory = 60; setFeedback(null);
+    ui.chatMenu = false; ui.inboxMenu = false; ui.selectedMessage = ''; ui.visibleMessages = 60; ui.historyOpen = false; ui.visibleHistory = 60; setFeedback(null);
     ui.attachment = ''; ui.attachmentDraft = {};
     render({ bottom: true });
     recoverVisibleImages();
@@ -574,8 +693,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     showPage('liangshi');
     root.querySelector('.phone-main').scrollTop = 0;
   }
-  // 返回先收起当前聊天的清空确认，再按页面父级走，不另存应用历史栈。
+  // 返回按页面父级走，不另存应用历史栈。
   function goBack() {
+    if (ui.view === 'favorite-detail') { returnFavorites(); return; }
     if (ui.view === 'album' && ui.albumPage !== 'gallery') { albumEditor.leave(); ui.albumPage = ui.albumPage === 'editor' ? 'detail' : 'gallery'; render(); return; }
     if (ui.view === 'liangshi' && (ui.liangshiTrail.length || ui.liangshiPage.kind !== 'feed')) {
       if (ui.liangshiPage.kind === 'compose') ui.liangshiDraft = null;
@@ -583,7 +703,6 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       ui.liangshiPage = previous?.page || { kind: 'feed', tab: 'square' };
       showPage('liangshi'); restoreListPosition(previous); return;
     }
-    if (inChat() && ui.confirmClear) { ui.confirmClear = false; render(); return; }
     let parent = 'desktop';
     switch (ui.view) {
       case 'chat':
@@ -756,6 +875,22 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   }
   function click(event) {
     if (selects.click(event)) return;
+    const favoriteButton = event.target.closest('button[data-action^="favorite-"]');
+    if (favoriteButton && !favoriteButton.disabled) {
+      event.stopPropagation();
+      const action = favoriteButton.dataset.action;
+      if (action === 'favorite-add') {
+        if (!isCurrentChat()) { closeActionMenu(); setFeedback({ error: true, text: '聊天已切换，请重新打开手机。' }); return; }
+        const ref = favoriteRef(favoriteButton), entryId = favoriteButton.dataset.favoriteId, key = `favorite-add:${JSON.stringify(ref)}`, route = renderedRoute;
+        closeActionMenu();
+        void perform(key, () => entryId ? store.removeFavorite(entryId) : store.addFavorite(ref, { defaultUser }), () => { if (route === renderedRoute && isCurrentChat()) setFeedback({ text: entryId ? '已取消收藏' : '已收藏', compact: true }); });
+      } else if (action === 'favorite-filter') { ui.favoriteFilter = favoriteButton.dataset.favoriteFilter; ui.favoriteScroll = 0; render(); root.querySelector('.phone-main').scrollTop = 0; }
+      else if (action === 'favorite-open') { ui.favoriteId = favoriteButton.dataset.favoriteId; showPage('favorite-detail'); }
+      else if (action === 'favorite-back') returnFavorites();
+      else if (action === 'favorite-remove') removeFavorite(ui.favoriteId);
+      else if (action === 'favorite-photo') void viewPhoto(() => (store.read().favorites || []).find(item => item.id === ui.favoriteId)?.snapshot.image, favoriteButton);
+      return;
+    }
     if (event.target.closest('button[data-action="dismiss"]')) { setFeedback(null); return; }
     if (ui.conflict) {
       const button = event.target.closest('button');
@@ -803,14 +938,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       draft.background = button.dataset.chatBackground; render(); return;
     }
     if (button.dataset.calendarDay) { ui.calendarDay = Number(button.dataset.calendarDay); render(); return; }
-    if (button.dataset.mentionId && ui.view === 'group-chat') {
-      const person = store.read().contacts?.find(item => item.id === button.dataset.mentionId), draft = root.querySelector('#sms-draft');
-      if (person && draft && !draft.disabled) {
-        const mention = `@${displayName(person)} `;
-        const start = draft.selectionStart ?? draft.value.length, end = draft.selectionEnd ?? start;
-        draft.setRangeText(mention, start, end, 'end');
-        draft.focus({ preventScroll: true }); input({ target: draft });
-      }
+    if (button.matches('.message-avatar') && inChat()) {
+      avatarClick(button, event);
       return;
     }
     if (button.dataset.inlineEmoji) {
@@ -1110,18 +1239,13 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         if (ui.chatMenu) closeActionMenu();
         else { closeActionMenu(); ui.chatMenu = true; ui.selectedMessage = ''; openActionMenu('聊天选项', () => renderChatMenu(store.read(), { ui, busy }), '[data-action="chat-menu"]'); }
         break;
-      case 'clear-chat': ui.confirmClear = true; ui.chatMenu = false; render(); break;
-      case 'cancel-clear': ui.confirmClear = false; render(); break;
-      case 'confirm-clear': {
-        const anchor = ui.batch;
-        void perform(`clear:${id}`, () => store.clearConversation(id, anchor), () => { ui.confirmClear = false; ui.selectedMessage = ''; ui.drafts.delete(id); onContextChange(); }); break;
-      }
+      case 'clear-chat': openClearDialog(); break;
       case 'delete-history': {
         const state = store.read(), group = partitionHistory(state.conversations[id] || [], ui.batch).past.find(item => item.key === button.dataset.historyKey);
         if (!group) break;
         const person = ui.view === 'group-chat' ? state.groups.find(item => item.id === id) : state.contacts.find(item => item.id === id);
         const content = doc.createElement('p');
-        content.textContent = `${group.label}，共 ${group.messages.length} 条消息。删除“${displayName(person)}”的这一整段历史及不再使用的生成图片；其他历史、当前消息和草稿保留。`;
+        content.textContent = `${group.label}，共 ${group.messages.length} 条消息。删除“${displayName(person)}”的这一整段历史；其他历史、当前消息、草稿和相册照片保留。`;
         void dialog.custom({ title: '删除这段历史', content, confirmText: '确认删除', cancelText: '取消', danger: true, dismissOnBackdrop: true, submit: () => true }).then(confirmed => {
           if (confirmed) void perform(`delete-history:${id}`, () => store.clearConversation(id, { key: group.key }), () => { ui.selectedMessage = ''; onContextChange(); });
         });
@@ -1176,6 +1300,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     draft.style.height = `${Math.min(draft.scrollHeight + 2, 120)}px`;
   }
   function input(event) {
+    if (event.target.id === 'story-reference-floors') { ui.storyReferenceFloorsDraft = event.target.value; return; }
     if (event.target.id === 'album-hole-size') { albumEditor.setSize(event.target.value); return; }
     if (event.target.closest('.attachment-form') && event.target.name) ui.attachmentDraft[event.target.name] = event.target.value;
     if (event.target.id === 'sms-draft') {
@@ -1211,6 +1336,15 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
   }
   function change(event) {
+    if (event.target.id === 'story-reference-floors') {
+      const value = event.target.value;
+      ui.storyReferenceFloorsDraft = value;
+      void perform('story-reference-floors', async () => {
+        try { return await store.setStoryReferenceFloors(value); }
+        finally { delete ui.storyReferenceFloorsDraft; }
+      }, onContextChange);
+      return;
+    }
     if (event.target.id === 'default-language') {
       void perform('default-language', () => store.setDefaultLanguage(event.target.value), onContextChange);
     }
@@ -1324,7 +1458,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
     if (event.target.matches('.group-form')) {
       const draft = { ...ui.groupDraft, memberIds: [...ui.groupDraft.memberIds] }, id = ui.groupEditId;
-      void perform('group-profile', () => store.saveGroup(id, draft), result => { ui.groupId = result.id; ui.view = 'group-chat'; ui.groupDraft = {}; ui.selectedMessage = ''; ui.confirmClear = false; });
+      void perform('group-profile', () => store.saveGroup(id, draft), result => { ui.groupId = result.id; ui.view = 'group-chat'; ui.groupDraft = {}; ui.selectedMessage = ''; });
     }
   }
   const refreshCalendar = () => {
@@ -1341,6 +1475,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   });
   doc.defaultView.addEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
   root.addEventListener('keydown', keydown);
+  root.addEventListener('pointerdown', avatarPointerDown);
+  root.addEventListener('compositionstart', draftCompositionStart);
+  root.addEventListener('compositionend', draftCompositionEnd);
   root.addEventListener('click', click);
   root.addEventListener('input', input);
   root.addEventListener('change', change);
@@ -1361,6 +1498,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     notifyNotifications,
     openNotifications() { void notificationShade.open(); },
     invalidateNotifications() { notificationEpoch++; notificationShade.close({ immediate: true, restoreFocus: false }); dismissPhoneNotice(); },
+    cancelAvatarGesture,
     close,
     openAlbum() { ui.albumPage = 'gallery'; ui.albumPath = ''; showPage('album'); },
     invalidateAlbum() {
@@ -1397,6 +1535,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
     },
     dispose() {
+      cancelClearDialog();
+      cancelFavoriteRemoval();
+      cancelAvatarGesture();
       notificationEpoch++;
       notificationShade.dispose();
       albumEditor.dispose();
@@ -1415,6 +1556,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       doc.defaultView.removeEventListener('st-sevendayscal:calendar-changed', refreshCalendar);
       doc.removeEventListener('pointerdown', dismissMenus, true);
       root.removeEventListener('keydown', keydown);
+      root.removeEventListener('pointerdown', avatarPointerDown);
+      root.removeEventListener('compositionstart', draftCompositionStart);
+      root.removeEventListener('compositionend', draftCompositionEnd);
       root.removeEventListener('click', click);
       root.removeEventListener('input', input);
       root.removeEventListener('change', change);

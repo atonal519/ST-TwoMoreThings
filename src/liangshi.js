@@ -1,5 +1,4 @@
 import { finishGeneratedText, hasStyleReference } from './generated-text.js';
-import { clipProjection } from './context-budget.js';
 import { parseJsonObject } from './api.js';
 import { createCameoAvatar } from './cameo-avatar.js';
 import { displayName } from './profiles.js';
@@ -223,15 +222,9 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
       const current = read(), post = current.posts.find(row => row.id === postId);
       if (!ownPost(current, post)) throw new Error('只能为本人微博生成回应。');
       const state = liangshiReplyState(post), excluded = new Set(regenerate ? state.last?.commentIds || [] : []);
-      let selected = regenerate ? (state.last?.inputIds || []).map(id => post.comments.find(row => row.id === id)).filter(row => row?.userAuthored === true) : state.pending;
+      const selected = regenerate ? (state.last?.inputIds || []).map(id => post.comments.find(row => row.id === id)).filter(row => row?.userAuthored === true) : state.pending;
       if (!selected.length) return null;
-      let material, continuation;
-      while (selected.length) {
-        material = replyMaterial(current, post, selected, excluded, ownName()); continuation = clipProjection(material, 8000);
-        if (continuation) break;
-        selected = selected.slice(0, -1);
-      }
-      if (!continuation) throw new Error('回复关系过长，请先减少本次回复内容。');
+      const material = replyMaterial(current, post, selected, excluded, ownName()), continuation = material;
       const selectedIds = new Set(selected.map(row => row.id)), previousBatch = JSON.stringify(post.replyBatch), original = current.posts.find(row => row.id === post.quoteId);
       const context = await contextReader.readForLiangshi({ scanText: JSON.stringify(continuation), includePhoneContext: true, includeStory: false, includeUserPersona: true, excludeApps: ['liangshi'], authorContactIds: continuation.accounts.map(account => account.contactId).filter(Boolean) });
       assertPrivateAuthors(store.read(), context);
@@ -394,12 +387,12 @@ export function createLiangshiService({ store, contextReader, modelClient, rando
       const current = read(), post = current.posts.find(item => item.id === postId);
       if (!post) throw new Error('这条微博已不在两事，请返回查看新内容。');
       const original = current.posts.find(item => item.id === post.quoteId);
-      const comments = liangshiInteractions(post).slice(-10).map(publicComment), reposts = liangshiInteractions(post, 'reposts').slice(-4).map(publicComment);
+      const comments = liangshiInteractions(post).map(publicComment), reposts = liangshiInteractions(post, 'reposts').map(publicComment);
       const ids = new Set([post.authorId, original?.authorId, ...comments.map(item => item.authorId), ...reposts.map(item => item.authorId)]);
       const accounts = current.accounts.filter(account => ids.has(account.id)).map(account => publicAccount(account.ownerId === '@user' ? { ...account, name: ownName() } : account));
       const own = post.userAuthored === true && current.accounts.some(account => account.id === post.authorId && account.ownerId === '@user');
-      const continuation = clipProjection({ post: { ...publicPost(post), comments, reposts }, ...(original ? { original: { ...publicPost(original), comments: [], reposts: [] } } : {}), accounts,
-        ...(own ? { currentAccount: accounts.find(account => account.id === post.authorId) } : {}) }, 8000);
+      const continuation = { post: { ...publicPost(post), comments, reposts }, ...(original ? { original: { ...publicPost(original), comments: [], reposts: [] } } : {}), accounts,
+        ...(own ? { currentAccount: accounts.find(account => account.id === post.authorId) } : {}) };
       const context = await contextReader.readForLiangshi({ scanText: [continuation.post.text, continuation.original?.text || '', ...continuation.accounts.map(account => account.name)].join('\n'), includePhoneContext: true, includeStory: false, includeUserPersona: own, authorContactIds: continuation.accounts.map(account => account.contactId).filter(Boolean) });
       assertPrivateAuthors(store.read(), context);
       const answer = parseJsonObject(await modelClient.complete({ system: LIANGSHI_MORE_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, ...continuation }) }] }));

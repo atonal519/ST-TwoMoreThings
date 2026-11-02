@@ -48,7 +48,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
   const entries = createPhoneEntries({ host, documentRef, open, defaults: preset?.entries,
     isEnabled: () => createPhoneControl({ host, target: host.captureChat() }).isEnabled(),
     toggle: () => phone?.isOpen && phone.isFrontmost ? phone.close() : open() });
-  const unsubscribeEntries = host.onChatChanged?.(() => { syncStoryTheme(); entries.refreshVisibility(); phone?.invalidateAlbum(); phone?.invalidateNotifications(); });
+  const unsubscribeEntries = host.onChatChanged?.(() => { syncStoryTheme(); entries.refreshVisibility(); phone?.cancelAvatarGesture(); phone?.invalidateAlbum(); phone?.invalidateNotifications(); });
   const onBusyChange = value => { activeRequests += value ? 1 : -1; entries.fab.setBusy(activeRequests > 0); };
   const unsubscribe = host.onBeforeMainGeneration(async (type, _params, dryRun) => {
     if (dryRun || ['quiet', 'impersonate'].includes(type)) return;
@@ -111,7 +111,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
         else if (globalThis.toastr?.success) globalThis.toastr.success(notification.text);
         else globalThis.alert?.(notification.text);
       },
-      control, imageProviders, images: createPhoneImageService({ store, modelClient, files, providers: imageProviders, assertEnabled: control.assertEnabled, onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
+      control, isCurrentChat: () => boundTo(host.captureChat()), imageProviders, images: createPhoneImageService({ store, modelClient, files, providers: imageProviders, assertEnabled: control.assertEnabled, onBusyChange, defaultUser: target.user }), readWeather: readLockWeather,
       onContextChange: () => host.setPrompt(''),
       onThemeChange: theme => { if (boundTo(target) && boundTo(host.captureChat())) syncStorySmsTheme(documentRef, theme); },
       onEnable: () => { void synchronizeStory(target, store, currentPhone); },

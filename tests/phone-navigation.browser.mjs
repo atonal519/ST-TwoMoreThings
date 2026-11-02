@@ -70,13 +70,15 @@ try {
     await page.locator('[data-contact="lin"]').click();
     await page.getByRole('textbox', { name: '短信内容' }).fill('尚未发送的草稿');
     await page.getByRole('button', { name: '聊天选项', exact: true }).click();
-    await page.getByRole('button', { name: '清空聊天', exact: true }).click();
+    await page.locator('[data-action="clear-chat"]').click();
+    await page.getByRole('dialog', { name: '清空聊天', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
     await page.getByRole('button', { name: '聊天资料', exact: true }).click();
     await page.locator('.view-contact-profile').waitFor();
     await back().click();
     assert.equal(await page.locator('.view-chat').count(), 1, 'leaving a chat confirmation for a profile must not consume its first back press');
     await page.getByRole('button', { name: '聊天选项', exact: true }).click();
-    await page.getByRole('button', { name: '清空聊天', exact: true }).click();
+    await page.locator('[data-action="clear-chat"]').click();
+    await page.getByRole('dialog', { name: '清空聊天', exact: true }).getByRole('button', { name: '取消', exact: true }).click();
     await page.getByRole('button', { name: '聊天选项', exact: true }).click();
     await page.getByRole('button', { name: '删除联系人', exact: true }).click();
     const deletion = page.getByRole('dialog', { name: '删除联系人', exact: true });

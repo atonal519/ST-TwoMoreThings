@@ -1,3 +1,4 @@
+import { favoriteButton } from './favorites.js';
 import { readForumTags, forumFilterTags } from '../forum-tags.js';
 import { action, empty, escape, icon, pageHeading, renderBilingual, renderContentImage } from './shared.js';
 import { forumComments } from '../forum.js';
@@ -60,7 +61,7 @@ export function renderPost(state, { ui, busy = new Set() }) {
     <article class="post-detail" tabindex="-1">${(readForumTags(post).length ? readForumTags(post) : ['闲聊']).map(tag => `<span class="post-category">${escape(tag)}</span>`).join(' ')}<h1>${renderBilingual(post.title, post.titleTranslation)}</h1>
       <div class="post-byline"><span class="author-mark">${escape(Array.from(post.author || '友')[0])}</span><span>${escape(post.author)}</span></div>
       <p class="post-body">${renderBilingual(post.content, post.contentTranslation)}</p>${photo}
-      <div class="forum-votes" aria-label="帖子态度">${[['like','赞'],['dislike','踩']].map(([key,label]) => `<button type="button" data-action="forum-vote" data-forum-vote="${key}" aria-pressed="${vote === key}">${icon(key)}${label} <span>${totals[key] + Number(vote === key)}</span></button>`).join('')}</div>
+      <div class="forum-votes" aria-label="帖子态度">${[['like','赞'],['dislike','踩']].map(([key,label]) => `<button type="button" data-action="forum-vote" data-forum-vote="${key}" aria-pressed="${vote === key}">${icon(key)}${label} <span>${totals[key] + Number(vote === key)}</span></button>`).join('')}${favoriteButton(state, { app: 'forum', kind: 'post', postId: post.id }, busy, ui.defaultUser)}</div>
     </article>
     <section class="comments"><h2>回帖 <span>${rows.length}</span></h2>${comments}</section>
     <div class="ls-more-area">${action('forum-more',loading ? '加载中…' : '加载更多','','ls-more-button',loading)}</div>

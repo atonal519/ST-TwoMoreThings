@@ -1,6 +1,5 @@
 import { parsePayload, parseJsonObject } from './api.js';
 import { FORUM_PROMPT, FORUM_MORE_PROMPT } from './prompts.js';
-import { clipProjection } from './context-budget.js';
 import { finishGeneratedText } from './generated-text.js';
 import { generatedImage } from './content.js';
 
@@ -39,22 +38,10 @@ export function createForumService({ store, contextReader, modelClient, random =
     },
     async loadMore(postId) {
       const state = await store.readSaved(), post = state.forum.posts.find(row => row.id === postId); if (!post) throw new Error('这条帖子已更新，请返回论坛。');
-      const all = forumComments(post), byId = new Map(all.map(row => [row.id, row]));
+      const all = forumComments(post);
       const pending = all.filter(row => row.userAuthored === true && !all.some(reply => !reply.userAuthored && reply.replyToId === row.id));
-      const chosen = [...pending.slice(-10)];
-      for (const row of all.slice(-10).reverse()) if (chosen.length < 10 && !chosen.some(item => item.id === row.id)) chosen.push(row);
-      chosen.sort((a, b) => all.indexOf(a) - all.indexOf(b));
-      let selected = chosen, source, continuation;
-      while (selected.length) {
-        const included = new Map(selected.map(row => [row.id, row]));
-        for (const row of selected) { let id = row.replyToId; const visited = new Set([row.id]); while (id && !visited.has(id)) { visited.add(id); const parent = byId.get(id); if (!parent) break; included.set(id, parent); id = parent.replyToId; } }
-        source = [...included.values()].map(commentDto);
-        continuation = clipProjection({ post: material(post), comments: source, replyTargets: selected.filter(row => pending.some(item => item.id === row.id)).map(row => row.id) }, 8000);
-        if (continuation) break;
-        selected = selected.slice(1);
-      }
-      if (!chosen.length) { source = []; continuation = clipProjection({ post: material(post), comments: [], replyTargets: [] }, 8000); }
-      if (!continuation) throw new Error('本帖楼层关系过长，请返回论坛查看其他帖子。');
+      const source = [...new Map(all.map(row => [row.id, row])).values()].map(commentDto);
+      const continuation = { post: material(post), comments: source, replyTargets: [...new Set(pending.map(row => row.id))] };
       const context = await contextReader.readForForum({ continuation: true, scanText: JSON.stringify(continuation) });
       const answer = parseJsonObject(await modelClient.complete({ system: FORUM_MORE_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, continuation }) }] }));
       let noComments = false;

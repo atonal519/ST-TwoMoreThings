@@ -107,10 +107,14 @@ test('new AI replies carry the operation clock and enter the recent public windo
   assert.ok(readPhoneContext(f.store.read(), { publicOnly: true }).some(row => row.source.id === ai.id));
 });
 
-test('long replies and parent chains fit the complete continuation budget without cutting routing IDs or mutating stored text', async () => {
+test('long replies and full parent chains keep their entire text and routing IDs', async () => {
   const f = setup(); await f.store.updateLiangshi(data => ({ ...data, posts: data.posts.map(p => ({ ...p, text: '🌙'.repeat(5000), comments: p.comments.map(c => ({ ...c, text: '父正文'.repeat(4000) })) })) }));
   const a = await f.service.publishReply('p', { replyToId: 'c1', text: '😂'.repeat(6000) }); f.answer(response(a.id)); await f.service.generateReplies('p');
   const input = JSON.parse(f.calls[0].messages[0].content), { post, original, accounts, currentAccount, replies, parents } = input;
-  assert.ok(JSON.stringify({ post, ...(original ? { original } : {}), accounts, currentAccount, replies, parents, ...(input.excerpted ? { excerpted: true } : {}) }).length <= 8000);
+  assert.equal(post.text,'🌙'.repeat(5000));assert.equal(replies[0].text,'😂'.repeat(6000));assert.equal(parents.find(row=>row.id==='c1').text,'父正文'.repeat(4000));assert.equal('excerpted' in input,false);
   assert.equal(replies[0].id, a.id); assert.equal(replies[0].replyToId, 'c1'); assert.equal(replies[0].text.isWellFormed(), true); assert.equal(f.post().comments.find(c => c.id === a.id).text.length, 12000);
+});
+
+test('one response request retains every pending reply beyond the former structural budget',async()=>{
+ const f=setup(),pending=Array.from({length:128},(_,i)=>({id:'pending'+i,authorId:'self',userAuthored:true,text:'PENDING_'+i+'完整正文'.repeat(100),replyToId:'c1',replyToAuthorId:'a'}));f.store.read().liangshi.posts[0].comments.push(...pending);f.answer(response('pending127'));await f.service.generateReplies('p');const input=JSON.parse(f.calls[0].messages[0].content);assert.deepEqual(input.replies.map(r=>r.id),pending.map(r=>r.id));assert.deepEqual(input.replies.map(r=>r.text),pending.map(r=>r.text));assert.equal(input.parents.filter(r=>r.id==='c1').length,1);assert.equal(f.calls.length,1);assert.equal(f.h.metadataSaves,1);assert.equal(f.post().comments.filter(r=>r.userAuthored&&r.replyHandled).length,128);f.answer(response('pending127','重新回应。'));await f.service.generateReplies('p',{regenerate:true});const regenerated=JSON.parse(f.calls[1].messages[0].content);assert.deepEqual(regenerated.replies.map(r=>r.id),pending.map(r=>r.id));assert.deepEqual(regenerated.replies.map(r=>r.text),pending.map(r=>r.text));assert.equal(regenerated.parents.filter(r=>r.id==='c1').length,1);assert.equal(f.calls.length,2);assert.equal(f.h.metadataSaves,2);
 });

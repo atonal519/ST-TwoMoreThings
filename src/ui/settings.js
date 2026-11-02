@@ -1,3 +1,4 @@
+import { readStoryReferenceFloors } from '../story-reference.js';
 import { renderSourcePicker } from './models.js';
 import { homeImage } from './home.js';
 import { action, avatar, escape, icon, pageHeading, refKey } from './shared.js';
@@ -78,6 +79,10 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
     </span>
   </label>
   ${renderStorySmsInstall(ui, busy, control)}
+  <label class="compact-switch-row story-reference-row" for="story-reference-floors"><span>参考正文楼</span>
+    <input id="story-reference-floors" class="story-reference-floors" type="number" inputmode="numeric" min="0" step="1" aria-label="参考正文楼" value="${escape(ui.storyReferenceFloorsDraft ?? readStoryReferenceFloors(state))}" ${busy.has('story-reference-floors') ? 'disabled' : ''}>
+  </label>
+  <p class="setting-note">最近N楼，含AI与用户；0为不参考正文。</p>
   <label class="compact-switch-row" for="default-language"><span>默认语言</span>
     <select id="default-language" class="default-language-select" aria-label="默认语言" ${busy.has('default-language') ? 'disabled' : ''}>
       ${[['', '自动'], ['中文', '汉语'], ['英语', '英语'], ['粤语', '粤语'], ['日语', '日语'], ['韩语', '韩语']].map(([value, label]) => `<option value="${value}" ${(state.defaultLanguage || '') === value ? 'selected' : ''}>${label}</option>`).join('')}

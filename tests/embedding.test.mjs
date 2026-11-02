@@ -208,3 +208,7 @@ test('phone default language survives preset export and old presets remain autom
   const existing = createHarness({ metadata: { pocketPhone: { contacts: [], groups: [], conversations: {}, defaultLanguage: '中文' } } });
   assert.equal(createPhoneStore({ target: existing.host.captureChat(), initialState: stateFromPreset(preset) }).read().defaultLanguage, '中文');
 });
+
+test('story reference setting travels in presets, defaults old cards to one and never overwrites reader archives',async()=>{
+ const h=createHarness(),store=createPhoneStore({target:h.host.captureChat()});for(const value of [0,1000,1e100]){await store.setStoryReferenceFloors(value);const {script}=await createAuthoringService({store,host:h.host}).exportScript(),preset=script.data.twoMoreThings;assert.equal(preset.storyReferenceFloors,value);assert.equal(stateFromPreset(preset).storyReferenceFloors,value);const reader=createPhoneStore({target:createHarness({metadata:{pocketPhone:{contacts:[],conversations:{},storyReferenceFloors:2}}}).host.captureChat(),initialState:stateFromPreset(preset)});assert.equal(reader.read().storyReferenceFloors,2);}const old={schemaVersion:1,contacts:[],groups:[]};assert.equal(stateFromPreset(old).storyReferenceFloors,1);assert.equal(stateFromPreset({...old,storyReferenceFloors:-1}).storyReferenceFloors,1);
+});

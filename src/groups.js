@@ -7,6 +7,7 @@ import { normalizeContent, RICH_MESSAGES_PROMPT } from './content.js';
 import { CALENDAR_PROMPT } from './calendar.js';
 import { LANGUAGE_RULE, STORY_MEMORY_RULE, CONVERSATION_CONTINUITY_RULE, KNOWLEDGE_BOUNDARY_RULE } from './prompts.js';
 import { replyToMessage } from './replies.js';
+import { displayName } from './profiles.js';
 
 const GROUP_PROMPT = `续写指定手机群里的聊天。一次考虑group.members全体成员的性格、线上表达、语言习惯、当前剧情时间与场景、各人正在做什么和实际知道什么。先确定成员、哪些人有动机发言，再拟消息顺序；不要求人人说话，可由少数有动机的成员自然交谈。围绕当前话题自然展开，不重复内容或把一句话无意义拆分来凑数。成员可互相回应，不必回应用户。userIsMember为false时用户只是旁观者，不得让角色向用户说话或知道用户正在旁观。人物私有资料不是群内共享认知。
 ${KNOWLEDGE_BOUNDARY_RULE}
@@ -27,6 +28,14 @@ export function createGroupService({ target, store, contextReader, modelClient }
     return group;
   };
   return {
+    async pat(id, targetId) {
+      const group = find(id);
+      if (!group.userIsMember) throw new Error('你不在这个群，不能发送信息。');
+      const person = store.read().contacts.find(person => person.id === targetId && group.memberIds.includes(person.id));
+      if (targetId !== '@user' && !person) throw new Error('拍一拍对象已不在群成员中。');
+      const batch = readTimeline(target.messages);
+      await store.togglePat(id, { ...record('user', `你拍了拍${targetId === '@user' ? '自己' : displayName(person)}`, batch.clock, '', batch), type: 'pat', speakerId: '@user', pat: { targetId } });
+    },
     async sendCard(id, draft, { replyToId } = {}) {
       const group = find(id);
       if (!group.userIsMember) throw new Error('你不在这个群，不能发送信息。');
@@ -60,6 +69,7 @@ export function createGroupService({ target, store, contextReader, modelClient }
       if (!Array.isArray(answer.messages)) throw new Error('回答中没有可读取的群聊消息，请点继续重试。');
       // 发言归属是保存所需身份，不从姓名或句子内容猜测。
       const indexedMessages = answer.messages.map(item => {
+        if (item?.type === 'pat' && (!allowed.includes(item.speakerId) || !speakers.includes(item.speakerId) || !roster.includes(item.pat?.targetId))) return null;
         if (!item || !roster.includes(item.speakerId) || item.speakerId === '@user' || !speakers.includes(item.speakerId)) throw new Error('回答中的发言者不在本轮群聊中，请点继续重试。');
         const plain = normalizeContent(item);
         const preserveStyle = hasStyleReference(context.group.members.find(person => person.id === item.speakerId));

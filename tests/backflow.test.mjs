@@ -71,13 +71,13 @@ for (const size of [2999, 3000, 3001]) test(`visible ${size}-character reference
   if (size > 3000) assert.equal(JSON.parse(requests[0].messages[0].content).maxCharacters, 100);
 });
 
-test('the short budget counts emoji as Unicode characters and only twenty recent current messages reach the same analysis', async () => {
+test('the short threshold counts Unicode characters while every eligible current message reaches the same analysis', async () => {
   const { target, store, batch } = setup();
   const messages = Array.from({ length: 200 }, (_, i) => ({ id: `m${i}`, role: i % 2 ? 'assistant' : 'user', text: (i % 2 ? '好的，到时书店见。' : '明天一起去书店见面吗？').repeat(24), batch }));
   await store.appendMessages('lin', messages);
   const requests = [];
   await createBackflowService({ target, store, modelClient: client(requests) }).prepare();
-  assert.equal(JSON.parse(requests[0].messages[0].content).conversations[0].messages.length, 20);
+  assert.deepEqual(JSON.parse(requests[0].messages[0].content).conversations[0].messages.map(row=>row.text),messages.map(row=>row.text));
   await store.clearConversation('lin', batch);
   await store.appendMessage('lin', { id: 'emoji', role: 'user', text: '🙂'.repeat(3000 - Array.from(rawPrefix).length), batch });
   const next = [];

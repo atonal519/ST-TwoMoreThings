@@ -1,3 +1,4 @@
+import { favoriteButton } from './favorites.js';
 import { action, avatar, empty, escape, icon, renderBilingual } from './shared.js';
 import { displayName } from '../profiles.js';
 import { getSocialAuthor, readSocialPosts, readSocialFeed } from '../social.js';
@@ -14,7 +15,7 @@ function renderPost(post, state, busy, ui) {
         ? `<img data-phone-image="${escape(post.image.path)}" src="${escape(imageSource(post.image.path))}" alt="${escape(post.image.description)}" loading="lazy" draggable="false">`
         : `<span class="social-photo-placeholder">${icon('image')}<span>${escape(post.image.description)}</span><small>${generating ? '生成中…' : '点击生成图片'}</small></span>`}
     </button>` : '';
-  const comments = (post.comments || []).map(comment => `<p class="social-comment" ${comment.replyToId && comment.read === false ? 'data-unread-reply' : ''}><strong class="social-comment-name">${escape(comment.name)}</strong>${renderBilingual(comment.text, comment.translation)}</p>`).join('');
+  const comments = (post.comments || []).map((comment, index) => `<p class="social-comment" data-social-comment="${escape(comment.id || `legacy:${index}`)}" ${comment.replyToId && comment.read === false ? 'data-unread-reply' : ''}><strong class="social-comment-name">${escape(comment.name)}</strong>${renderBilingual(comment.text, comment.translation)}</p>`).join('');
   const commentOpen = ui.socialCommentOpen.has(post.id);
   const draft = ui.socialDrafts.get(post.id) || '';
   const commentBusy = busy.has(`social-comment:${post.id}`);
@@ -32,7 +33,7 @@ function renderPost(post, state, busy, ui) {
     ${photo}
     ${post.text ? `<p class="social-caption">${renderBilingual(post.text, post.translation)}</p>` : ''}
     <div class="social-stats" aria-label="动态统计">
-      <button type="button" class="social-like" data-action="social-like" data-social-post="${escape(post.id)}" aria-pressed="${userLiked}" aria-label="${userLiked ? '取消点赞' : '点赞'}" ${busy.has(`social-like:${post.id}`) ? 'disabled' : ''}>${icon(userLiked ? 'heart-active' : 'heart')}${likes} 赞</button><span>${icon('repost')}${post.reposts || 0} 转发</span><button type="button" class="social-comment-toggle" data-action="social-comment-toggle" data-social-post="${escape(post.id)}" aria-expanded="${commentOpen}">${icon('comment')}${post.commentsCount || 0} 评论</button>
+      <button type="button" class="social-like" data-action="social-like" data-social-post="${escape(post.id)}" aria-pressed="${userLiked}" aria-label="${userLiked ? '取消点赞' : '点赞'}" ${busy.has(`social-like:${post.id}`) ? 'disabled' : ''}>${icon(userLiked ? 'heart-active' : 'heart')}${likes} 赞</button><span>${icon('repost')}${post.reposts || 0} 转发</span><button type="button" class="social-comment-toggle" data-action="social-comment-toggle" data-social-post="${escape(post.id)}" aria-expanded="${commentOpen}">${icon('comment')}${post.commentsCount || 0} 评论</button>${favoriteButton(state, { app: 'social', kind: 'post', postId: post.id }, busy, ui.defaultUser)}
     </div>
     ${comments ? `<div class="social-comments">${comments}</div>` : ''}
     ${commentBusy ? '<small class="social-reply-pending" role="status">等待回应…</small>' : ''}
