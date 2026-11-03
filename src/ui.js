@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 import { renderFavorites, renderFavoriteDetail } from './ui/favorites.js';
 import { avatar, refKey, renderAvatarMenu } from './ui/shared.js';
 import { renderHome } from './ui/home.js';
@@ -181,7 +182,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (pendingAvatar?.id === id && pendingAvatar.targetId === targetId && pendingAvatar.route === renderedRoute && avatarTimer !== undefined) {
       clearAvatarClick();
       const service = ui.view === 'group-chat' ? groups : messages;
-      void perform(`pat:${id}:${globalThis.crypto.randomUUID()}`, () => service.pat(id, targetId), onContextChange);
+      void perform(`pat:${id}:${createUuid()}`, () => service.pat(id, targetId), onContextChange);
       return;
     }
     confirmAvatarMention();

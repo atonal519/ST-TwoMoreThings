@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 import { parsePayload, parseJsonObject } from './api.js';
 import { hasStyleReference } from './generated-text.js';
 import { CONTACTS_PROMPT, MESSAGES_PROMPT } from './prompts.js';
@@ -10,7 +11,7 @@ import { displayName } from './profiles.js';
 export function record(role, text, clock, translation, batch) {
   const now = new Date();
   // createdAt 记录消息创建时间，供通知排序；可见时间和剧情日期在创建时确定，之后不追改历史短信。
-  return { id: globalThis.crypto.randomUUID(), role, text, createdAt: now.toISOString(), timeLabel: clock.time,
+  return { id: createUuid(), role, text, createdAt: now.toISOString(), timeLabel: clock.time,
     ...(translation ? { translation } : {}),
     ...(batch ? { batch: { key: batch.key, label: batch.label } } : {}),
     ...(clock.source === 'story' ? { storyDate: clock.date, storyWeekday: clock.weekday } : {}),

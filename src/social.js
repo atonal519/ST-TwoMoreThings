@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 import { finishGeneratedText, hasStyleReference } from './generated-text.js';
 import { parseJsonObject } from './api.js';
 import { createCameoAvatar } from './cameo-avatar.js';
@@ -97,10 +98,10 @@ function parsePosts(answer, authors, context, perAuthor) {
       const author = comment.authorId ? known.get(comment.authorId) : null;
       const name = author?.nickname || author?.name || text(comment.name ?? comment.author);
       const translation = finishGeneratedText(text(comment.translation ?? comment.translatedText), { preserveStyle });
-      return name ? [{ id: globalThis.crypto.randomUUID(), name, text: body, ...(translation ? { translation } : {}), ...(author ? { authorId: author.id } : {}), createdAt, publishedAt: [context.clock?.date, context.clock?.time].filter(Boolean).join(' ') }] : [];
+      return name ? [{ id: createUuid(), name, text: body, ...(translation ? { translation } : {}), ...(author ? { authorId: author.id } : {}), createdAt, publishedAt: [context.clock?.date, context.clock?.time].filter(Boolean).join(' ') }] : [];
     }).slice(0, 2);
     used.set(authorId, (used.get(authorId) || 0) + 1);
-    return [{ id: globalThis.crypto.randomUUID(), authorId, text: body, ...(body && translation ? { translation } : {}),
+    return [{ id: createUuid(), authorId, text: body, ...(body && translation ? { translation } : {}),
       ...(description ? { image: { description } } : {}),
       likes: count(item.likes), reposts: count(item.reposts), commentsCount: Math.max(count(item.commentsCount), comments.length), comments,
       createdAt, batch: context.batch, publishedAt: publicationValue(item, context.clock, perAuthor > 1),
@@ -137,7 +138,7 @@ export function createSocialService({ store, contextReader, modelClient, random 
     readPosts: options => structuredClone(readSocialPosts(store.read(), options)),
     async refresh() {
       const state = store.read(), authors = chooseFriends((state.contacts || []).filter(person => !isUserIdentity(state, person.id)), random);
-      while (authors.length < 15) authors.push({ id: `npc:${globalThis.crypto.randomUUID()}`, kind: 'npc', name: '', description: '' });
+      while (authors.length < 15) authors.push({ id: `npc:${createUuid()}`, kind: 'npc', name: '', description: '' });
       const context = await contextReader.readForSocial(authors);
       assertPrivateAuthors(store.read(), context);
       const answer = parseJsonObject(await modelClient.complete({ system: SOCIAL_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, task: 'feed' }) }] }));
@@ -215,7 +216,7 @@ export function createSocialService({ store, contextReader, modelClient, random 
       const authors = [...new Map([author, ...commenters].filter(item => !isUserIdentity(state, item.id)).map(item => [item.id, item])).values()];
       const userName = text(state.userProfile?.nickname || state.userProfile?.name || defaultUser) || '我';
       const clock = contextReader.readClock?.();
-      const userComment = { id: globalThis.crypto.randomUUID(), role: 'user', name: userName, text: content, createdAt: new Date().toISOString(), ...(clock ? { publishedAt: [clock.date, clock.time].filter(Boolean).join(' ') } : {}) };
+      const userComment = { id: createUuid(), role: 'user', name: userName, text: content, createdAt: new Date().toISOString(), ...(clock ? { publishedAt: [clock.date, clock.time].filter(Boolean).join(' ') } : {}) };
       await store.updateSocial(social => {
         const currentPost = social.posts.find(item => item.id === postId);
         if (!currentPost) throw new Error('这条动态已不存在，请返回动态列表。');
@@ -239,7 +240,7 @@ export function createSocialService({ store, contextReader, modelClient, random 
         if (!currentPost) throw new Error('这条动态已不存在，请返回动态列表。');
         const activeIds = new Set([...(current.contacts || []), ...(current.social?.npcs || [])].filter(item => !isUserIdentity(current, item.id) && sameIdentity(current, item.id, context[identitySource])).map(item => item.id));
         const read = Boolean(isReadingPost(postId)), createdAt = new Date().toISOString();
-        const validReplies = replies.filter(reply => !reply.authorId || activeIds.has(reply.authorId)).map(reply => ({ ...reply, id: globalThis.crypto.randomUUID(), replyToId: userComment.id, createdAt, publishedAt: [context.clock?.date, context.clock?.time].filter(Boolean).join(' '), read }));
+        const validReplies = replies.filter(reply => !reply.authorId || activeIds.has(reply.authorId)).map(reply => ({ ...reply, id: createUuid(), replyToId: userComment.id, createdAt, publishedAt: [context.clock?.date, context.clock?.time].filter(Boolean).join(' '), read }));
         saved = validReplies.length ? { ...currentPost, comments: [...(currentPost.comments || []), ...validReplies], commentsCount: Math.max(count(currentPost.commentsCount), (currentPost.comments || []).length) + validReplies.length } : currentPost;
         if (saved === currentPost) return social;
         return { ...social, posts: social.posts.map(item => item.id === postId ? saved : item) };

@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 const REQUEST = 'generate-image-request', RESPONSE = 'generate-image-response';
 const nameOf = item => String(item?.nameCN || item?.nameEN || '').split('|')[0].trim();
 
@@ -25,7 +26,7 @@ export function createImageProviders({ host, baibai = () => globalThis.STBaiBaiI
       return { characters, outfits };
     },
     async generate({ prompt, size }) {
-      const events = host.getEventSource(), id = `tmt:${globalThis.crypto.randomUUID()}`;
+      const events = host.getEventSource(), id = `tmt:${createUuid()}`;
       const result = await new Promise((resolve, reject) => {
         const finish = (error, value) => { clearTimeout(timer); events.removeListener(RESPONSE, receive); error ? reject(error) : resolve(value); };
         const receive = reply => {
@@ -43,7 +44,7 @@ export function createImageProviders({ host, baibai = () => globalThis.STBaiBaiI
       const match = typeof result === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,([\s\S]+)$/i.exec(result);
       if (!match) throw new Error('智绘姬没有返回可保存的图片，请检查生图渠道。');
       let response;
-      try { response = await host.request('/api/images/upload', { method: 'POST', body: JSON.stringify({ image: match[2], format: /^jpe?g$/i.test(match[1]) ? 'jpg' : match[1].toLowerCase(), ch_name: 'pocket-phone', filename: `generated-${globalThis.crypto.randomUUID()}` }) }); }
+      try { response = await host.request('/api/images/upload', { method: 'POST', body: JSON.stringify({ image: match[2], format: /^jpe?g$/i.test(match[1]) ? 'jpg' : match[1].toLowerCase(), ch_name: 'pocket-phone', filename: `generated-${createUuid()}` }) }); }
       catch { throw new Error('图片已生成，但保存失败，请检查酒馆连接。'); }
       if (!response.ok) throw new Error('图片已生成，但保存失败，请检查酒馆连接。');
       let data;

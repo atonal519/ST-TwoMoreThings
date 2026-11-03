@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 import { finishGeneratedText, hasStyleReference } from './generated-text.js';
 import { parseJsonObject } from './api.js';
 import { createCameoAvatar } from './cameo-avatar.js';
@@ -9,7 +10,7 @@ import { LIANGSHI_PROMPT, LIANGSHI_MORE_PROMPT, LIANGSHI_HOT_PROMPT, LIANGSHI_TO
 const text = value => typeof value === 'string' ? value.trim() : '';
 const rows = value => Array.isArray(value) ? value : value && typeof value === 'object' ? [value] : [];
 const count = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
-const uid = () => globalThis.crypto.randomUUID();
+const uid = () => createUuid();
 const handle = value => text(value).replace(/^@/, '').toLowerCase();
 const empty = () => ({ accounts: [], posts: [], topics: [] });
 const publicAccount = ({ id, name, handle, kind, description, expression, language, contactId }) => ({ id, name, handle, kind, description, expression, language, contactId });

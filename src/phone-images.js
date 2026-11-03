@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 import { SENTENCE_RULE } from './prompts.js';
 import { parseJsonObject } from './api.js';
 import { getSocialAuthor } from './social.js';
@@ -91,7 +92,7 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
       // Legacy index IDs identify this exact retained object, never a replacement row.
       const position = original.id ? rows.findIndex(row => row.id === original.id) : rows.indexOf(original), row = rows[position];
       if (!row || row.image?.description !== original.image.description || actor(current, app, row).key !== identity.key) throw new Error('回复、作者或配图已更新，图片未关联。');
-      const saved = { ...row, id: row.id || globalThis.crypto.randomUUID(), image: { ...row.image, ...image } };
+      const saved = { ...row, id: row.id || createUuid(), image: { ...row.image, ...image } };
       return { ...current, [app]: { ...data, posts: data.posts.map(post => post.id === postId ? { ...post, [collection]: rows.map((item, index) => index === position ? saved : item) } : post) } };
     });
     return { ...original.image, ...image };

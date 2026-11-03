@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 import { normalizeStoryReferenceFloors } from './story-reference.js';
 import { captureFavorite, favoriteFor } from './favorites.js';
 import { cleanProfile } from './profiles.js';
@@ -64,7 +65,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         assertEnabled();
         if (!candidate) throw new Error('原内容已移除，无法收藏。');
         if (favoriteFor(state, candidate)) return state;
-        const entry = { id: globalThis.crypto.randomUUID(), savedAt: new Date().toISOString(), ...candidate };
+        const entry = { id: createUuid(), savedAt: new Date().toISOString(), ...candidate };
         return { ...state, favorites: [...(state.favorites || []), entry] };
       });
     },
@@ -112,7 +113,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
           const matches = findPerson(name);
           if (matches.length > 1) return null;
           if (matches.length) return matches[0];
-          const person = { id: `story:${globalThis.crypto.randomUUID()}`, name, avatar: createCameoAvatar(), source: { kind: 'story' } };
+          const person = { id: `story:${createUuid()}`, name, avatar: createCameoAvatar(), source: { kind: 'story' } };
           contacts.push(person); return person;
         };
         for (const block of blocks) {
@@ -123,7 +124,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
             const speaker = block.sender === '我' ? null : personFor(block.sender);
             if (block.sender !== '我' && !speaker) continue;
             const current = matches[0];
-            const group = { ...current, id: current?.id || `group:${globalThis.crypto.randomUUID()}`, name: block.name,
+            const group = { ...current, id: current?.id || `group:${createUuid()}`, name: block.name,
               memberIds: [...new Set([...(current?.memberIds || []), ...(speaker ? [speaker.id] : [])])], userIsMember: true };
             if (current && (current.userIsMember !== group.userIsMember || current.memberIds.length !== group.memberIds.length)) conversations[current.id] = sealGroupScope(conversations[current.id], current);
             if (current) groups[groups.indexOf(current)] = group; else groups.push(group);
@@ -277,7 +278,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
     },
     async saveContact(id, draft) {
       const profile = { ...cleanProfile(draft, true), ...('background' in draft ? { background: cleanBackground(draft.background, true) } : {}) };
-      const contactId = id || `manual:${globalThis.crypto.randomUUID()}`;
+      const contactId = id || `manual:${createUuid()}`;
       await update(state => {
         const current = state.contacts.find(item => item.id === contactId);
         if (id && !current) throw new Error('这个联系人已不存在，请返回短信重新选择。');
@@ -342,7 +343,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
           const name = typeof draft?.name === 'string' ? draft.name.trim() : '';
           if (!name || typeof draft.userIsMember !== 'boolean' || !ids.length || ids.length + Number(draft.userIsMember) < 2 || ids.some(id => !people.has(id))) continue;
           if (mergedGroups.some(group => group.userIsMember === draft.userIsMember && group.memberIds.length === ids.length && ids.every(id => group.memberIds.includes(id)))) continue;
-          const group = { id: `group:${globalThis.crypto.randomUUID()}`, name, memberIds: ids, userIsMember: draft.userIsMember };
+          const group = { id: `group:${createUuid()}`, name, memberIds: ids, userIsMember: draft.userIsMember };
           mergedGroups.push(group); added.groups.push(group);
         }
         return added.contacts.length || added.groups.length ? { ...state, contacts: [...people.values()], groups: mergedGroups } : state;
@@ -357,7 +358,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
       const memberIds = [...new Set(draft.memberIds || [])];
       const userIsMember = draft.userIsMember !== false;
       if (!memberIds.length || memberIds.length + Number(userIsMember) < 2) throw new Error('请至少选择两位群成员，可以包含自己。');
-      const groupId = id || `group:${globalThis.crypto.randomUUID()}`;
+      const groupId = id || `group:${createUuid()}`;
       await update(state => {
         if (memberIds.some(key => !state.contacts.some(person => person.id === key))) throw new Error('有群成员不在联系人中，请重新选择。');
         const groups = state.groups || [], current = groups.find(group => group.id === id);

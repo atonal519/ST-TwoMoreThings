@@ -1,10 +1,11 @@
+import { createUuid } from './uuid.js';
 import { parsePayload, parseJsonObject } from './api.js';
 import { FORUM_PROMPT, FORUM_MORE_PROMPT } from './prompts.js';
 import { finishGeneratedText } from './generated-text.js';
 import { generatedImage } from './content.js';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
-const uid = () => globalThis.crypto.randomUUID();
+const uid = () => createUuid();
 const time = clock => [clock?.date, clock?.time].filter(Boolean).join(' ');
 const nicknames = ['河边捡石头','晚饭吃什么','纸袋装月亮','窗边发呆','今天也路过','慢半拍','橘子味汽水','一碗小面','鞋带又散了','听风的纸盒','别催在走了','周末睡到自然醒'];
 function anonymousName(post, random) { const candidate = nicknames[Math.floor(random() * nicknames.length)]; return [post.author, ...(post.comments || []).map(row => row.author)].includes(candidate) ? candidate + uid().slice(0, 4) : candidate; }

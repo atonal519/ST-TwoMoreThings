@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 import { readStoryReferenceFloors } from './story-reference.js';
 import { cleanBackground } from './backgrounds.js';
 import { readRelease, releaseUrlForCore, STABLE_CORE_URL } from './release.js';
@@ -70,7 +71,7 @@ function bootstrap(coreUrl) {
 const stableCoreUrl = ${JSON.stringify(coreUrl === REMOTE_CORE_URL ? STABLE_CORE_URL : '')};
 const node = window.parent.document.createElement('script');
 node.type = 'module';
-node.id = 'tmt-card-loader-' + crypto.randomUUID();
+node.id = 'tmt-card-loader-' + (${createUuid.toString()})();
 node.owner = window;
 node.preset = getVariables({ type: 'script' }).twoMoreThings;
 node.textContent = '(' + ${JSON.stringify(loadEmbedded.toString())} + ')(' + JSON.stringify(node.id) + ',' + JSON.stringify(coreUrl) + ',' + JSON.stringify(stableCoreUrl) + ',' + ${JSON.stringify(JSON.stringify(releaseUrlForCore(coreUrl)))} + ',(' + ${JSON.stringify(readRelease.toString())} + '))';
@@ -107,7 +108,7 @@ export function createAuthoringService({ store, host, readEntries = () => host.r
         wallpapers: { day: await portable(state.wallpapers?.day), night: await portable(state.wallpapers?.night) }, ...(userProfile ? { userProfile } : {}),
       };
       stateFromPreset(preset);
-      const script = { type: 'script', id: crypto.randomUUID(), name: '两三事 · 卡内手机', enabled: true, content: bootstrap(coreUrl), info: '两三事随卡手机。角色资料和外观由作者配置，手机核心随正式版本更新。', button: { enabled: false, buttons: [] }, data: { twoMoreThings: preset }, export_with: { data: true, button: false } };
+      const script = { type: 'script', id: createUuid(), name: '两三事 · 卡内手机', enabled: true, content: bootstrap(coreUrl), info: '两三事随卡手机。角色资料和外观由作者配置，手机核心随正式版本更新。', button: { enabled: false, buttons: [] }, data: { twoMoreThings: preset }, export_with: { data: true, button: false } };
       const name = (host.captureChat().character?.name || '角色卡').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_');
       return { script, filename: `${name}-两三事随卡包.json` };
     },

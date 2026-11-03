@@ -1,3 +1,4 @@
+import { createUuid } from './uuid.js';
 import { readForumTags } from './forum-tags.js';
 import { normalizeContent, generatedImage } from './content.js';
 import { getSharedProcessingPrompt, prependProcessingPrompt } from './shared-processing-prompt.js';
@@ -26,7 +27,7 @@ export function resolveApiConfig(settings, ref, localModel) {
 }
 
 export async function saveManualPreset(settings, draft, saveSettings) {
-  const preset = { id: globalThis.crypto.randomUUID(), name: draft.name?.trim() || draft.model?.trim(), url: normalizeUrl(draft.url), key: draft.key?.trim(), model: draft.model?.trim(), excludeParams: [], timeoutSec: 180, stream: false };
+  const preset = { id: createUuid(), name: draft.name?.trim() || draft.model?.trim(), url: normalizeUrl(draft.url), key: draft.key?.trim(), model: draft.model?.trim(), excludeParams: [], timeoutSec: 180, stream: false };
   resolveApiConfig({ 'schedule-planner': { apiPresets: [preset] } }, { kind: 'shared-preset', presetId: preset.id });
   const container = settings['schedule-planner'] ||= {};
   const previous = container.apiPresets;
@@ -152,7 +153,7 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
     async saveAs(draft, name, ref = api.getSelected(), { select = true } = {}) {
       const label = String(name || '').trim(); if (!label) throw new Error('请输入预设名称。');
       const settings = host.readSettings(), config = draftConfig(draft, ref), current = sharedConfig(settings, ref);
-      const preset = { excludeParams: [], timeoutSec: 180, stream: false, ...current, ...config, id: globalThis.crypto.randomUUID(), name: label };
+      const preset = { excludeParams: [], timeoutSec: 180, stream: false, ...current, ...config, id: createUuid(), name: label };
       const selected = { kind: 'shared-preset', presetId: preset.id };
       await persistPresets([...pool(settings), preset], select ? { apiSourceRef: selected, apiModel: config.model } : {}, '连接保存失败，请重试。');
       return selected;

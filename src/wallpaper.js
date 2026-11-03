@@ -1,10 +1,11 @@
+import { createUuid } from './uuid.js';
 export function createWallpaperService({ host, store }) {
   const service = {
     async uploadImage(dataUrl) {
       const image = /^data:image\/webp;base64,(.+)$/.exec(dataUrl)?.[1];
       if (!image) throw new Error('背景图片无法读取，请重新选择图片。');
       let response;
-      try { response = await host.request('/api/images/upload', { method: 'POST', body: JSON.stringify({ image, format: 'webp', ch_name: 'pocket-phone', filename: globalThis.crypto.randomUUID() }) }); }
+      try { response = await host.request('/api/images/upload', { method: 'POST', body: JSON.stringify({ image, format: 'webp', ch_name: 'pocket-phone', filename: createUuid() }) }); }
       catch { throw new Error('背景图片上传失败，请检查酒馆连接后重试。'); }
       if (!response.ok) throw new Error('背景图片上传失败，请检查酒馆连接后重试。');
       let data;
