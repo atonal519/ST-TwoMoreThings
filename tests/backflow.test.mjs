@@ -14,6 +14,60 @@ function setup(messages = [{ is_user: false, mes: '<!-- QQJ-end | date=2026-10-1
 }
 const client = (requests, summary = '用户与林舟约好还书。') => ({ complete(request) { requests.push(request); return JSON.stringify({ summary }); } });
 
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: joined group names and member names reach the story without current SMS or another request`, async () => {
+  const { h, target, store, batch } = setup(undefined, hostKind);
+  await store.saveContact('lin', { name: '林舟', nickname: '不带昵称' });
+  await store.saveContact('', { name: '无关私联系人' });
+  const joined = await store.saveGroup('', { name: '周末读书', memberIds: ['lin', 'zhou'], userIsMember: true });
+  const observer = await store.saveGroup('', { name: '旁观工作群', memberIds: ['lin', 'zhou'], userIsMember: false });
+  await store.appendMessage(joined.id, { id: 'old', role: 'assistant', speakerId: 'lin', text: '旧段短信不进入目录', batch: { key: 'past' } });
+  await store.appendMessage(observer.id, { id: 'observer', role: 'assistant', speakerId: 'lin', text: '旁观短信不进入目录', batch });
+  store.read().contacts.find(person => person.id === 'lin').personality = '不带人设';
+  const requests = [], before = structuredClone(store.read()), saves = h.metadataSaves;
+  const reference = await createBackflowService({ target, store, modelClient: client(requests) }).prepare();
+  assert.ok(reference.split('\n').some(line => ['周末读书', '我', '林舟', '周予'].every(value => line.includes(value))));
+  for (const value of [joined.id, observer.id, '无关私联系人', '不带昵称', '不带人设', '旁观工作群', '旧段短信不进入目录', '旁观短信不进入目录']) assert.equal(reference.includes(value), false, value);
+  assert.equal(requests.length, 0);
+  assert.equal(h.metadataSaves, saves);
+  assert.deepEqual(store.read(), before);
+});
+
+test('the group directory follows both existing injection switches and disappears with the last joined group', async () => {
+  const { target, store } = setup(), requests = [];
+  const group = await store.saveGroup('', { name: '当前群', memberIds: ['lin'], userIsMember: true });
+  let enabled = true;
+  const service = createBackflowService({ target, store, modelClient: client(requests), isEnabled: () => enabled });
+  assert.ok((await service.prepare()).includes('当前群'));
+  enabled = false;
+  assert.equal(await service.prepare(), '');
+  enabled = true;
+  await store.setInjectionEnabled(false);
+  assert.equal(await service.prepare(), '');
+  await store.setInjectionEnabled(true);
+  await store.saveContact('zhou', { name: '周予新名' });
+  await store.saveGroup(group.id, { name: '改名群', memberIds: ['zhou'], userIsMember: true });
+  const renamed = await service.prepare();
+  assert.ok(renamed.includes('改名群') && renamed.includes('周予新名'));
+  for (const value of ['当前群', '林舟']) assert.equal(renamed.includes(value), false);
+  await store.saveGroup(group.id, { ...store.read().groups[0], memberIds: ['lin', 'zhou'], userIsMember: false });
+  assert.equal(await service.prepare(), '');
+  assert.equal(requests.length, 0);
+});
+
+test('a directory longer than the SMS threshold retains every group and member without a summary request', async () => {
+  const { h, target, store } = setup(), requests = [];
+  const members = Array.from({ length: 90 }, (_, index) => ({ id: `person-${index}`, name: `成员${index}${'名'.repeat(40)}` }));
+  store.read().contacts = members;
+  store.read().groups = Array.from({ length: 40 }, (_, index) => ({ id: `group-${index}`, name: `群${index}`, userIsMember: true, memberIds: members.map(person => person.id) }));
+  const before = structuredClone(store.read());
+  const reference = await createBackflowService({ target, store, modelClient: client(requests) }).prepare();
+  assert.ok(Array.from(reference).length > 3000);
+  for (const group of before.groups) assert.ok(reference.split('\n').some(line => line.startsWith(`${group.name}：`) && members.every(person => line.includes(person.name))));
+  assert.equal(requests.length, 0);
+  assert.equal(h.metadataSaves, 0);
+  assert.deepEqual(store.read(), before);
+});
+
 for (const hostKind of ['native', 'luker']) test(`${hostKind}: normal and regenerate use the right SMS batch and exclude the replaced story from analysis`, async () => {
   const { h, target, store } = setup([
     { is_user: false, mes: '上午的安排。<!-- SDC-end | date=2027-03-19 | time=15:30 -->' },
@@ -69,6 +123,59 @@ for (const size of [2999, 3000, 3001]) test(`visible ${size}-character reference
   await createBackflowService({ target, store, modelClient: client(requests) }).prepare();
   assert.equal(requests.length, size <= 3000 ? 0 : 1);
   if (size > 3000) assert.equal(JSON.parse(requests[0].messages[0].content).maxCharacters, 100);
+});
+
+for (const size of [2999, 3000, 3001]) test(`a joined directory stays outside the existing ${size}-character SMS threshold and summary input`, async () => {
+  const { target, store, batch } = setup(), requests = [];
+  await store.saveGroup('', { name: '门槛外的群目录', memberIds: ['lin', 'zhou'], userIsMember: true });
+  await store.appendMessage('lin', { id: 'boundary', role: 'user', text: '汉'.repeat(size - Array.from(rawPrefix).length), batch });
+  const reference = await createBackflowService({ target, store, modelClient: client(requests) }).prepare();
+  assert.ok(reference.includes('门槛外的群目录'));
+  assert.equal(reference.split('门槛外的群目录').length - 1, 1);
+  assert.equal(requests.length, size <= 3000 ? 0 : 1);
+  if (size <= 3000) assert.ok(reference.includes('汉'.repeat(size - Array.from(rawPrefix).length)));
+  else {
+    assert.ok(reference.includes('用户与林舟约好还书。'));
+    assert.equal(JSON.stringify(requests[0]).includes('门槛外的群目录'), false);
+    assert.equal(JSON.parse(requests[0].messages[0].content).maxCharacters, 100);
+  }
+});
+
+for (const summary of ['有效短信摘要。', '']) test(`the ${summary ? 'nonempty' : 'empty'} summary uses the latest joined roster after awaiting`, async () => {
+  const { target, store, batch } = setup();
+  const renamed = await store.saveGroup('', { name: '旧群名', memberIds: ['lin'], userIsMember: true });
+  const left = await store.saveGroup('', { name: '已退群目录', memberIds: ['lin', 'zhou'], userIsMember: true });
+  const deleted = await store.saveGroup('', { name: '已删群目录', memberIds: ['lin'], userIsMember: true });
+  const joining = await store.saveGroup('', { name: '新加入群', memberIds: ['lin', 'zhou'], userIsMember: false });
+  await store.appendMessage('lin', { id: 'long', role: 'user', text: '长短信材料。'.repeat(700), batch });
+  let calls = 0;
+  const reference = await createBackflowService({ target, store, modelClient: { async complete() {
+    calls++;
+    await store.saveContact('zhou', { name: '周予新名' });
+    await store.saveGroup(renamed.id, { name: '新群名', memberIds: ['zhou'], userIsMember: true });
+    await store.saveGroup(left.id, { name: left.name, memberIds: left.memberIds, userIsMember: false });
+    await store.deleteGroup(deleted.id);
+    await store.saveGroup(joining.id, { name: joining.name, memberIds: ['zhou'], userIsMember: true });
+    return JSON.stringify({ summary });
+  } } }).prepare();
+  for (const value of ['新群名', '新加入群', '周予新名', ...(summary ? [summary] : [])]) assert.ok(reference.includes(value), value);
+  for (const value of ['旧群名', '已退群目录', '已删群目录', '林舟']) assert.equal(reference.includes(value), false, value);
+  assert.equal(calls, 1);
+});
+
+for (const toggle of ['phone', 'injection']) test(`the directory is removed when ${toggle} is disabled while an empty summary is pending`, async () => {
+  const { target, store, batch } = setup();
+  await store.saveGroup('', { name: '不应迟到的群目录', memberIds: ['lin'], userIsMember: true });
+  await store.appendMessage('lin', { id: 'long', role: 'user', text: '长短信材料。'.repeat(700), batch });
+  let enabled = true, calls = 0;
+  const reference = await createBackflowService({ target, store, isEnabled: () => enabled, modelClient: { async complete() {
+    calls++;
+    if (toggle === 'phone') enabled = false;
+    else await store.setInjectionEnabled(false);
+    return '{"summary":""}';
+  } } }).prepare();
+  assert.equal(reference, '');
+  assert.equal(calls, 1);
 });
 
 test('the short threshold counts Unicode characters while every eligible current message reaches the same analysis', async () => {

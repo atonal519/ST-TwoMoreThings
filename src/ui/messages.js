@@ -8,6 +8,9 @@ import { renderAttachments, renderCardActions, renderCardBody } from './cards.js
 import { chatBackgroundStyle } from '../backgrounds.js';
 import { replyContext } from '../replies.js';
 import { isUserIdentity } from '../identities.js';
+import { storySmsDisplayText } from '../story-sms.js';
+
+const inboxTime = message => [message?.storyDate, message?.timeLabel].filter(Boolean).join(' ');
 
 export function renderInbox(state, { ui, busy }) {
   const groups = state.groups || [];
@@ -22,7 +25,7 @@ export function renderInbox(state, { ui, busy }) {
       <span class="contact-copy">
         <span class="contact-title">
           <strong>${escape(group.name)}</strong>
-          <span class="contact-time">${escape(last?.timeLabel || '')}</span>
+          <span class="contact-time">${escape(inboxTime(last))}</span>
         </span>
         <span class="contact-preview">${renderEmojiText(preview)}</span>
       </span>
@@ -36,7 +39,7 @@ export function renderInbox(state, { ui, busy }) {
       <span class="contact-copy">
         <span class="contact-title">
           <strong>${escape(displayName(contact))}</strong>
-          <span class="contact-time">${escape(last?.timeLabel || '')}</span>
+          <span class="contact-time">${escape(inboxTime(last))}</span>
         </span>
         ${last ? `<span class="contact-preview">${renderEmojiText(messageText(last))}</span>` : ''}
       </span>
@@ -98,7 +101,8 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
   const replyName = reply && !reply.missing ? displayName(reply.role === 'user' ? user : state.contacts.find(person => person.id === reply.speakerId) || { name: '已移除联系人' }) : '';
   const renderText = text => renderMentionText(text, groupPeople);
   const replyBlock = reply ? `<div class="message-reply${reply.missing ? ' is-missing' : ''}"><small>引用${replyName ? ` ${escape(replyName)}` : ''}</small>${reply.missing ? '<span>原消息已删除</span>' : renderBilingual(reply.messageText, reply.translation, renderText)}</div>` : '';
-  const body = !message.type ? renderBilingual(message.text, message.translation, renderText) : renderCardBody(message, busy.has(`image:${message.id}`));
+  const text = !message.type && message.source?.kind === 'main-story' ? storySmsDisplayText(message.text) : message.text;
+  const body = !message.type ? renderBilingual(text, message.translation, renderText) : renderCardBody(message, busy.has(`image:${message.id}`));
   return `<div data-message-id="${escape(message.id)}" class="message-row ${mine ? 'is-mine' : 'is-theirs'}${chosen ? ' is-selected' : ''}${!hasNext && message.timeLabel ? ' has-time' : ''}${grouped}">
     ${messageAvatar}
     <div class="message-body">

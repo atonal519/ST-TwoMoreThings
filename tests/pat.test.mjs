@@ -102,7 +102,7 @@ test('pats retain original frozen audience through phone reference, backflow and
   await f.store.saveGroup(f.group.id, { ...f.group, memberIds: ['lin', 'zhou', 'xu'] });
   await f.store.setInjectionEnabled(true);
   const backflow = createBackflowService({ target: f.target, store: f.store, modelClient: { complete() { assert.fail('short backflow must not call model'); } } });
-  const reference = await backflow.prepare(); assert.ok(reference.includes('林舟拍了拍周予')); assert.equal(reference.includes('许知'), false);
+  const reference = await backflow.prepare(); assert.ok(reference.includes('林舟拍了拍周予')); assert.deepEqual(new Set(reference.match(/\[知情：([^\]]+)\]/)?.[1].split('、')), new Set(['林舟', '周予', '我']));
   const anchor = { key: 'next-batch', label: '之后' };
   const own = readPhoneContext(f.store.read(), { anchor, targetIds: ['lin'] });
   assert.equal(own[0].type, 'pat'); assert.deepEqual(own[0].pat, { targetId: 'zhou' }); assert.equal(own[0].author.id, 'lin');

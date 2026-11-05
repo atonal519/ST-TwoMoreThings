@@ -22,7 +22,7 @@ test('a user-owned alias can carry only the group messages it actually knew with
 });
 
 test('short backflow identifies actual per-message knowers rather than implying later members knew it',async()=>{
- const f=setup({rows:[{id:'known',text:'已知事情。',knownToIds:['a','@user']}]});const result=await f.service.prepare();assert.ok(result.includes('知情'));assert.ok(result.includes('甲'));assert.equal(result.includes('后来成员'),false);assert.equal(f.calls.length,0);
+ const f=setup({rows:[{id:'known',text:'已知事情。',knownToIds:['a','@user']}]});const result=await f.service.prepare();assert.ok(result.includes('知情'));assert.ok(result.includes('甲'));assert.equal(result.match(/\[知情：([^\]]+)\]/)?.[1],'甲、我');assert.equal(f.calls.length,0);
 });
 
 for(const change of ['owner','scope','delete'])test(`a pending summary rechecks an expanded old quote parent after ${change} changes`,async()=>{

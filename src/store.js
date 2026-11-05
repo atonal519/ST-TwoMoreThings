@@ -10,6 +10,7 @@ import { findAlbumPhoto, preserveAlbumPhotos, rememberAlbumPhotos } from './albu
 import { groupAudience } from './phone-context.js';
 import { assignIdentityOwner, isUserIdentity, assertIdentitySnapshot } from './identities.js';
 import { archiveNotifications, initializeNotificationHistory } from './notifications.js';
+import { findStorySmsPeople, storySmsBlockMatches, storySmsSourceRows } from './story-sms.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
 const fillDefaultAvatars = people => {
@@ -97,18 +98,20 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         return items.length === history.items.length ? state : { ...seeded, notifications: { ...history, items } };
       });
     },
-    importStorySms({ floor, blocks, batch }) {
+    importStorySms({ floor, blocks, projection, batch }) {
       return update(state => {
         assertEnabled();
-        if (state.storySmsImportedFloor === floor) return state;
+        const previous = state.storySmsImports, processed = previous?.floor === floor ? previous.processed : [];
+        if (processed.includes(projection)) return state;
+        const storySmsImports = { floor, processed: [...processed, projection] };
+        if (!previous && state.storySmsImportedFloor === floor) {
+          // 旧档只凭存活且无法对应当前投影的短信认定换稿；无证据则登记基线，尊重手删。
+          let different = false;
+          for (const { conversationId, row } of storySmsSourceRows(state, floor)) if (row.source.floor === floor && !blocks.some(block => storySmsBlockMatches(state, conversationId, row, block))) { different = true; break; }
+          if (!different) return { ...state, storySmsImports };
+        }
         const contacts = [...state.contacts], groups = [...(state.groups || [])], conversations = { ...state.conversations };
-        const separatedName = (label, name) => label && name && new RegExp(`(^|[\\s\\p{P}\\p{S}])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[\\s\\p{P}\\p{S}])`, 'u').test(label);
-        const findPerson = name => {
-          const exact = contacts.filter(person => person.name === name || person.nickname === name);
-          // Extra labels may surround a whole name; continuous names stay distinct.
-          const matches = exact.length ? exact : contacts.filter(person => [person.name, person.nickname].some(alias => separatedName(name, alias) || separatedName(alias, name)));
-          return [...new Map(matches.map(person => [person.id, person])).values()];
-        };
+        const findPerson = name => findStorySmsPeople(contacts, name);
         const personFor = name => {
           const matches = findPerson(name);
           if (matches.length > 1) return null;
@@ -116,7 +119,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
           const person = { id: `story:${createUuid()}`, name, avatar: createCameoAvatar(), source: { kind: 'story' } };
           contacts.push(person); return person;
         };
-        for (const block of blocks) {
+        for (const [position, block] of blocks.entries()) {
           let conversationId, speakerId;
           if (block.group) {
             const matches = groups.filter(group => group.name === block.name);
@@ -139,15 +142,15 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
             conversationId = person.id; speakerId = block.sender === '我' ? '@user' : person.id;
           }
           const clock = batch.clock;
-          const message = { id: `story:${floor}:${block.index}`, role: speakerId === '@user' ? 'user' : 'assistant', speakerId,
+          const message = { id: `story:${floor}:${block.index}:${createUuid()}`, role: speakerId === '@user' ? 'user' : 'assistant', speakerId,
             text: block.text, createdAt: new Date().toISOString(), timeLabel: clock.time, read: true,
             ...(clock.source === 'story' ? { storyDate: clock.date, storyWeekday: clock.weekday } : {}),
-            batch: { key: batch.key, label: batch.label }, source: { kind: 'main-story', floor, block: block.index } };
+            batch: { key: batch.key, label: batch.label }, source: { kind: 'main-story', floor, block: block.index, projection, position } };
           const group = groups.find(item => item.id === conversationId);
           conversations[conversationId] = [...(conversations[conversationId] || []), { ...message, ...(group ? { knownToIds: groupAudience(group) } : {}) }];
         }
-        const next = { ...state, contacts, groups, conversations, storySmsImportedFloor: floor };
-        // 最新已处理楼即可尊重手机里的删除；不保存正文或历史处理台账。
+        const next = { ...state, contacts, groups, conversations, storySmsImportedFloor: floor, storySmsImports };
+        // 仅当前楼的候选凭据随正常保存保留，手删不复活，不留全历史正文台账。
         return next;
       });
     },

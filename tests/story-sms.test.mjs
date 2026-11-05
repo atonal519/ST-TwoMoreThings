@@ -6,6 +6,211 @@ import { createContextReader, createBackflowService } from '../src/context.js';
 import { createMessageService } from '../src/messages.js';
 import { syncStorySms, parseStorySms, storySmsRegex, removeAcceptedStorySms } from '../src/story-sms.js';
 import { readContactAvatars } from '../src/contact-avatars.js';
+import { renderChat } from '../src/ui/messages.js';
+import { readTimeline } from '../src/timeline.js';
+import { captureFavorite } from '../src/favorites.js';
+import { replyContext } from '../src/replies.js';
+
+const rerollSms = text => `[tmt|群:测试群|甲]${text}[/tmt]`;
+const rerollBody = texts => `<content>当前叙事。${texts.map(rerollSms).join('')}</content><!-- QQJ-end | date=2031年4月8日 | time=10:00 -->`;
+function rerollSetup(texts = ['候选A。'], hostKind = 'native') {
+  const h = createHarness({ hostKind, messages: [{ is_user: false, mes: rerollBody(texts) }], metadata: { pocketPhone: {
+    contacts: [{ id: 'a', name: '甲' }, { id: 'b', name: '乙' }], groups: [{ id: 'g', name: '测试群', memberIds: ['a', 'b'], userIsMember: true }], conversations: {},
+  } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  return { h, target, store, reader: () => createContextReader({ target, store, qqjBridgeProvider: () => null }) };
+}
+
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: same-floor candidates append with independent message references and stay deleted across switching and store reconstruction`, async () => {
+  const s = rerollSetup(undefined, hostKind);
+  await syncStorySms(s);
+  const first = structuredClone(s.store.read().conversations.g[0]), firstSaves = s.h.metadataSaves;
+  assert.equal(await syncStorySms(s), false);
+  assert.equal(s.h.metadataSaves, firstSaves);
+  s.target.messages[0].mes = rerollBody(['候选B。']);
+  await syncStorySms(s);
+  const rows = s.store.read().conversations.g;
+  assert.deepEqual(rows.map(row => row.text), ['候选A。', '候选B。']);
+  assert.equal(new Set(rows.map(row => row.id)).size, 2);
+  assert.deepEqual(rows[0], first);
+  assert.equal(rows[0].batch.key, rows[1].batch.key, 'same time and floor keep the existing batch contract');
+  const ids = rows.map(row => row.id);
+  for (let index = 0; index < rows.length; index++) {
+    assert.equal(replyContext({ replyToId: ids[index] }, rows).messageText, rows[index].text);
+    const ref = { app: 'messages', kind: 'message', conversationId: 'g', messageId: ids[index], batchKey: rows[index].batch.key };
+    assert.equal(captureFavorite(s.store.read(), ref).snapshot.text, rows[index].text);
+    await s.store.addFavorite(ref);
+  }
+  const favorites = structuredClone(s.store.read().favorites);
+  await s.store.deleteMessage('g', ids[0]);
+  assert.deepEqual(s.store.read().conversations.g.map(row => row.id), [ids[1]]);
+  s.target.messages[0].mes = rerollBody(['候选A。']);
+  const before = s.h.metadataSaves;
+  assert.equal(await syncStorySms(s), false);
+  assert.equal(s.h.metadataSaves, before);
+  await s.store.deleteMessage('g', ids[1]);
+  for (const text of ['候选B。', '候选A。']) {
+    s.h.context.chatMetadata.pocketPhone = JSON.parse(JSON.stringify(s.store.read()));
+    s.target.messages[0].mes = rerollBody([text]);
+    const fresh = createPhoneStore({ target: s.target }), saves = s.h.metadataSaves;
+    assert.equal(await syncStorySms({ ...s, store: fresh }), false);
+    assert.equal(s.h.metadataSaves, saves);
+    assert.deepEqual(fresh.read().conversations.g, []);
+    assert.deepEqual(fresh.read().favorites, favorites);
+  }
+  assert.equal(s.store.read().storySmsImports.processed.length, 2);
+  assert.equal(s.h.modelRequests.length, 0);
+});
+
+test('formal projection identity ignores draft changes and maps its source position to the current raw block index', async () => {
+  const s = rerollSetup(); await syncStorySms(s);
+  const source = structuredClone(s.store.read().conversations.g[0].source), saves = s.h.metadataSaves;
+  s.target.messages[0].mes = `<draft>${rerollSms('草稿一。')}${rerollSms('草稿二。')}</draft>${rerollBody(['候选A。'])}`;
+  assert.equal(await syncStorySms(s), false);
+  assert.equal(s.h.metadataSaves, saves);
+  assert.deepEqual(s.store.read().conversations.g[0].source, source);
+  assert.deepEqual((await s.reader().readForContact('a')).story.map(row => row.text), ['当前叙事。']);
+  s.target.messages[0].mes = rerollBody(['候选B。']);
+  assert.ok((await s.reader().readForContact('a')).story[0].text.includes('候选B。'));
+  await syncStorySms(s);
+  assert.deepEqual((await s.reader().readForContact('a')).story.map(row => row.text), ['当前叙事。']);
+});
+
+test('new-floor receipts replace the previous receipt while old candidate records and their source identities remain', async () => {
+  const s = rerollSetup(); await syncStorySms(s);
+  s.target.messages[0].mes = rerollBody(['候选B。']); await syncStorySms(s);
+  const old = structuredClone(s.store.read().conversations.g);
+  s.target.messages.push({ is_user: false, mes: rerollBody(['下一楼。']) }); await syncStorySms(s);
+  assert.equal(s.store.read().storySmsImports.floor, 1);
+  assert.equal(s.store.read().storySmsImports.processed.length, 1);
+  assert.deepEqual(s.store.read().conversations.g.slice(0, 2), old);
+  s.store.read().storyReferenceFloors = 2;
+  assert.deepEqual((await s.reader().readForContact('a')).story.map(row => row.text), ['当前叙事。', '当前叙事。']);
+});
+
+test('duplicate sync calls and a reconstructed store publish one projection in the normal save queue', async () => {
+  const s = rerollSetup(), fresh = createPhoneStore({ target: s.target });
+  await Promise.all([syncStorySms(s), syncStorySms(s), syncStorySms({ ...s, store: fresh })]);
+  assert.equal(s.h.metadataSaves, 1);
+  assert.equal(s.store.read().conversations.g.length, 1);
+  assert.equal(s.store.read().storySmsImports.processed.length, 1);
+});
+
+test('a failed candidate save rolls back messages and receipt together and the same candidate can be retried', async () => {
+  const s = rerollSetup(), before = structuredClone(s.store.read());
+  s.h.saveFailure = new Error('synthetic save failure');
+  await assert.rejects(syncStorySms(s), /保存/);
+  assert.deepEqual(s.store.read(), before);
+  s.h.saveFailure = null;
+  await syncStorySms(s);
+  assert.equal(s.h.metadataSaves, 1);
+  assert.equal(s.store.read().conversations.g.length, 1);
+  assert.equal(s.store.read().storySmsImports.processed.length, 1);
+  assert.equal(await syncStorySms(s), false);
+});
+
+test('legacy surviving text that differs from all seven new formal blocks allows the current candidate to append', async () => {
+  const s = rerollSetup(Array.from({ length: 7 }, (_, index) => `新短信${index}。`));
+  s.target.messages[0].mes = `<draft>${Array.from({ length: 41 }, () => rerollSms('草稿。')).join('')}</draft>${s.target.messages[0].mes}`;
+  const old = { id: 'story:0:38', role: 'assistant', speakerId: 'a', text: '\n旧短信。\n', batch: readTimeline(s.target.messages), source: { kind: 'main-story', floor: 0, block: 38 } };
+  s.store.read().storySmsImportedFloor = 0; s.store.read().conversations.g = [old];
+  await syncStorySms(s);
+  assert.equal(s.store.read().conversations.g.length, 8);
+  assert.deepEqual(s.store.read().conversations.g[0], old);
+  assert.deepEqual(s.store.read().conversations.g.slice(1).map(row => [row.source.block, row.source.position]), Array.from({ length: 7 }, (_, i) => [41 + i, i]));
+  assert.equal(s.h.metadataSaves, 1);
+  assert.equal(await syncStorySms({ ...s, store: createPhoneStore({ target: s.target }) }), false);
+});
+
+for (const surviving of [true, false]) test(`legacy ${surviving ? 'partially retained boundary-wrapped text' : 'fully deleted text'} gets one conservative receipt without restoring removed messages`, async () => {
+  const s = rerollSetup(['候选A。', '已手删的同候选短信。']);
+  const old = { id: 'legacy-stable-id', role: 'assistant', speakerId: 'a', text: '\r\n候选A。\r\n', batch: readTimeline(s.target.messages), source: { kind: 'main-story', floor: 0, block: 0 } };
+  s.store.read().storySmsImportedFloor = 0; s.store.read().conversations.g = surviving ? [old] : [];
+  const before = structuredClone(s.store.read()), raw = s.target.messages[0].mes;
+  await syncStorySms(s);
+  const { storySmsImports, ...unchanged } = s.store.read();
+  assert.deepEqual(unchanged, before);
+  assert.equal(storySmsImports.processed.length, 1);
+  assert.equal(s.h.metadataSaves, 1);
+  assert.equal(await syncStorySms({ ...s, store: createPhoneStore({ target: s.target }) }), false);
+  assert.equal(s.h.metadataSaves, 1);
+  assert.equal(s.target.messages[0].mes, raw);
+});
+
+for (const block of ['[tmt|甲|甲]同文。[/tmt]', '[tmt|群:测试群|乙]同文。[/tmt]']) test(`legacy accepted-removal requires the actual conversation and sender for ${block}`, async () => {
+  const s = rerollSetup();
+  s.target.messages[0].mes = `<content>当前叙事。${block}</content>`;
+  s.store.read().conversations.g = [{ id: 'legacy', role: 'assistant', speakerId: 'a', text: '同文。', batch: readTimeline(s.target.messages), source: { kind: 'main-story', floor: 0, block: 0 } }];
+  s.store.read().storySmsImportedFloor = 0;
+  assert.ok((await s.reader().readForContact('a')).story[0].text.includes(block));
+  await syncStorySms(s);
+  const rows = Object.values(s.store.read().conversations).flat();
+  assert.equal(rows.length, 2);
+  assert.equal(rows.filter(row => row.source.projection).length, 1);
+  assert.ok(rows.some(row => row.id === 'legacy'));
+});
+
+for (const newline of ['\n', '\r\n', '\r']) test(`TMT wrapper blank lines are excluded from display capture and imported text (${JSON.stringify(newline)})`, async () => {
+  const text = `  第一行的缩进和尾空格  ${newline}${newline}  内部段落也保留。  `;
+  const block = `[tmt|甲|甲]${newline}\t${newline}${text}${newline}  ${newline}[/tmt]`;
+  const raw = `\n\n${block}\n\n`;
+  const rule = storySmsRegex(), pattern = new RegExp(rule.findRegex.slice(1, -2), 'g');
+  const match = [...raw.matchAll(pattern)][0];
+  assert.equal(match.length, 4);
+  assert.equal(match[0], block);
+  assert.deepEqual(match.slice(1), ['甲', '甲', text]);
+  assert.deepEqual(parseStorySms(raw), [{ index: 0, name: '甲', sender: '甲', text, group: false }]);
+  assert.equal(raw.replace(pattern, rule.replaceString).match(/class="tmt-main-sms-bubble">([\s\S]*?)<\/div>/)[1], text);
+  assert.equal(removeAcceptedStorySms(raw, new Set([0])), '\n\n\n\n');
+  const h = createHarness({ messages: [{ is_user: false, mes: raw }], metadata: { pocketPhone: { contacts: [{ id: 'a', name: '甲' }], groups: [], conversations: {} } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target });
+  await syncStorySms({ target, store });
+  assert.equal(store.read().conversations.a[0].text, text);
+  assert.equal(target.messages[0].mes, raw);
+  assert.equal(h.metadataSaves, 1);
+  assert.equal(h.modelRequests.length, 0);
+});
+
+test('empty and unclosed TMT wrappers keep full matching and raw block indexes while same-line spaces survive', () => {
+  const empty = '[tmt|甲|甲]\n \t\n[/tmt]', first = '[tmt|甲|甲]\n第一条。\n[/tmt]', second = '[tmt|甲|我]  第二条。  [/tmt]';
+  const raw = `${empty}[tmt|草稿|草稿]\n未闭合示例。${first}\n${second}`;
+  const rule = storySmsRegex(), matches = [...raw.matchAll(new RegExp(rule.findRegex.slice(1, -2), 'g'))];
+  assert.deepEqual(matches.map(match => match[0]), [empty, first, second]);
+  assert.ok(matches.every(match => match.length === 4));
+  assert.deepEqual(parseStorySms(raw).map(({ index, text }) => [index, text]), [[1, '第一条。'], [2, '  第二条。  ']]);
+  assert.equal(removeAcceptedStorySms(raw, new Set([1])), `${empty}[tmt|草稿|草稿]\n未闭合示例。\n${second}`);
+  assert.deepEqual(parseStorySms(empty), []);
+  const unclosed = `[tmt|未闭合|甲]${'\r\n'.repeat(64)}`;
+  assert.deepEqual(parseStorySms(unclosed + first).map(({ index, text }) => [index, text]), [[0, '第一条。']]);
+});
+
+for (const isGroup of [false, true]) test(`existing main-story ${isGroup ? 'group' : 'private'} messages keep stored text while a legacy receipt is established once`, async () => {
+  const text = '\r\n \t\r\n  第一段原样保留。  \r\n\r\n第二段。\r\n\t\r\n';
+  const shown = '  第一段原样保留。  \r\n\r\n第二段。';
+  const raw = `[tmt|${isGroup ? '群:读书群' : '甲'}|甲]${text}[/tmt]`;
+  const h = createHarness({ messages: [{ is_user: false, mes: raw }], metadata: { pocketPhone: {
+    contacts: [{ id: 'a', name: '甲' }], groups: [{ id: 'g', name: '读书群', memberIds: ['a'], userIsMember: true }], conversations: {}, storySmsImportedFloor: 0,
+  } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target }), batch = readTimeline(target.messages), id = isGroup ? 'g' : 'a';
+  store.read().conversations[id] = [
+    { id: 'story', role: 'assistant', speakerId: 'a', text, batch, source: { kind: 'main-story', floor: 0, block: 0 } },
+    { id: 'manual', role: 'user', speakerId: '@user', text, batch },
+    { id: 'phone-model', role: 'assistant', speakerId: 'a', text, batch },
+  ];
+  const before = structuredClone(store.read());
+  const html = renderChat(store.read(), { ui: { view: isGroup ? 'group-chat' : 'chat', contactId: 'a', groupId: 'g', defaultUser: '我', batch, visibleMessages: 30, visibleHistory: 30, drafts: new Map() }, busy: new Set() });
+  assert.deepEqual([...html.matchAll(/class="message-original"[^>]*>([\s\S]*?)<\/span>/g)].map(match => match[1]), [shown, text, text]);
+  assert.equal(parseStorySms(raw)[0].text, shown);
+  assert.equal(await syncStorySms({ target, store }), true);
+  const { storySmsImports, ...unchanged } = store.read();
+  assert.deepEqual(unchanged, before);
+  assert.equal(storySmsImports.processed.length, 1);
+  assert.equal(target.messages[0].mes, raw);
+  assert.equal(h.metadataSaves, 1);
+  assert.equal(await syncStorySms({ target, store }), false);
+  assert.equal(h.metadataSaves, 1);
+  assert.equal(h.modelRequests.length, 0);
+});
 
 test('main-story SMS theme reuses one scoped style and leaves regex output unchanged', async () => {
   const { syncStorySmsTheme, storySmsRegex } = await import('../src/story-sms.js');
@@ -94,7 +299,10 @@ test('projected messages continue normally but do not flow back; independently r
   const requests = [], modelClient = { async complete(request) { requests.push(request); return '{"messages":[{"text":"手机新回复"}]}'; } };
   const reader = createContextReader({ target: s.target, store: s.store, qqjBridgeProvider: () => null });
   const backflow = createBackflowService({ target: s.target, store: s.store, modelClient });
-  assert.equal(await backflow.prepare(), '');
+  const directory = await backflow.prepare();
+  assert.equal(directory.split('读书群').length - 1, 1);
+  for (const value of ['晚上八点见。', '收到', '我带书。', '[手机参考']) assert.equal(directory.includes(value), false, value);
+  assert.equal(requests.length, 0);
   await createMessageService({ target: s.target, store: s.store, contextReader: reader, modelClient }).continueChat(a.id);
   assert.ok(JSON.parse(requests[0].messages[0].content).history.some(row => row.text === '晚上八点见。'));
   const prompt = await backflow.prepare();
@@ -176,7 +384,9 @@ test('an invalid opener consumes no block index while closed draft blocks and re
   assert.deepEqual(parseStorySms(raw).map(row => [row.index, row.text]), [[0, '合法草稿。'], [1, text], [2, text]]);
   const s = wrappedStory(raw); await syncStorySms(s);
   const person = s.store.read().contacts.find(row => row.name === '甲'), rows = s.store.read().conversations[person.id];
-  assert.deepEqual(rows.map(row => [row.id, row.source.block, row.text, row.role]), [['story:0:1', 1, text, 'user'], ['story:0:2', 2, text, 'user']]);
+  assert.deepEqual(rows.map(row => [row.source.block, row.text, row.role]), [[1, text, 'user'], [2, text, 'user']]);
+  assert.equal(new Set(rows.map(row => row.id)).size, 2);
+  assert.match(rows[0].id, /^story:0:1:/); assert.match(rows[1].id, /^story:0:2:/);
   await syncStorySms(s); assert.equal(s.h.metadataSaves, 1); assert.equal(s.h.modelRequests.length, 0);
   assert.equal(s.target.messages[0].mes, raw);
 });
@@ -186,7 +396,7 @@ test('three draft SMS copies are excluded while the formal copy keeps its origin
   await syncStorySms(s);
   const state = s.store.read(), person = state.contacts.find(row => row.name === '朋友甲'), rows = state.conversations[person.id];
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].source.block, 3); assert.equal(rows[0].id, 'story:0:3');
+  assert.equal(rows[0].source.block, 3); assert.match(rows[0].id, /^story:0:3:/);
   assert.equal(rows[0].text, '完整原话，保留  两格与换行。\n收到。'); assert.equal(rows[0].role, 'user'); assert.equal(rows[0].speakerId, '@user');
   assert.equal(s.target.messages[0].mes, draftStory); assert.equal(s.h.metadataSaves, 1); assert.equal(s.h.modelRequests.length, 0);
   const reader = createContextReader({ target: s.target, store: s.store, qqjBridgeProvider: () => null, wrapperSettingsProvider: s.wrapperSettingsProvider });
@@ -207,13 +417,13 @@ test('SMS import follows shared XML keep, literal draft exclusion and default pl
   }
 });
 
-test('genuinely repeated formal SMS stays distinct, while floor gating and manual deletion stay unchanged', async () => {
+test('genuinely repeated formal SMS stays distinct, while candidate gating respects manual deletion', async () => {
   const raw = `<content>${repeatedSms}${repeatedSms}</content>`, s = wrappedStory(raw);
   await syncStorySms(s);
   const person = s.store.read().contacts.find(row => row.name === '朋友甲');
   assert.deepEqual(s.store.read().conversations[person.id].map(row => row.source.block), [0, 1]);
   await syncStorySms(s); assert.equal(s.h.metadataSaves, 1);
-  await s.store.deleteMessage(person.id, 'story:0:0'); const saves = s.h.metadataSaves;
+  await s.store.deleteMessage(person.id, s.store.read().conversations[person.id][0].id); const saves = s.h.metadataSaves;
   assert.equal(await syncStorySms(s), false); assert.equal(s.h.metadataSaves, saves);
   s.target.messages.push({ is_user: false, mes: `<content>${repeatedSms}</content>` }); await syncStorySms(s);
   assert.deepEqual(s.store.read().conversations[person.id].map(row => [row.source.floor, row.source.block]), [[0, 1], [1, 0]]);

@@ -6,8 +6,14 @@ export const STORY_SMS_PROMPT = '本楼实际新增的短信按[tmt|对话名|�
 const RULE_ID = 'two-more-things:story-sms-display';
 const ENTRY_FIELDS = { content: STORY_SMS_PROMPT, constant: true, disable: false, vectorized: false, position: 4, depth: 1, role: 0, probability: 100, useProbability: false, ignoreBudget: true };
 const avatarName = character => character.avatar.split('/').at(-1).replace(/\.[^.]+$/, '');
+const OPENING_BLANK_LINES = String.raw`(?:[^\S\r\n]*(?:\r\n|\r(?!\n)|\n))*`;
+const CLOSING_BLANK_LINES = String.raw`(?:(?:\r\n|\r(?!\n)|\n)[^\S\r\n]*)*`;
+const BODY_BOUNDARY_LINES = new RegExp(`^${OPENING_BLANK_LINES}|${CLOSING_BLANK_LINES}$`, 'g');
 // 未闭合的格式示例不能跨过下一条完整短信头，吞掉正式正文。
-const BLOCK_SOURCE = String.raw`\[tmt\|([^|\]\r\n]+)\|([^|\]\r\n]+)\]((?:(?!\[tmt\|[^|\]\r\n]+\|[^|\]\r\n]+\])[\s\S])*?)\[\/tmt\]`;
+const BLOCK_SOURCE = String.raw`\[tmt\|([^|\]\r\n]+)\|([^|\]\r\n]+)\]${OPENING_BLANK_LINES}((?:(?!\[tmt\|[^|\]\r\n]+\|[^|\]\r\n]+\])[\s\S])*?)${CLOSING_BLANK_LINES}\[\/tmt\]`;
+
+// 旧正文导入只修正展示副本；同一行缩进与正文内部段落保留。
+export const storySmsDisplayText = value => String(value ?? '').replace(BODY_BOUNDARY_LINES, '');
 
 export function syncStorySmsTheme(documentRef, theme) {
   // The shared host style outlives a phone window and is reused by other instances.
@@ -63,15 +69,57 @@ function storyBodyBlocks(raw, blocks, wrappers) {
   return blocks.filter(block => accepted.has(block.index));
 }
 
+export function readStorySmsProjection(raw, wrappers = {}) {
+  const blocks = storyBodyBlocks(raw, parseStorySms(raw), wrappers);
+  // 指纹只取正式短信顺序和内容；草稿、叙事与原始块号变化不产生新候选。
+  const material = JSON.stringify(blocks.map(({ group, name, sender, text }) => [group, name, sender, text]));
+  let fingerprint = 144066263297769815596495629667062367629n;
+  for (const character of material) fingerprint = BigInt.asUintN(128, (fingerprint ^ BigInt(character.codePointAt(0))) * 309485009821345068724781371n);
+  return { blocks, key: fingerprint.toString(16).padStart(32, '0') };
+}
+
+export function findStorySmsPeople(contacts, name) {
+  const separatedName = (label, alias) => label && alias && new RegExp(`(^|[\\s\\p{P}\\p{S}])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[\\s\\p{P}\\p{S}])`, 'u').test(label);
+  const exact = contacts.filter(person => person.name === name || person.nickname === name);
+  // Extra labels may surround a whole name; continuous names stay distinct.
+  const matches = exact.length ? exact : contacts.filter(person => [person.name, person.nickname].some(alias => separatedName(name, alias) || separatedName(alias, name)));
+  return [...new Map(matches.map(person => [person.id, person])).values()];
+}
+
+export function storySmsBlockMatches(state, conversationId, message, block) {
+  if (storySmsDisplayText(message.text) !== block.text) return false;
+  const group = state.groups?.find(item => item.id === conversationId);
+  if (block.group) { if (!group || group.name !== block.name) return false; }
+  else {
+    const people = findStorySmsPeople(state.contacts, block.name);
+    if (group || people.length !== 1 || people[0].id !== conversationId) return false;
+  }
+  if (block.sender === '我') return message.role === 'user';
+  const senders = findStorySmsPeople(state.contacts, block.sender);
+  return message.role === 'assistant' && senders.length === 1 && senders[0].id === (message.speakerId || (!block.group ? conversationId : undefined));
+}
+
+export function* storySmsSourceRows(state, firstFloor) {
+  for (const [conversationId, thread] of Object.entries(state?.conversations || {})) {
+    // 只读所需楼层对应的短信尾部，遇到更早批次即停止。
+    for (let position = thread.length - 1; position >= 0; position--) {
+      const row = thread[position];
+      let floor;
+      try { floor = JSON.parse(row.batch?.key)[0]; } catch { break; }
+      if (!Number.isInteger(floor) || floor < firstFloor) break;
+      if (row.source?.kind === 'main-story') yield { conversationId, row };
+    }
+  }
+}
+
 export function syncStorySms({ target, store, wrapperSettingsProvider = () => ({}) }) {
   const floor = latestAiFloor(target.messages);
-  if (!floor || store.read().storySmsImportedFloor === floor.index) return false;
-  const parsed = parseStorySms(floor.message.mes);
-  if (!parsed.length) return false;
-  const blocks = storyBodyBlocks(floor.message.mes, parsed, wrapperSettingsProvider());
+  if (!floor) return false;
+  const { blocks, key: projection } = readStorySmsProjection(floor.message.mes, wrapperSettingsProvider());
   if (!blocks.length) return false;
   const previous = store.read();
-  return store.importStorySms({ floor: floor.index, blocks, batch: readTimeline(target.messages) }).then(next => next !== previous);
+  if (previous.storySmsImports?.floor === floor.index && previous.storySmsImports.processed.includes(projection)) return false;
+  return store.importStorySms({ floor: floor.index, blocks, projection, batch: readTimeline(target.messages) }).then(next => next !== previous);
 }
 
 export function createStorySmsInstaller({ host }) {

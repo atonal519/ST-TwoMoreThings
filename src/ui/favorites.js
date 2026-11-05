@@ -45,7 +45,7 @@ function snapshotMessage(s) {
   const rich = ['sticker', 'location', 'transfer'].includes(s.type);
   const image = s.type === 'image' || !s.type && Boolean(s.image);
   const body = image
-    ? `${!s.type ? bilingual(s) : ''}${s.image?.path ? `<img class="message-photo" data-phone-image="${escape(s.image.path)}" src="${escape(imageSource(s.image.path))}" alt="${escape(s.image.description || '')}" loading="lazy">` : `<span class="photo-placeholder">${icon('image')}</span>`}<span class="photo-description">${escape(s.image?.description || '')}</span><small>${s.image?.path ? '查看图片' : '尚未生成图片'}</small>`
+    ? `${!s.type ? bilingual(s) : ''}${s.image?.path ? `<img class="message-photo" data-phone-image="${escape(s.image.path)}" src="${escape(imageSource(s.image.path))}" alt="${escape(s.image.description || '')}" loading="lazy">` : `<span class="photo-placeholder">${icon('image')}<small>尚未生成图片</small></span>`}<span class="photo-description">${escape(s.image?.description || '')}</span>`
     : rich ? renderCardBody(s) : bilingual(s);
   const classes = `bubble favorite-copy${image ? ' image-message favorite-rich' : s.type ? ` ${escape(s.type)}-message favorite-rich` : ''}`;
   const bubble = image && s.image?.path ? `<button type="button" class="${classes}" data-action="favorite-photo" aria-label="查看收藏图片">${body}</button>` : `<div class="${classes}">${body}</div>`;

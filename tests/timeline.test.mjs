@@ -3,6 +3,28 @@ import assert from 'node:assert/strict';
 import { createHarness } from './harness.mjs';
 import { createPhoneStore } from '../src/store.js';
 import { readTimeline, partitionHistory } from '../src/timeline.js';
+import { renderInbox } from '../src/ui/messages.js';
+
+for (const isGroup of [false, true]) test(`${isGroup ? 'group' : 'private'} inbox rows show the last saved story date and time without inferring a real date or reordering`, () => {
+  const cases = [
+    { id: 'full', last: { storyDate: '2025年7月2日', timeLabel: '23:55' }, expected: '2025年7月2日 23:55' },
+    { id: 'time', last: { timeLabel: '01:10' }, expected: '01:10' },
+    { id: 'date', last: { storyDate: '旧历三年初月' }, expected: '旧历三年初月' },
+    { id: 'unknown', last: {}, expected: '' },
+    { id: 'empty', expected: '' },
+    { id: 'photo', last: { type: 'image', image: { description: '合成照片。' }, storyDate: '2025年7月3日', timeLabel: '11:05' }, expected: '2025年7月3日 11:05' },
+  ];
+  const state = { contacts: isGroup ? [{ id: 'speaker', name: '甲' }] : cases.map(({ id }) => ({ id, name: `联系人${id}` })),
+    groups: isGroup ? cases.map(({ id }) => ({ id, name: `群${id}`, memberIds: ['speaker'], userIsMember: true })) : [],
+    conversations: Object.fromEntries(cases.map(({ id, last }) => [id, last ? [
+      { id: `${id}-previous`, role: 'assistant', text: '前一条。', storyDate: '2098年1月1日', timeLabel: '12:00' },
+      { id: `${id}-last`, role: 'assistant', speakerId: 'speaker', text: '末条预览。', createdAt: '2099-12-31T00:00:00Z', ...last },
+    ] : []])) };
+  const before = structuredClone(state), html = renderInbox(state, { ui: {}, busy: new Set() }), attribute = isGroup ? 'group' : 'contact';
+  for (const { id, expected } of cases) assert.equal(html.match(new RegExp(`data-${attribute}="${id}"[\\s\\S]*?<span class="contact-time">([^<]*)<\\/span>`))[1], expected);
+  assert.deepEqual([...html.matchAll(new RegExp(`data-${attribute}="([^"]+)"`, 'g'))].map(match => match[1]), cases.map(item => item.id));
+  assert.deepEqual(state, before);
+});
 
 test('timeline labels use the host zero-based AI message index', () => {
   const first = { is_user: false, mes: '<!-- QQJ-end | date=2026-10-18 | time=18:00 -->' };

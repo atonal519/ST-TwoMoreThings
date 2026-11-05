@@ -196,8 +196,8 @@ h3 { font-size: 14px; font-weight: 600; }
 :host([data-theme="night"]) .avatar { color: var(--pp-ink); border-color: var(--pp-mineral); background: var(--pp-pale); }
 .contact-copy { flex: 1; min-width: 0; }
 .contact-title { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
-.contact-title strong { font-size: 14px; line-height: 1.4; font-weight: 500; }
-.contact-time { font-size: 10px; color: var(--pp-muted); white-space: nowrap; }
+.contact-title strong { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 1.4; font-weight: 500; }
+.contact-time { flex-shrink: 0; font-size: 10px; color: var(--pp-muted); white-space: nowrap; }
 .contact-preview { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--pp-muted); font-size: 12px; line-height: 1.5; margin-top: 3px; }
 .contact-row > svg { width: 14px; color: var(--pp-muted); }
 /* 共用表单操作。 */
@@ -326,8 +326,9 @@ h3 { font-size: 14px; font-weight: 600; }
 @keyframes phone-image-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .photo-placeholder.is-generating svg { animation: none; } }
 .message-photo { display: block; width: 100%; max-height: 220px; object-fit: cover; border-radius: 7px; }
-.photo-placeholder { width: 100%; min-height: 86px; display: grid; place-items: center; background: var(--pp-pale); color: var(--pp-active); border-radius: 6px; }
+.photo-placeholder { width: 100%; min-height: 86px; display: grid; place-items: center; align-content: center; gap: 7px; background: var(--pp-pale); color: var(--pp-active); border-radius: 6px; }
 .photo-placeholder svg { width: 27px; height: 27px; }
+.photo-placeholder > small { color: var(--pp-ink); }
 .photo-description { font-size: 11px; line-height: 1.6; }
 .attachment-button { width: 40px; min-height: 33px; }
 .attachment-button svg { width: 20px; height: 20px; }

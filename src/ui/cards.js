@@ -20,10 +20,9 @@ export function renderCardBody(message, generating = false) {
   if (message.type === 'image') {
     const photo = message.image.path
       ? `<img class="message-photo" data-phone-image="${escape(message.image.path)}" src="${escape(imageSource(message.image.path))}" alt="${escape(message.image.description)}" loading="lazy">`
-      : `<span class="photo-placeholder${generating ? ' is-generating' : ''}">${generating ? `${icon('refresh')}<span role="status">生成中…</span>` : icon('image')}</span>`;
+      : `<span class="photo-placeholder${generating ? ' is-generating' : ''}">${generating ? `${icon('refresh')}<span role="status">生成中…</span>` : `${icon('image')}<small>点击生成</small>`}</span>`;
     return `${photo}
-      <span class="photo-description">${escape(message.image.description)}</span>
-      ${generating ? '' : `<small>${message.image.path ? '查看图片' : '点击生成'}</small>`}`;
+      <span class="photo-description">${escape(message.image.description)}</span>`;
   }
   return renderBilingual(message.text, message.translation);
 }

@@ -67,7 +67,9 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: original services
 for (const hostKind of ['native', 'luker']) test(`${hostKind}: short/long backflow uses only actual SMS and leaves retired todos inert`, async () => {
   const { h, target, store, modelClient, legacy } = setup(hostKind);
   const backflow = createBackflowService({ target, store, modelClient });
-  assert.equal(await backflow.prepare(), '', 'legacy task alone cannot trigger a main-story reference');
+  const directory = await backflow.prepare();
+  assert.ok(directory.includes('朋友'));
+  for (const value of ['LEGACY_UNUSED_TASK', '明晚见。', '早已在群里说定的约定。', '[手机参考']) assert.equal(directory.includes(value), false, value);
   assert.equal(h.modelRequests.length, 0);
   const batch = readTimeline(target.messages);
   await store.appendMessage('lin', { id: 'short', role: 'user', text: '明天改到六点见。', batch });
