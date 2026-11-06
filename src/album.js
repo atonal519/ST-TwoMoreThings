@@ -4,6 +4,7 @@ import { forumComments } from './forum.js';
 import { liangshiInteractions } from './liangshi.js';
 import { displayName } from './profiles.js';
 import { hasPublicationDate, formatPublicationTime, savedPublication } from './social-time.js';
+import { forumPostEntries } from './forum-scope.js';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
 const description = value => typeof value === 'string' ? value : '';
@@ -45,9 +46,10 @@ function liveAlbumPhotos(state, { defaultUser = '我', includeUnavailable = fals
     const author = getSocialAuthor(state, post.authorId);
     if (author || includeUnavailable) add(post.image, source('social', post, author ? `Ins · ${displayName(author)}` : 'Ins', { authorId: post.authorId }));
   }
-  for (const post of state.forum?.posts || []) {
-    add(post.image, source('forum', post, `论坛 · ${post.title || post.author || '主帖'}`));
-    for (const row of forumComments(post)) add(row.image, source('forum-comments', row, `论坛评论 · ${row.author || '匿名'}`, { postId: post.id }));
+  for (const { scope, post, profile } of forumPostEntries(state)) {
+    const inside = scope === 'circle', label = inside ? `圈内论坛 · ${profile?.name || '圈内'}` : '论坛';
+    add(post.image, source(inside ? 'forum-circle' : 'forum', post, `${label} · ${post.title || post.author || '主帖'}`));
+    for (const row of forumComments(post)) add(row.image, source(inside ? 'forum-circle-comments' : 'forum-comments', row, `${label}评论 · ${row.author || '匿名'}`, { postId: post.id }));
   }
   const accounts = new Map((state.liangshi?.accounts || []).map(account => [account.id, account]));
   const accountName = account => account.ownerId === '@user' ? state.userProfile?.nickname || state.userProfile?.name || defaultUser : account.name || account.handle || '博主';

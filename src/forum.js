@@ -1,8 +1,9 @@
 import { createUuid } from './uuid.js';
 import { parsePayload, parseJsonObject } from './api.js';
-import { FORUM_PROMPT, FORUM_MORE_PROMPT } from './prompts.js';
+import { FORUM_PROMPT, FORUM_MORE_PROMPT, CIRCLE_FORUM_PROMPT, CIRCLE_FORUM_MORE_PROMPT } from './prompts.js';
 import { finishGeneratedText } from './generated-text.js';
 import { generatedImage } from './content.js';
+import { forumData, forumScope, circleProfile } from './forum-scope.js';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
 const uid = () => createUuid();
@@ -14,18 +15,22 @@ const material = post => ({ id: post.id, title: post.title, author: post.author,
 const commentDto = ({ id, author, text, translation, replyToId, publishedAt, image }) => ({ id, author, text, ...(image?.description ? { image: { description: image.description } } : {}), ...(translation ? { translation } : {}), ...(replyToId ? { replyToId } : {}), ...(publishedAt ? { publishedAt } : {}) });
 
 export function createForumService({ store, contextReader, modelClient, random = Math.random }) {
-  const find = id => store.read().forum.posts.find(post => post.id === id);
+  const find = (id, scope) => forumData(store.read(), scope).posts.find(post => post.id === id);
   return {
-    getPost(id) { const post = find(id); return post && { ...post, comments: forumComments(post) }; },
-    async refresh() {
-      const context = await contextReader.readForForum();
-      const reply = await modelClient.complete({ system: FORUM_PROMPT, messages: [{ role: 'user', content: JSON.stringify(context) }] });
+    getPost(id, scope = 'public') { const post = find(id, scope); return post && { ...post, comments: forumComments(post) }; },
+    async refresh(scope = 'public') {
+      scope = forumScope(scope);
+      const context = await contextReader.readForForum({ scope });
+      const inside = scope === 'circle', expectedProfile = inside ? circleProfile(context.circleProfile) : undefined;
+      const reply = await modelClient.complete({ system: inside ? CIRCLE_FORUM_PROMPT : FORUM_PROMPT, messages: [{ role: 'user', content: JSON.stringify(context) }] });
+      const profile = inside ? expectedProfile || circleProfile(parseJsonObject(reply).profile) : undefined;
+      if (inside && !profile) throw new Error('暂未找到明确的圈内社区，请先手动填写圈内范围。');
       const createdAt = new Date().toISOString();
       const posts = parsePayload(reply, 'forum').map(post => ({ ...post, id: uid(), publishedAt: time(context.clock), createdAt, comments: post.comments.map(row => ({ ...row, id: uid(), publishedAt: time(context.clock), createdAt })) }));
-      await store.replaceForum(posts);
+      await store.replaceForum(posts, { scope, profile, expectedProfile });
       return posts;
     },
-    async publishComment(postId, draft) {
+    async publishComment(postId, draft, scope = 'public') {
       const body = text(draft.text); if (!body) throw new Error('请先写下回帖。');
       const clock = contextReader.readClock(); let published;
       await store.updateForum(data => {
@@ -34,17 +39,19 @@ export function createForumService({ store, contextReader, modelClient, random =
         if (replyToId && replyToId !== post.id && !comments.some(row => row.id === replyToId)) throw new Error('回复的楼层已不存在，请重新选择。');
         published = { id: uid(), author: anonymousName(post, random), userAuthored: true, text: body, publishedAt: time(clock), createdAt: new Date().toISOString(), ...(replyToId && replyToId !== post.id ? { replyToId } : {}) };
         return { ...data, posts: data.posts.map(row => row.id === postId ? { ...row, comments: [...comments, published] } : row) };
-      });
+      }, { scope });
       return published;
     },
-    async loadMore(postId) {
-      const state = await store.readSaved(), post = state.forum.posts.find(row => row.id === postId); if (!post) throw new Error('这条帖子已更新，请返回论坛。');
+    async loadMore(postId, scope = 'public') {
+      scope = forumScope(scope);
+      const state = await store.readSaved(), post = forumData(state, scope).posts.find(row => row.id === postId); if (!post) throw new Error('这条帖子已更新，请返回论坛。');
+      const expectedProfile = scope === 'circle' ? circleProfile(forumData(state, scope).profile) : undefined;
       const all = forumComments(post);
       const pending = all.filter(row => row.userAuthored === true && !all.some(reply => !reply.userAuthored && reply.replyToId === row.id));
       const source = [...new Map(all.map(row => [row.id, row])).values()].map(commentDto);
       const continuation = { post: material(post), comments: source, replyTargets: [...new Set(pending.map(row => row.id))] };
-      const context = await contextReader.readForForum({ continuation: true, scanText: JSON.stringify(continuation) });
-      const answer = parseJsonObject(await modelClient.complete({ system: FORUM_MORE_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, continuation }) }] }));
+      const context = await contextReader.readForForum({ continuation: true, scanText: JSON.stringify(continuation), scope });
+      const answer = parseJsonObject(await modelClient.complete({ system: scope === 'circle' ? CIRCLE_FORUM_MORE_PROMPT : FORUM_MORE_PROMPT, messages: [{ role: 'user', content: JSON.stringify({ ...context, continuation }) }] }));
       let noComments = false;
       const saved = await store.updateForum(data => {
         const actual = data.posts.find(row => row.id === postId); if (!actual) throw new Error('这条帖子已更新，回帖未保存。');
@@ -64,8 +71,8 @@ export function createForumService({ store, contextReader, modelClient, random =
         }
         if (!added.length) { if (Array.isArray(rows) && !rows.length) { noComments = true; return data; } throw new Error('没有可用的新回帖，请重新加载。'); }
         return { ...data, posts: data.posts.map(row => row.id === postId ? { ...row, comments: [...comments, ...added] } : row) };
-      }, { notice: { kind: 'forum-post', id: postId } });
-      return noComments ? null : saved.forum.posts.find(row => row.id === postId);
+      }, { scope, expectedProfile, notice: { kind: scope === 'circle' ? 'forum-circle-post' : 'forum-post', id: postId } });
+      return noComments ? null : forumData(saved, scope).posts.find(row => row.id === postId);
     },
   };
 }

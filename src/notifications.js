@@ -2,6 +2,7 @@ import { messageText } from './content.js';
 import { getSocialAuthor } from './social.js';
 import { displayName } from './profiles.js';
 import { savedPublication } from './social-time.js';
+import { forumData } from './forum-scope.js';
 
 const string = value => typeof value === 'string' ? value.trim() : '';
 export const notificationEventKey = (kind, id, ids) => JSON.stringify([kind, id || '', ids]);
@@ -26,7 +27,7 @@ function socialReplySnapshots(state, post, rows, createdAt) {
 
 export function initializeNotificationHistory(state) {
   if (state.notifications?.initialized === true) return state;
-  const messages = [...(state.contacts || []), ...(state.groups || [])].flatMap(person => messageSnapshots(state, person.id, (state.conversations?.[person.id] || []).filter(row => row.read === false)));
+  const messages = [...(state.contacts || []), ...(state.groups || [])].flatMap(person => messageSnapshots(state, person.id, (state.conversations?.[person.id] || []).filter(row => row.read === false && row.source?.kind !== 'main-story')));
   const replies = (state.social?.posts || []).flatMap(post => socialReplySnapshots(state, post, (post.comments || []).filter(row => row.read === false)));
   return { ...state, notifications: { initialized: true, items: [...messages, ...replies].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) } };
 }
@@ -48,6 +49,8 @@ export function archiveNotifications(previous, next, descriptors = []) {
       const author = kind === 'social-author' && getSocialAuthor(next, id); title = author ? `${displayName(author)}的动态已更新` : 'ainstgram已更新';
     } else if (kind === 'forum') { rows = addedRows(previous.forum?.posts, next.forum?.posts); title = '论坛有新内容'; }
     else if (kind === 'forum-post') { const before = previous.forum?.posts?.find(post => post.id === id), after = next.forum?.posts?.find(post => post.id === id); rows = addedRows(before?.comments, after?.comments).filter(row => !row.userAuthored); title = '论坛有新回帖'; }
+    else if (kind === 'forum-circle') { rows = addedRows(forumData(previous, 'circle').posts, forumData(next, 'circle').posts); title = `${forumData(next, 'circle').profile?.name || '圈内论坛'}有新内容`; }
+    else if (kind === 'forum-circle-post') { const before = forumData(previous, 'circle').posts.find(post => post.id === id), after = forumData(next, 'circle').posts.find(post => post.id === id); rows = addedRows(before?.comments, after?.comments).filter(row => !row.userAuthored); title = `${forumData(next, 'circle').profile?.name || '圈内论坛'}有新回帖`; }
     else if (kind === 'liangshi-hot') { rows = addedRows(previous.liangshi?.topics, next.liangshi?.topics).map(row => ({ ...row, text: row.name, translation: row.nameTranslation })); title = '两事热榜已更新'; }
     else if (kind === 'liangshi-post') {
       const before = previous.liangshi?.posts?.find(post => post.id === id), after = next.liangshi?.posts?.find(post => post.id === id);
@@ -86,11 +89,9 @@ export function unreadSocialReplies(state) {
 }
 
 export function lockNotifications(state) {
-  if (state.notifications?.initialized) {
-    const keys = new Set(state.notifications.items.map(record => record.key));
-    state = { ...state, conversations: Object.fromEntries(Object.entries(state.conversations || {}).map(([id, rows]) => [id, rows.filter(row => keys.has(notificationEventKey('message', id, [row.id])))])),
-      ...(state.social ? { social: { ...state.social, posts: (state.social.posts || []).map(post => ({ ...post, comments: (post.comments || []).filter(row => keys.has(notificationEventKey('social-reply', post.id, [row.id]))) })) } } : {}) };
-  }
+  const keys = state.notifications?.initialized ? new Set(state.notifications.items.map(record => record.key)) : null;
+  state = { ...state, conversations: Object.fromEntries(Object.entries(state.conversations || {}).map(([id, rows]) => [id, rows.filter(row => row.source?.kind !== 'main-story' && (!keys || keys.has(notificationEventKey('message', id, [row.id]))))])),
+    ...(keys && state.social ? { social: { ...state.social, posts: (state.social.posts || []).map(post => ({ ...post, comments: (post.comments || []).filter(row => keys.has(notificationEventKey('social-reply', post.id, [row.id]))) })) } } : {}) };
   return [...unreadConversations(state).map(item => ({ ...item, ...(item.message.id ? { notificationKey: notificationEventKey('message', item.id, [item.message.id]) } : {}) })), ...unreadSocialReplies(state)]
     .sort((a, b) => (b.createdAt || b.message?.createdAt || '').localeCompare(a.createdAt || a.message?.createdAt || ''));
 }

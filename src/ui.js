@@ -1,12 +1,14 @@
+import { createSourcePermissionView } from './ui/source-permission-view.js';
+import { forumData, forumScope, circleProfile, sameCircleProfile } from './forum-scope.js';
 import { createUuid } from './uuid.js';
 import { renderFavorites, renderFavoriteDetail } from './ui/favorites.js';
-import { avatar, refKey, renderAvatarMenu } from './ui/shared.js';
+import { avatar, icon, refKey, renderAvatarMenu, escape as escapeHtml } from './ui/shared.js';
 import { renderHome } from './ui/home.js';
 import { createPhoneClock } from './ui/status.js';
 import { renderFeedback, renderShell } from './ui/shell.js';
 import { renderDesktop } from './ui/desktop.js';
 import { renderInbox, renderChat, renderChatMenu, renderInboxMenu } from './ui/messages.js';
-import { renderForum, renderPost } from './ui/forum.js';
+import { renderForum, renderPost, renderForumMenu } from './ui/forum.js';
 import { forumComments } from './forum.js';
 import { renderSettings, renderSettingsVersion, renderStorySmsInstall } from './ui/settings.js';
 import { renderProfile, renderIdentityOptions } from './ui/profiles.js';
@@ -81,7 +83,7 @@ const pages = {
   'favorite-detail': renderFavoriteDetail,
 };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, social, liangshi, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenNotifications }) {
+export function mountPhone({ mount, store, messages, groups, directory, forum, social, liangshi, sourcePermissions, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenNotifications }) {
   const doc = mount.ownerDocument;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
@@ -106,9 +108,14 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   mount.append(element);
   const appearanceFont = createAppearanceFontController({ appearance, root, element, documentRef: doc });
   const windowControls = createPhoneWindow(surface);
-  const chatScroll = createChatScroll(root);
+  const chatScroll = createChatScroll(root, {
+    onEarlier: expandMessages, onPullStart: cancelAvatarGesture,
+    canPull: () => !element.hidden && isFrontmost() && isCurrentChat() && !ui.photo && !ui.conflict && !notificationShade?.isOpen && !root.querySelector('[data-phone-overlay], .phone-action-popup'),
+  });
   const dialog = createPhoneDialog({ mount: surface, documentRef: doc });
   const editing = createEditingRenderer(surface);
+  const sourcePermissionView = sourcePermissions ? createSourcePermissionView({ permissions: sourcePermissions, documentRef: doc }) : null;
+  let worldbookSettings;
   const selects = createPhoneSelects({ root, beforeOpen: () => { closeSources(); closeModels(); } });
   // 这里只持有未保存的页面状态；联系人和消息始终从 store 读取。
   const ui = {
@@ -122,9 +129,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     groupMembersOpen: false,
     socialAuthorId: '', socialPastOpen: false, socialLimit: 30, socialScroll: 0,
     socialCommentOpen: new Set(), socialDrafts: new Map(), notice: null,
-    forumDrafts: new Map(), forumVotes: new Map(), forumScroll: 0, forumTag: '',
+    forumDrafts: new Map(), forumVotes: new Map(), forumScroll: 0, forumTag: '', forumScope: 'public', forumPages: { public: { tag: '', scroll: 0 }, circle: { tag: '', scroll: 0 } },
     liangshiPage: { kind: 'feed', tab: 'square' }, liangshiTrail: [], liangshiExpanded: new Set(), liangshiDraft: null, liangshiMenu: '', liangshiReplyDrafts: new Map(),
-    drawers: { connection: false, appearance: false, content: false },
+    drawers: { connection: false, appearance: false, content: false }, worldbookOpen: false,
     manual: false, apiDraft: apiSettings.readDraft?.() || {}, models: [], modelSearch: '', modelsOpen: false, sourcesOpen: false,
     attachment: '', attachmentDraft: {}, stickerPack: 'emoji', photo: null,
     calendarOffset: 0, calendarDay: null,
@@ -189,7 +196,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     pendingAvatar = { id, route: renderedRoute, targetId, mentionId };
     avatarTimer = doc.defaultView.setTimeout(confirmAvatarMention, 300);
   }
-  const avatarPointerDown = event => { if (event.target.closest('.message-avatar')) event.preventDefault(); };
+  const avatarPointerDown = event => {
+    const paging = event.target.closest('[data-action="earlier"], [data-action="history"], [data-action="earlier-history"]');
+    if (event.target.closest('.message-avatar') || paging && root.activeElement?.id === 'sms-draft') event.preventDefault();
+  };
   const draftCompositionStart = event => { if (event.target.id === 'sms-draft') composingDraft = true; };
   const draftCompositionEnd = event => {
     if (event.target.id !== 'sms-draft') return;
@@ -295,8 +305,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       if (kind === 'social-reply') return !isReadingSocial(id);
       if (kind === 'social-author') return ui.view !== 'social-profile' || ui.socialAuthorId !== id;
       if (kind === 'social-feed') return ui.view !== 'social';
-      if (kind === 'forum') return ui.view !== 'forum';
-      if (kind === 'forum-post') return ui.view !== 'post' || ui.postId !== id;
+      if (kind === 'forum' || kind === 'forum-circle') return ui.view !== 'forum' || ui.forumScope !== (kind === 'forum-circle' ? 'circle' : 'public');
+      if (kind === 'forum-post' || kind === 'forum-circle-post') return ui.view !== 'post' || ui.postId !== id || ui.forumScope !== (kind === 'forum-circle-post' ? 'circle' : 'public');
       if (kind === 'liangshi-post') return ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'post' || ui.liangshiPage.id !== id;
       if (kind === 'liangshi-topic') return ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'hot-topic' || ui.liangshiPage.id !== id;
       const tab = kind === 'liangshi-following' ? 'following' : kind === 'liangshi-hot' ? 'hot' : 'square';
@@ -332,8 +342,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (ui.notice?.key && !store.read().notifications?.items.some(item => item.key === ui.notice.key)) dismissPhoneNotice();
     if (ui.view === 'album' && ui.albumPath && !findAlbumPhoto(store.read(), ui.albumPath, { defaultUser })) { albumEditor.forgetCurrent(ui.albumPath); ui.albumPage = 'gallery'; ui.albumPath = ''; ui.photo = null; }
     if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
-    const route = JSON.stringify([ui.view, ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'favorite-detail' ? ui.favoriteId : ui.view === 'post' ? ui.postId : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
+    const route = JSON.stringify([ui.view, ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'favorite-detail' ? ui.favoriteId : ui.view === 'post' ? [ui.forumScope, ui.postId] : ui.view === 'forum' ? ui.forumScope : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
     const sameRoute = route === renderedRoute;
+    if (!sameRoute || ui.view !== 'settings' || !ui.drawers.content) worldbookSettings = null;
     if (!sameRoute) { cancelClearDialog(); cancelFavoriteRemoval(); actionMenu.close(); cancelAvatarGesture(); composingDraft = false; }
     if (clearDialog && !isCurrentChat()) cancelClearDialog();
     if (favoriteRemoveDialog && !isCurrentChat()) cancelFavoriteRemoval();
@@ -369,14 +380,22 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       : ui.view === 'desktop' ? calendar.month(0) : null;
     notificationShade.beforeRender();
     editing.render(renderShell({
-      content: page(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
+      content: page(state, { ui, busy, sourcePermissions, sourcePermissionMarkup: worldbookSettings?.outerHTML || '', apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
         profileAvatar: ui.view === 'contact-profile' ? readContactAvatarDraft(ui.profileDraft, store.read().contacts.find(person => person.id === ui.editId), qqjBridgeProvider?.()) : undefined }),
       view: ui.view, enabled, weather,
       feedback: ui.feedback, photo: ui.photo,
       conflict: ui.conflict, mode, conflictBusy: busy.has('conflict'),
       lockStyle: state.lockStyle,
       settingsVersion: ui.view === 'settings' ? renderSettingsVersion(mode, updates) : '',
-    }), sameEditor);
+    }), sameEditor, worldbookSettings && { node: worldbookSettings, selector: '#qqj-settings-worldbook' });
+    const worldbookSlot = root.querySelector('[data-worldbook-settings]');
+    if (worldbookSlot && sourcePermissionView) {
+      if (!worldbookSettings) {
+        worldbookSettings = sourcePermissionView.renderSettings({ open: ui.worldbookOpen, onDrawerToggle: open => { ui.worldbookOpen = open; } });
+        worldbookSettings.querySelector('summary').insertAdjacentHTML('beforeend', icon('next'));
+      }
+      if (worldbookSlot.firstElementChild !== worldbookSettings || worldbookSlot.children.length !== 1) worldbookSlot.replaceChildren(worldbookSettings);
+    }
     selects.mount(route, busy);
     if (updatesView && ui.view === 'settings') {
       root.querySelector('[data-update-controls]')?.append(updatesView.controls);
@@ -401,7 +420,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     clock.refresh();
     revealClassicArtwork();
     resizeDraft();
-    chatScroll.attach({ followFocus: !sameRoute || bottom });
+    chatScroll.attach({ followFocus: !sameRoute || bottom, key: route });
     if (bottom) {
       const feed = root.querySelector('.message-feed');
       if (feed) feed.scrollTop = feed.scrollHeight;
@@ -640,6 +659,17 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     recoverVisibleImages();
     void store.markRead(id).catch(() => { setFeedback({ error: true, text: '消息的已读状态保存失败，请检查酒馆连接。' }); render(); });
   }
+  function expandMessages(action) {
+    if (!inChat()) return;
+    const update = () => {
+      if (action === 'earlier') ui.visibleMessages += 60;
+      else if (action === 'earlier-history') ui.visibleHistory += 60;
+      else if (action === 'history') { ui.historyOpen = !ui.historyOpen; ui.selectedMessage = ''; }
+      render();
+    };
+    if (action === 'history' && ui.historyOpen) update();
+    else chatScroll.prepend(update);
+  }
   function openSocialReply(postId) {
     const state = store.read(), post = state.social?.posts.find(item => item.id === postId);
     if (!post) return;
@@ -673,8 +703,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     } else if (notice.kind === 'social-reply') { if (state.social?.posts.some(post => post.id === notice.id)) openSocialReply(notice.id); else missing('social'); }
     else if (notice.kind === 'social-author') { if ([...(state.contacts || []), ...(state.social?.npcs || [])].some(item => item.id === notice.id)) { ui.socialAuthorId = notice.id; showPage('social-profile'); } else missing('social'); }
     else if (notice.kind === 'social-feed') showPage('social');
-    else if (notice.kind === 'forum') showPage('forum');
-    else if (notice.kind === 'forum-post') { if (state.forum?.posts.some(post => post.id === notice.id)) { ui.forumScroll = 0; ui.forumTag = ''; ui.postId = notice.id; showPage('post'); } else missing('forum'); }
+    else if (notice.kind === 'forum' || notice.kind === 'forum-circle') { selectForumScope(notice.kind === 'forum-circle' ? 'circle' : 'public'); showPage('forum'); restoreListPosition(ui.forumScroll); }
+    else if (notice.kind === 'forum-post' || notice.kind === 'forum-circle-post') { selectForumScope(notice.kind === 'forum-circle-post' ? 'circle' : 'public'); if (forumData(state, ui.forumScope).posts.some(post => post.id === notice.id)) { ui.forumScroll = 0; ui.forumTag = ''; ui.postId = notice.id; showPage('post'); } else missing('forum'); }
     else if (notice.kind === 'liangshi-feed') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'square' }, false); }
     else if (notice.kind === 'liangshi-following') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'following' }, false); }
     else if (notice.kind === 'liangshi-hot') { ui.liangshiTrail = []; openLiangshiPage({ kind: 'feed', tab: 'hot' }, false); }
@@ -727,6 +757,32 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (parent === 'forum') ui.forumTag = ui.forumScroll?.tag || '';
     showPage(parent, { bottom: ['chat', 'group-chat'].includes(parent) });
     if (parent === 'forum') restoreListPosition(ui.forumScroll);
+  }
+  function selectForumScope(value) {
+    const next = forumScope(value);
+    ui.forumPages[ui.forumScope] = { tag: ui.forumTag, scroll: ui.view === 'forum' ? listPosition() : ui.forumScroll };
+    ui.forumScope = next;
+    ui.forumTag = ui.forumPages[next].tag; ui.forumScroll = ui.forumPages[next].scroll;
+  }
+  function resetForumPage(scope, previousIds) {
+    for (const id of previousIds) { ui.forumDrafts.delete(id); ui.forumVotes.delete(id); }
+    ui.forumPages[scope] = { tag: '', scroll: 0 };
+    if (ui.forumScope === scope) { ui.forumTag = ''; ui.forumScroll = 0; }
+  }
+  function editCircleProfile() {
+    const profile = circleProfile(forumData(store.read(), 'circle').profile), content = doc.createElement('div');
+    content.className = 'profile-form forum-circle-editor';
+    content.innerHTML = `<label class="field-label" for="forum-circle-name">社区名称</label><input id="forum-circle-name" name="circle-name" value="${escapeHtml(profile?.name || '')}" required><label class="field-label" for="forum-circle-members">成员范围</label><textarea id="forum-circle-members" name="circle-members" rows="2" required>${escapeHtml(profile?.memberScope || '')}</textarea><p class="forum-profile-warning">保存不同的圈内范围会清空当前圈内帖子，已收藏内容和照片保留。</p>`;
+    void dialog.custom({ title: '圈内范围', content, confirmText: '保存', cancelText: '取消', submit: async () => {
+      const name = content.querySelector('input'), members = content.querySelector('textarea');
+      if (!name.reportValidity() || !members.reportValidity()) return false;
+      const next = circleProfile({ name: name.value, memberScope: members.value });
+      if (!next) throw new Error('请填写社区名称和成员范围。');
+      const before = forumData(store.read(), 'circle'), changed = !sameCircleProfile(before.profile, next), previousIds = before.posts.map(post => post.id);
+      await store.saveCircleProfile(next);
+      if (changed) { resetForumPage('circle', previousIds); render(); }
+      return true;
+    } });
   }
   function editGroup(id = '') {
     const group = store.read().groups?.find(item => item.id === id);
@@ -811,6 +867,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   function keydown(event) {
     if (notificationShade.keydown(event)) return;
     if (actionMenu.keydown(event) || selects.keydown(event)) return;
+    if (event.target.matches('[data-action="forum-menu"]') && ['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); openActionMenu('论坛范围', () => renderForumMenu(store.read(), { ui }), '[data-action="forum-menu"]'); return; }
     if (ui.identityOwnersOpen || event.target.id === 'identity-owner') {
       if (event.key === 'Escape' && ui.identityOwnersOpen) { event.preventDefault(); event.stopPropagation(); closeIdentityOptions(); root.querySelector('#identity-owner')?.focus({ preventScroll: true }); return; }
       if (['ArrowDown', 'ArrowUp'].includes(event.key) && (event.target.id === 'identity-owner' || event.target.closest('.identity-popup'))) {
@@ -983,7 +1040,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       render();
       return;
     }
-    if (button.dataset.post) { ui.forumScroll = { ...listPosition(button), tag: ui.forumTag }; ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
+    if (button.dataset.post) { ui.forumScroll = { ...listPosition(button), tag: ui.forumTag }; ui.forumPages[ui.forumScope] = { tag: ui.forumTag, scroll: ui.forumScroll }; ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
       case 'album-back': goBack(); break;
@@ -1178,9 +1235,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         if (!doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches) root.querySelector(`[data-forum-vote="${vote}"]`)?.animate([{ transform: 'scale(1)' },{ transform: 'scale(1.12)', offset: .4 },{ transform: 'scale(1)' }], { duration: 200, easing: 'cubic-bezier(.16,1,.3,1)' });
         break;
       }
-      case 'forum-more': { const id = ui.postId; void perform(`forum-more:${id}`, () => forum.loadMore(id), result => { if (result === null) setFeedback({ text: '暂时没有新的回帖。' }); }); break; }
-      case 'forum-tag': ui.forumTag = button.dataset.forumTag; render(); root.querySelector('.phone-main').scrollTop = 0; break;
-      case 'forum-image': { const id = ui.postId, commentId = button.dataset.forumComment, readImage = () => { const post = store.read().forum?.posts.find(post => post.id === id); return commentId && post ? forumComments(post).find(row => row.id === commentId)?.image : post?.image; }; if (readImage()?.path) void viewPhoto(readImage, button); else void perform(`forum-image:${id}${commentId ? `:${commentId}` : ''}`, () => images.generateForum(id, commentId)); break; }
+      case 'forum-more': { const id = ui.postId, scope = ui.forumScope; void perform(`forum-more:${id}`, () => forum.loadMore(id, scope), result => { if (result === null) setFeedback({ text: '暂时没有新的回帖。' }); }); break; }
+      case 'forum-tag': ui.forumTag = button.dataset.forumTag; ui.forumPages[ui.forumScope] = { tag: ui.forumTag, scroll: 0 }; render(); root.querySelector('.phone-main').scrollTop = 0; break;
+      case 'forum-image': { const id = ui.postId, scope = ui.forumScope, commentId = button.dataset.forumComment, readImage = () => { const post = forumData(store.read(), scope).posts.find(post => post.id === id); return commentId && post ? forumComments(post).find(row => row.id === commentId)?.image : post?.image; }; if (readImage()?.path) void viewPhoto(readImage, button); else void perform(`forum-image:${id}${commentId ? `:${commentId}` : ''}`, () => images.generateForum(id, commentId, scope)); break; }
       case 'back-inbox':
       case 'back-forum': goBack(); break;
       case 'profile': editProfile('contact', id); break;
@@ -1261,9 +1318,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         ui.replyToId = button.dataset.messageTarget; ui.selectedMessage = ''; render(); root.querySelector('#sms-draft')?.focus({ preventScroll: true }); break;
       }
       case 'cancel-reply': ui.replyToId = ''; render(); root.querySelector('#sms-draft')?.focus({ preventScroll: true }); break;
-      case 'earlier': ui.visibleMessages += 60; render(); break;
-      case 'history': ui.historyOpen = !ui.historyOpen; ui.selectedMessage = ''; render(); break;
-      case 'earlier-history': ui.visibleHistory += 60; render(); break;
+      case 'earlier': case 'history': case 'earlier-history': expandMessages(button.dataset.action); break;
       case 'install-story-sms': void perform('story-sms-install', () => storySmsInstaller.install(), result => { ui.storySmsStatus = { state: 'installed', bookName: result.bookName }; }); break;
       case 'close': close(); break;
       case 'send': {
@@ -1272,7 +1327,16 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         break;
       }
       case 'continue': void perform(`continue:${id}`, () => service.continueChat(id), onContextChange); break;
-      case 'refresh': void perform('forum', () => forum.refresh(), () => { const ids = new Set(store.read().forum.posts.map(post => post.id)); for (const id of ui.forumDrafts.keys()) if (!ids.has(id)) ui.forumDrafts.delete(id); for (const id of ui.forumVotes.keys()) if (!ids.has(id)) ui.forumVotes.delete(id); }); break;
+      case 'refresh': {
+        const scope = ui.forumScope, previousIds = forumData(store.read(), scope).posts.map(post => post.id);
+        void perform(scope === 'circle' ? 'forum:circle' : 'forum', () => forum.refresh(scope), () => resetForumPage(scope, previousIds)); break;
+      }
+      case 'forum-menu': {
+        const opened = button.getAttribute('aria-expanded') === 'true'; closeActionMenu();
+        if (!opened) openActionMenu('论坛范围', () => renderForumMenu(store.read(), { ui }), '[data-action="forum-menu"]'); break;
+      }
+      case 'forum-scope': selectForumScope(button.dataset.forumScope); showPage('forum'); restoreListPosition(ui.forumScroll); root.querySelector('[data-action="forum-menu"]')?.focus({ preventScroll: true }); break;
+      case 'forum-circle-profile': editCircleProfile(); break;
       case 'restore-wallpaper': { const theme = store.read().theme; void perform('wallpaper', () => wallpaper.restore(theme)); break; }
       case 'restore-font': void appearance.setFontCssUrl(DEFAULT_FONT_CSS_URL).catch(error => setFeedback({ error: true, text: error.message })); break;
       case 'sources-menu': if (ui.sourcesOpen) closeSources(); else openSources(); break;
@@ -1403,9 +1467,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   }
   function submit(event) {
     if (event.target.matches('.forum-comment-form')) {
-      event.preventDefault(); const id = event.target.dataset.forumPost, draft = ui.forumDrafts.get(id); if (!draft) return;
+      event.preventDefault(); const id = event.target.dataset.forumPost, scope = event.target.dataset.forumScope || 'public', draft = ui.forumDrafts.get(id); if (!draft) return;
       const before = { ...draft };
-      void perform(`forum-comment:${id}`, () => forum.publishComment(id, before), () => { if (ui.forumDrafts.get(id) === draft && draft.text === before.text && draft.replyToId === before.replyToId) ui.forumDrafts.delete(id); }); return;
+      void perform(`forum-comment:${id}`, () => forum.publishComment(id, before, scope), () => { if (ui.forumDrafts.get(id) === draft && draft.text === before.text && draft.replyToId === before.replyToId) ui.forumDrafts.delete(id); }); return;
     }
     const replyForm = event.target.closest('.ls-reply-form');
     if (replyForm) {

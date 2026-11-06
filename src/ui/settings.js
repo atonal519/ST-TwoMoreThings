@@ -17,7 +17,7 @@ export function renderSettingsVersion(mode, updates) {
   return `<small class="app-version"><span class="app-version-label"><span>两三事 ${VERSION}</span> · <span>${mode === 'embedded' ? '随卡版' : '插件版'}</span></span>${updates ? '<span data-update-notice></span>' : ''}</small>`;
 }
 
-export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, updates }) {
+export function renderSettings(state, { ui, busy, apiSettings, imageProviders, entries, appearance, control, mode, updates, sourcePermissions, sourcePermissionMarkup = '' }) {
   const sources = apiSettings.listSources(), selected = apiSettings.getSelected();
   const current = sources.find(source => refKey(source.ref) === refKey(selected));
   const preferences = entries.read();
@@ -94,7 +94,8 @@ export function renderSettings(state, { ui, busy, apiSettings, imageProviders, e
       <option value="baibai" ${imageProviders?.getSelected() !== 'chatu8' ? 'selected' : ''}>柏宝绘</option>
       <option value="chatu8" ${imageProviders?.getSelected() === 'chatu8' ? 'selected' : ''}>智绘姬</option>
     </select>
-  </label>`;
+  </label>
+  ${sourcePermissions ? `<div data-worldbook-settings>${sourcePermissionMarkup}</div>` : ''}`;
   return `${pageHeading('设置')}
     <div class="master-switch-row">
     <label for="phone-enabled">启用两三事</label>

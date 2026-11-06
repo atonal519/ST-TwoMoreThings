@@ -7,6 +7,7 @@ import { getLiangshiContact, liangshiInteractions } from './liangshi.js';
 import { forumComments } from './forum.js';
 import { identityOwnerId } from './identities.js';
 import { findAlbumPhoto } from './album.js';
+import { forumData, withForumData, sameCircleProfile } from './forum-scope.js';
 
 const IMAGE_PROMPT = SENTENCE_RULE + '把手机照片描述转为绘图提示。结合sender辨明“我/自拍”的人物；只描述这张照片，不补写剧情。人物外观和衣着由柏宝绘角色库提供，prompt不自行编写这些特征。必须列出所有画面人物，库中缺少人物也要返回其姓名，不能为绕过缺档而省略。只输出JSON：{"prompt":"场景、动作、构图的英文danbooru短标签，非空","nl":"可选画面描述","characters":["画面中人物的准确姓名；有对应库条目时用库内姓名，无人物时为空"],"size":"portrait或landscape"}。不输出说明或图片地址。';
 
@@ -62,7 +63,7 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
     if (!result.path) throw new Error(`图片已生成，但${label}没有保存成功。请检查图库保存状态。`);
     return { path: result.path, ...(result.seed !== undefined ? { seed: result.seed } : {}) };
   }
-  async function attach(image, originalState, app, original, change) {
+  async function attach(image, originalState, app, original, change, scope = 'public') {
     const replace = row => {
       if (row === original) return { ...row, image: { ...row.image, ...image } };
       let next = row;
@@ -71,30 +72,36 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
     };
     const material = app === 'messages'
       ? { ...originalState, conversations: Object.fromEntries(Object.entries(originalState.conversations).map(([id, rows]) => [id, rows.map(replace)])) }
+      : app === 'forum' ? withForumData(originalState, scope, { ...forumData(originalState, scope), posts: forumData(originalState, scope).posts.map(replace) })
       : { ...originalState, [app]: { ...originalState[app], posts: originalState[app].posts.map(replace) } };
     const photo = findAlbumPhoto(material, image.path);
     if (!photo) throw new Error('图片已生成，但保存路径无法用于相册，请在生图插件图库查看。');
     // Validation controls attachment, while the paid provider result is retained
     // in the same save even if its original source changed during generation.
-    await store.saveGeneratedPhoto(photo, state => { assertEnabled(); return change(state); });
+    await store.saveGeneratedPhoto(photo, state => {
+      assertEnabled();
+      if (app === 'forum' && scope === 'circle' && !sameCircleProfile(forumData(state, scope).profile, forumData(originalState, scope).profile)) throw new Error('圈内范围已修改，图片未关联。');
+      return change(state);
+    });
   }
-  async function generateNested(app, postId, collection, rowId) {
+  async function generateNested(app, postId, collection, rowId, scope = 'public') {
     assertEnabled();
-    const state = store.read(), post = state[app]?.posts.find(item => item.id === postId);
+    const state = store.read(), post = (app === 'forum' ? forumData(state, scope) : state[app])?.posts.find(item => item.id === postId);
     const rows = post && (app === 'forum' ? forumComments(post) : liangshiInteractions(post, collection));
     const index = rows?.findIndex(row => row.id === rowId), original = index >= 0 ? post[collection][index] : null;
     if (!original?.image) throw new Error('这条回复或转发配图已不存在。');
     if (original.image.path) return original.image;
     const identity = actor(state, app, original), image = await draw(original.image.description, identity.sender, identity.sceneryOnly, { anonymous: identity.anonymous });
     await attach(image, state, app, original, current => {
-      const data = current[app];
+      const data = app === 'forum' ? forumData(current, scope) : current[app];
       const actual = data.posts.find(item => item.id === postId), rows = actual?.[collection] || [];
       // Legacy index IDs identify this exact retained object, never a replacement row.
       const position = original.id ? rows.findIndex(row => row.id === original.id) : rows.indexOf(original), row = rows[position];
       if (!row || row.image?.description !== original.image.description || actor(current, app, row).key !== identity.key) throw new Error('回复、作者或配图已更新，图片未关联。');
       const saved = { ...row, id: row.id || createUuid(), image: { ...row.image, ...image } };
-      return { ...current, [app]: { ...data, posts: data.posts.map(post => post.id === postId ? { ...post, [collection]: rows.map((item, index) => index === position ? saved : item) } : post) } };
-    });
+      const next = { ...data, posts: data.posts.map(post => post.id === postId ? { ...post, [collection]: rows.map((item, index) => index === position ? saved : item) } : post) };
+      return app === 'forum' ? withForumData(current, scope, next) : { ...current, [app]: next };
+    }, scope);
     return { ...original.image, ...image };
   }
   return {
@@ -120,17 +127,17 @@ export function createPhoneImageService({ store, modelClient, files, host, provi
       });
       return { ...message.image, ...image };
     },
-    async generateForum(postId, commentId) {
-      if (commentId) return generateNested('forum', postId, 'comments', commentId);
-      assertEnabled(); const state = store.read(), post = state.forum?.posts.find(row => row.id === postId);
+    async generateForum(postId, commentId, scope = 'public') {
+      if (commentId) return generateNested('forum', postId, 'comments', commentId, scope);
+      assertEnabled(); const state = store.read(), post = forumData(state, scope).posts.find(row => row.id === postId);
       if (!post?.image) throw new Error('这条帖子配图已不存在。');
       if (post.image.path) return post.image;
       const image = await draw(post.image.description, null, true, { anonymous: true });
       await attach(image, state, 'forum', post, current => {
-        const actual = current.forum.posts.find(row => row.id === postId);
+        const data = forumData(current, scope), actual = data.posts.find(row => row.id === postId);
         if (!actual || actual.image?.description !== post.image.description) throw new Error('帖子或配图已更新，图片未关联。');
-        return { ...current, forum: { ...current.forum, posts: current.forum.posts.map(row => row.id === postId ? { ...row, image: { ...row.image, ...image } } : row) } };
-      });
+        return withForumData(current, scope, { ...data, posts: data.posts.map(row => row.id === postId ? { ...row, image: { ...row.image, ...image } } : row) });
+      }, scope);
       return { ...post.image, ...image };
     },
     async generateLiangshi(postId, { collection = 'comments', id } = {}) {

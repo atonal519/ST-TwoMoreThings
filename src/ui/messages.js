@@ -13,46 +13,32 @@ import { storySmsDisplayText } from '../story-sms.js';
 const inboxTime = message => [message?.storyDate, message?.timeLabel].filter(Boolean).join(' ');
 
 export function renderInbox(state, { ui, busy }) {
-  const groups = state.groups || [];
+  const entries = [...(state.groups || []).map(person => ({ kind: 'group', person })), ...state.contacts.map(person => ({ kind: 'contact', person }))]
+    .map((entry, index) => {
+      const thread = state.conversations[entry.person.id] || [], last = thread.at(-1), time = Date.parse(last?.createdAt);
+      const unread = thread.reduce((count, message) => count + Number(message.role === 'assistant' && message.read === false), 0);
+      return { ...entry, last, unread, index, time, rank: !last ? 2 : Number.isFinite(time) ? 0 : 1 };
+    }).sort((a, b) => a.rank - b.rank || (a.rank === 0 ? b.time - a.time : 0) || a.index - b.index);
   const options = `<div class="inbox-options"><button type="button" class="icon-button" data-action="inbox-menu" aria-label="通讯录操作" aria-haspopup="menu" aria-expanded="${ui.inboxMenu}">${icon('plus')}</button></div>`;
-  const groupRows = groups.map(group => {
-    const last = state.conversations[group.id]?.at(-1), sender = state.contacts.find(person => person.id === last?.speakerId);
-    const preview = last
+  const rows = entries.map(({ kind, person, last, unread }) => {
+    const isGroup = kind === 'group', sender = isGroup && state.contacts.find(contact => contact.id === last?.speakerId);
+    const preview = isGroup ? last
       ? `${last.role === 'user' ? '我' : displayName(sender || { name: '群成员' })}：${messageText(last)}`
-      : `${group.memberIds.length + Number(group.userIsMember)} 位成员`;
-    return `<button type="button" class="contact-row" data-group="${escape(group.id)}">
-      ${avatar(group)}
+      : `${person.memberIds.length + Number(person.userIsMember)} 位成员` : last ? messageText(last) : '';
+    return `<button type="button" class="contact-row" data-${kind}="${escape(person.id)}">
+      ${avatar(person)}
       <span class="contact-copy">
         <span class="contact-title">
-          <strong>${escape(group.name)}</strong>
+          <strong>${escape(isGroup ? person.name : displayName(person))}</strong>
           <span class="contact-time">${escape(inboxTime(last))}</span>
         </span>
-        <span class="contact-preview">${renderEmojiText(preview)}</span>
+        ${isGroup || last ? `<span class="contact-preview-row"><span class="contact-preview">${renderEmojiText(preview)}</span>${unread ? `<small class="contact-unread"><span aria-hidden="true">${unread > 99 ? '99+' : unread}</span><span class="sr-only">未读 ${unread} 条</span></small>` : ''}</span>` : ''}
       </span>
-      ${icon('next')}
-    </button>`;
-  }).join('');
-  const contactRows = state.contacts.map(contact => {
-    const last = state.conversations[contact.id]?.at(-1);
-    return `<button type="button" class="contact-row" data-contact="${escape(contact.id)}">
-      ${avatar(contact)}
-      <span class="contact-copy">
-        <span class="contact-title">
-          <strong>${escape(displayName(contact))}</strong>
-          <span class="contact-time">${escape(inboxTime(last))}</span>
-        </span>
-        ${last ? `<span class="contact-preview">${renderEmojiText(messageText(last))}</span>` : ''}
-      </span>
-      ${icon('next')}
     </button>`;
   }).join('');
   return `${pageHeading('短信', options)}
-    ${groups.length ? `
-      <div class="section-label"><span>群聊</span><span>${groups.length} 个</span></div>
-      <div class="contact-list">${groupRows}</div>` : ''}
-    <div class="section-label"><span>联系人</span><span>${state.contacts.length} 位</span></div>
-    <div class="contact-list">${contactRows}</div>
-    ${!state.contacts.length ? empty('还没有联系人') : ''}`;
+    <div class="contact-list">${rows}</div>
+    ${!entries.length ? empty('还没有联系人') : ''}`;
 }
 
 export function renderChatMenu(state, { ui, busy }) {

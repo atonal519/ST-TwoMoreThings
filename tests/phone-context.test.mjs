@@ -154,10 +154,11 @@ test('a former group participant keeps the direct-interaction priority of an old
 
 test('readers wait for an existing save and use its saved snapshot, including failure rollback', async () => {
   const { target, store, reader, h } = setup();
-  const original = structuredClone(store.read().forum);
+  const original = structuredClone(store.read().social);
+  const replacePublic = (id, text) => store.updateSocial(() => ({ npcs: [], feedIds: [id], posts: [{ id, authorId: 'a', text, comments: [] }] }));
   let finish;
   target.saveMetadata = () => new Promise(resolve => { finish = resolve; });
-  const saving = store.replaceForum([{ id: 'pending', author: '路人', title: '新帖', content: 'PENDING_PUBLIC' }]);
+  const saving = replacePublic('pending', 'PENDING_PUBLIC');
   while (!finish) await new Promise(resolve => setImmediate(resolve));
   assert.ok(serialized(store.read()).includes('PENDING_PUBLIC'), 'the original live metadata contract remains');
   let finishedReading = false;
@@ -165,13 +166,13 @@ test('readers wait for an existing save and use its saved snapshot, including fa
   await new Promise(resolve => setImmediate(resolve)); assert.equal(finishedReading, false);
   let nextFinish;
   target.saveMetadata = () => new Promise(resolve => { nextFinish = resolve; });
-  const next = store.replaceForum([{ id: 'next', author: '路人', title: '更晚', content: 'UNSAVED_NEXT' }]);
+  const next = replacePublic('next', 'UNSAVED_NEXT');
   finish(); await saving;
   const result = await reading; assert.ok(serialized(result.phoneContext).includes('PENDING_PUBLIC')); assert.equal(serialized(result).includes('UNSAVED_NEXT'), false);
   while (!nextFinish) await new Promise(resolve => setImmediate(resolve)); nextFinish(); await next;
   let fail;
   target.saveMetadata = () => new Promise((_resolve, reject) => { fail = reject; });
-  const failing = store.replaceForum([{ id: 'failed', author: '路人', title: '失败', content: 'FAILED_PUBLIC' }]);
+  const failing = replacePublic('failed', 'FAILED_PUBLIC');
   const failure = assert.rejects(failing, /save failed/);
   while (!fail) await new Promise(resolve => setImmediate(resolve));
   const afterFailure = reader.readForContact('a'); fail(Error('save failed')); await failure;

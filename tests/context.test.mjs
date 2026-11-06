@@ -416,3 +416,63 @@ test('story reference cleans imported SMS per selected AI floor and backflow reg
  const messages=[{name:'角色',mes:'<content>AI_ZERO[tmt|甲|甲]FIRST_SMS[/tmt]</content>'},{name:'玩家',is_user:true,mes:'<user_input>USER_RAW</user_input>'},{name:'角色',mes:'<content>AI_TWO[tmt|甲|甲]SECOND_SMS[/tmt]</content>'}],h=createHarness({messages,metadata:{pocketPhone:{contacts:[{id:'a',name:'甲'}],groups:[],conversations:{a:[{id:'first',role:'assistant',text:'FIRST_SMS',source:{kind:'main-story',floor:0,block:0},batch:{key:'[0]'}},{id:'second',role:'assistant',text:'SECOND_SMS',source:{kind:'main-story',floor:2,block:0},batch:{key:'[2]'}}]},storyReferenceFloors:3,injectEnabled:true}}}),target=h.host.captureChat(),store=createPhoneStore({target}),reader=createContextReader({target,store,qqjBridgeProvider:()=>null,wrapperSettingsProvider:()=>({keepTags:'content'})});assert.deepEqual((await reader.readForContact('a')).story.map(r=>r.text),['AI_ZERO','<user_input>USER_RAW</user_input>','AI_TWO']);
  target.messages.push({name:'角色',mes:'OLD_ANSWER_EXCLUDED'});store.read().conversations.a.push({id:'long',role:'user',text:'长'.repeat(4000),batch:{key:'[2]'}});store.read().storyReferenceFloors=2;const calls=[];await createBackflowService({target,store,wrapperSettingsProvider:()=>({keepTags:'content'}),modelClient:{complete:async q=>{calls.push(JSON.parse(q.messages[0].content));return JSON.stringify({summary:'参考。'});}}}).prepare('regenerate');assert.equal(calls.length,1);assert.deepEqual(calls[0].story.map(r=>r.text),['<user_input>USER_RAW</user_input>','AI_TWO']);assert.equal(JSON.stringify(calls[0]).includes('OLD_ANSWER_EXCLUDED'),false);assert.equal(h.metadataSaves,0);
 });
+
+
+test('WeChat omits ambient forum posts while preserving explicit shares, complete SMS and other public sources', async () => {
+  const { h, target, store, reader } = continuityHarness();
+  const state = target.metadata.pocketPhone;
+  const shared = '我转述论坛那段：' + '这是我选择分享的完整原话。'.repeat(900);
+  state.forum = { posts: [{ id: 'ambient', title: '未分享的论坛标题', author: '匿名', content: '未分享的论坛全文'.repeat(900), comments: [{ id: 'ambient-reply', author: '网友', text: '未分享的完整论坛回帖'.repeat(300) }] }] };
+  state.social = { npcs: [], feedIds: ['photo'], posts: [{ id: 'photo', authorId: 'lin', text: '仍允许的公开动态'.repeat(900), image: { description: '完整图片说明'.repeat(300) }, comments: [] }] };
+  const current = { key: '[2,"2026-10-18","19:30"]', label: '2026-10-18 19:30' };
+  for (const [id, group] of [['lin', false], ['current', true]]) {
+    state.conversations[id] = [
+      { id: id + '-share', role: 'user', ...(group ? { speakerId: '@user' } : {}), text: shared, storyDate: '2026-10-18', timeLabel: '15:30', batch: { key: '[0]', label: '过去' } },
+      { id: id + '-reply', role: 'assistant', ...(group ? { speakerId: 'lin' } : {}), text: '已经看到了。', translation: 'Already read it.', batch: current },
+      { id: id + '-now', role: 'user', ...(group ? { speakerId: '@user', replyToId: id + '-share' } : {}), type: 'image', image: { description: '这张我发来的图'.repeat(900) }, batch: current },
+    ];
+  }
+  const before = structuredClone(target.metadata);
+  for (const context of [await reader.readForContact('lin'), await reader.readForGroup('current')]) {
+    assert.equal(context.phoneContext.some(row => row.source.app === 'forum'), false);
+    assert.equal(context.previousMessages[0].text, shared);
+    assert.equal(context.history[0].translation, 'Already read it.');
+    assert.equal(context.history[1].text, '[图片：' + '这张我发来的图'.repeat(900) + ']');
+    assert.equal(context.phoneContext.find(row => row.source.id === 'photo').text, '仍允许的公开动态'.repeat(900));
+    assert.equal(context.phoneContext.find(row => row.source.id === 'photo').image.description, '完整图片说明'.repeat(300));
+  }
+  const group = await reader.readForGroup('current');
+  assert.equal(group.history[1].replyTo.messageText, shared);
+  const social = await reader.readForSocial(store.read().contacts.map(person => ({ ...person, kind: 'contact' })));
+  assert.equal(social.phoneContext.find(row => row.source.id === 'ambient').text, state.forum.posts[0].content);
+  assert.equal(social.phoneContext.find(row => row.source.id === 'ambient-reply').text, state.forum.posts[0].comments[0].text);
+  assert.deepEqual(target.metadata, before);
+  assert.equal(h.metadataSaves, 0); assert.equal(h.settingsSaves, 0); assert.equal(h.modelRequests.length, 0);
+});
+
+test('private and group model requests end in full previous/current SMS without changing their values or request count', async () => {
+  const { h, target, store, reader } = continuityHarness();
+  const current = { key: '[2,"2026-10-18","19:30"]', label: '2026-10-18 19:30' };
+  const state = target.metadata.pocketPhone;
+  state.contacts[0].expression = '按人设连发；使用表情包。';
+  state.conversations.lin = [{ role: 'user', text: '前面的分享完整保留。'.repeat(1000), batch: { key: '[0]' } }, { role: 'user', text: '我知道了，你先休息。', batch: current }];
+  state.conversations.current = [{ role: 'user', speakerId: '@user', text: '旧群消息完整保留。'.repeat(1000), batch: { key: '[0]' } }, { role: 'user', speakerId: '@user', text: '我们都确认过了。', batch: current }];
+  const modelClient = createModelClient({ host: h.host, sourceProvider: createApiSettings({ host: h.host }) });
+  for (const [id, group] of [['lin', false], ['current', true]]) {
+    const context = group ? await reader.readForGroup(id) : await reader.readForContact(id);
+    h.completion = { choices: [{ message: { content: JSON.stringify(group ? { anchor: { memberIds: ['lin', 'zhou', '@user'], speakerIds: ['lin'] }, messages: [{ speakerId: 'lin', text: '收到。' }] } : { messages: [{ text: '收到。' }] }) } }] };
+    const calls = h.modelRequests.length;
+    const service = group ? createGroupService({ target, store, contextReader: reader, modelClient }) : createMessageService({ target, store, contextReader: reader, modelClient });
+    await service.continueChat(id);
+    assert.equal(h.modelRequests.length, calls + 1);
+    const body = h.modelRequests.at(-1).body;
+    assert.equal(body.messages.length, 2);
+    const input = JSON.parse(body.messages[1].content);
+    assert.deepEqual(input, JSON.parse(JSON.stringify(context)));
+    assert.deepEqual(Object.keys(input).slice(-2), ['previousMessages', 'history']);
+    assert.equal(input.history.at(-1).text, group ? '我们都确认过了。' : '我知道了，你先休息。');
+    assert.equal(body.messages[0].content.includes(group ? 'messages每轮合计至少6条' : 'messages每轮至少3条'), true);
+    assert.equal(store.read().conversations[id].at(-1).text, '收到。');
+  }
+  assert.equal(state.contacts[0].expression, '按人设连发；使用表情包。');
+});

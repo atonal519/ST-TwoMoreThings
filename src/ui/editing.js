@@ -22,7 +22,7 @@ export function createEditingRenderer(surface) {
       const previous = held; held = null;
       if (restore && previous?.input.isConnected) { previous.input.focus({ preventScroll: true }); if (previous.start !== null) previous.input.setSelectionRange(previous.start, previous.end, previous.direction); }
     },
-    render(markup, sameRoute) {
+    render(markup, sameRoute, preserved) {
       const overlays = sameRoute && [...surface.children].filter(node => node.hasAttribute('data-phone-overlay'));
       if (overlays?.length) {
         const template = surface.ownerDocument.createElement('template'); template.innerHTML = markup;
@@ -30,14 +30,15 @@ export function createEditingRenderer(surface) {
         surface.insertBefore(template.content, overlays[0]);
         return;
       }
-      const input = sameRoute && (held?.input.isConnected ? held.input : root.activeElement);
-      const form = input?.matches?.('textarea, input:not([type="checkbox"]):not([type="file"]):not([type="radio"])') && input.closest(forms);
+      const stable = sameRoute && preserved?.node?.isConnected && preserved.node.contains(root.activeElement) ? preserved : null;
+      const input = stable?.node || sameRoute && (held?.input.isConnected ? held.input : root.activeElement);
+      const form = stable?.node || input?.matches?.('textarea, input:not([type="checkbox"]):not([type="file"]):not([type="radio"])') && input.closest(forms);
       if (!form || !surface.contains(form) || !input.closest('.phone-main')) { surface.innerHTML = markup; return; }
       const template = surface.ownerDocument.createElement('template'); template.innerHTML = markup;
       const formClass = [...form.classList].find(name => forms.includes(`.${name}`));
       const owners = ownerAttributes.filter(name => form.hasAttribute(name)).map(name => `[${name}="${CSS.escape(form.getAttribute(name))}"]`).join('');
       const nextForm = template.content.querySelector(`.${formClass}${owners}`);
-      const next = nextForm?.querySelector(input.id ? `#${CSS.escape(input.id)}` : `[name="${CSS.escape(input.name)}"]`);
+      const next = stable ? template.content.querySelector(stable.selector) : nextForm?.querySelector(input.id ? `#${CSS.escape(input.id)}` : `[name="${CSS.escape(input.name)}"]`);
       const branch = (node, parent) => { const nodes = []; while (node && node !== parent) { nodes.unshift(node); node = node.parentNode; } return node === parent ? nodes : []; };
       const currentPath = branch(input, surface), nextPath = branch(next, template.content);
       if (!next || input.tagName !== next.tagName || currentPath.length !== nextPath.length || currentPath.some((node, i) => node.tagName !== nextPath[i].tagName)) { surface.innerHTML = markup; return; }

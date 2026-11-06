@@ -1,3 +1,4 @@
+import { circleProfile } from './forum-scope.js';
 import { sanitizeStoryBody } from './shared-body-wrappers.js';
 import { parseJsonObject } from './api.js';
 import { SUMMARY_PROMPT } from './prompts.js';
@@ -114,7 +115,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       const current = base(state);
       const history = phoneHistory(state, id, current.batch).map(message => contextMessage(message, state.conversations[id] || []));
       const previousMessages = previousPhoneHistory(state, id, current.batch.key);
-      const phoneContext = readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, targetIds: [id], excludeConversationId: id });
+      const phoneContext = readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, targetIds: [id], excludeApps: ['forum'], excludeConversationId: id });
       const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'), target.id);
       let related = '';
       const source = memorySources.select(), bridge = source.bridge;
@@ -125,17 +126,22 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         const context = await bridge.readContext({ query, entityIds: [entityId] });
         if (context?.status === 'ready') related = (context.actors || []).filter(x => x.entityId === entityId).map(x => [x.stateText, x.memoryText].filter(Boolean).join('\n')).join('\n');
       }
-      return withIdentitySource({ ...current, phoneContext, ...(actingPerson ? { actingPerson: { id: actingPerson.id, name: actingPerson.name }, ownAccounts: ownAccounts.map(person => ({ id: person.id, name: person.name })) } : {}), ...(storyMemory ? { storyMemory } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { id: contact.id, name: contact.name, nickname: contact.nickname || '', personality: character.personality, expression: contact.expression, language: contact.language || '', ...(typeof contact.remarkForUser === 'string' && contact.remarkForUser.trim() ? { remarkForUser: contact.remarkForUser } : {}) }, previousMessages, history, related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...phoneContext.map(row => row.text)].join('\n') }) }, state, ownAccounts.map(person => person.id));
+      return withIdentitySource({ ...current, phoneContext, ...(actingPerson ? { actingPerson: { id: actingPerson.id, name: actingPerson.name }, ownAccounts: ownAccounts.map(person => ({ id: person.id, name: person.name })) } : {}), ...(storyMemory ? { storyMemory } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), contact: { id: contact.id, name: contact.name, nickname: contact.nickname || '', personality: character.personality, expression: contact.expression, language: contact.language || '', ...(typeof contact.remarkForUser === 'string' && contact.remarkForUser.trim() ? { remarkForUser: contact.remarkForUser } : {}) }, related, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), contact.name, ...history.map(messageText), ...phoneContext.map(row => row.text)].join('\n') }), previousMessages, history }, state, ownAccounts.map(person => person.id));
     },
-    async readForForum({ continuation = false, scanText = '' } = {}) {
+    async readForForum({ continuation = false, scanText = '', scope = 'public' } = {}) {
       const state = await store.readSaved();
+      const inside = scope === 'circle', profile = circleProfile(state.forum?.circle?.profile);
+      const circle = inside ? { circleProfile: profile, ...(!continuation && !profile ? { userPersona: target.userPersona || '' } : {}) } : {};
+      const scan = (value, setting = '') => !inside ? value : profile
+        ? [value, profile.name, profile.memberScope].filter(Boolean).join('\n')
+        : !continuation ? [value, setting, target.userPersona].filter(Boolean).join('\n') : value;
       if (continuation) return { clock: readTimeline(target.messages).clock, setting: cardText(target.character), defaultLanguage: state.defaultLanguage || '',
-        phoneContext: readPhoneContext(state, { defaultUser: target.user, anchor: readTimeline(target.messages), publicOnly: true, excludeApps: ['forum'] }), worldbook: await target.readWorldInfo({ scanText }) };
+        ...circle, phoneContext: readPhoneContext(state, { defaultUser: target.user, anchor: readTimeline(target.messages), publicOnly: true, excludeApps: ['forum'] }), worldbook: await target.readWorldInfo({ scanText: scan(scanText) }) };
       const current = base(state);
       // 正文只提供时代、地域与环境背景，公众知情由论坛任务判断，不传用户档案或人物记忆。
-      return { clock: current.clock, setting: current.character, defaultLanguage: current.defaultLanguage, storyBackground: current.story,
+      return { clock: current.clock, setting: current.character, defaultLanguage: current.defaultLanguage, storyBackground: current.story, ...circle,
         phoneContext: readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, publicOnly: true, excludeApps: ['forum'] }),
-        worldbook: await target.readWorldInfo({ scanText: current.story.map(item => item.text).join('\n') }) };
+        worldbook: await target.readWorldInfo({ scanText: scan(current.story.map(item => item.text).join('\n'), current.character) }) };
     },
     async readForLiangshi({ scanText = '', includePhoneContext = false, includeStory = true, includeUserPersona = false, excludeApps = [], authorContactIds } = {}) {
       const state = await store.readSaved();
@@ -213,7 +219,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       const selected = thread;
       const quoted = selected.flatMap(message => message.replyToId ? thread.filter(item => item.id === message.replyToId) : []);
       const sourceIds = [...selected, ...quoted].flatMap(message => Array.isArray(message.knownToIds) ? message.knownToIds : []);
-      const phoneContext = readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, targetIds: group.memberIds, excludeConversationId: id });
+      const phoneContext = readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, targetIds: group.memberIds, excludeApps: ['forum'], excludeConversationId: id });
       const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'), target.id);
       const members = group.memberIds.map(key => {
         const account = state.contacts.find(item => item.id === key);
@@ -231,7 +237,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       }
       const roster = members.map(({ source, ...person }) => ({ ...person, related: actors.filter(actor => ids.has(person.id) && actor.entityId === ids.get(person.id)).map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n') }));
       if (group.userIsMember) roster.push({ id: '@user', ...current.userProfile });
-      return withIdentitySource({ ...current, phoneContext, ...(storyMemory ? { storyMemory } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster, replyMemberIds: group.memberIds.filter(id => !isUserIdentity(state, id)) }, previousMessages, history, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText), ...phoneContext.map(row => row.text)].join('\n') }) }, state, [...group.memberIds, ...sourceIds]);
+      return withIdentitySource({ ...current, phoneContext, ...(storyMemory ? { storyMemory } : {}), ...(calendarReference ? { calendar: calendarReference } : {}), emojis: emojiChoices(), stickers: stickerChoices(), group: { name: group.name, userIsMember: group.userIsMember, members: roster, replyMemberIds: group.memberIds.filter(id => !isUserIdentity(state, id)) }, worldbook: await target.readWorldInfo({ scanText: [...current.story.map(item => item.text), ...members.map(person => person.name), ...history.map(messageText), ...phoneContext.map(row => row.text)].join('\n') }), previousMessages, history }, state, [...group.memberIds, ...sourceIds]);
     },
 
   };

@@ -1,3 +1,6 @@
+import { filterWorldInfoSourcesByPermission } from './source-permission.js';
+import { createSourcePermissionSettings } from './source-permission-settings.js';
+import { listWorldInfoBookNames } from './world-info-book-names.js';
 import { selectWorldEntries } from './worldbook.js';
 import { OPEN_COMMAND } from './quick-reply.js';
 import { readCardPreset } from './authoring.js';
@@ -16,6 +19,14 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
     if (!value) throw new Error('暂时无法读取酒馆，请刷新页面后再打开小手机。');
     return value;
   };
+  const getWorldInfoBindings = async () => worldInfoBindings || await import(new URL('/scripts/world-info.js', globalThis.location.href).href).then(world => ({
+    getNames: current => [...(world.selected_world_info || []), ...[current.metadata.world_info || []].flat(), ...(world.world_info?.charLore?.find(x => x.name === current.character?.avatar?.replace(/\.[^.]+$/, ''))?.extraBooks || [])],
+    load: world.loadWorldInfo,
+    defaults: { caseSensitive: world.world_info_case_sensitive, matchWholeWords: world.world_info_match_whole_words },
+    getSelectedWorldInfo: () => world.selected_world_info,
+    getWorldInfoSettings: () => world.world_info,
+    getWorldInfoNames: () => world.world_names,
+  }));
   const host = {
     mode, phoneSettingsKey: embedded ? 'twoMoreThingsEmbedded' : 'pocketPhone', openCommand,
     captureChat() {
@@ -78,16 +89,17 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       ctx.eventSource.on(name, callback);
       return () => ctx.eventSource.removeListener(name, callback);
     },
+    async listWorldInfoBookNames() {
+      const bindings = await getWorldInfoBindings();
+      return listWorldInfoBookNames(context(), { bindings: { ...bindings, getSelectedWorldInfo: bindings.getSelectedWorldInfo || (() => bindings.getNames?.(host.captureChat()) || []) } });
+    },
     async readWorldInfo(target, { scanText } = {}) {
       // 核心可从CDN加载，宿主模块仍必须从当前酒馆页面的地址读取。
-      const bindings = worldInfoBindings || await import(new URL('/scripts/world-info.js', globalThis.location.href).href).then(world => ({
-        getNames: current => [...(world.selected_world_info || []), ...[current.metadata.world_info || []].flat(), ...(world.world_info?.charLore?.find(x => x.name === current.character?.avatar?.replace(/\.[^.]+$/, ''))?.extraBooks || [])],
-        load: world.loadWorldInfo,
-        defaults: { caseSensitive: world.world_info_case_sensitive, matchWholeWords: world.world_info_match_whole_words },
-      }));
+      const bindings = await getWorldInfoBindings();
       const names = [...new Set([target.character?.world, target.personaWorld, ...(bindings.getNames?.(target) || [])].filter(Boolean))];
+      const allowedNames = filterWorldInfoSourcesByPermission({ sources: names.map(sourceName => ({ sourceName })), settings: createSourcePermissionSettings(host).sourcePermissionSnapshot() }).map(source => source.sourceName);
       const parts = [];
-      for (const name of names) {
+      for (const name of allowedNames) {
         const book = await bindings.load(name);
         if (!book) throw new Error('关联世界书读取失败，请检查世界书是否可用。');
         const rows = Object.values(book.entries || {});

@@ -35,7 +35,7 @@ export function createPhoneActionMenu({ root, onClose }) {
     const focused = root.activeElement, action = opened.popup.contains(focused) && focused.dataset.action;
     if (opened.markup !== content) {
       opened.markup = content; opened.list.innerHTML = content;
-      for (const option of opened.list.querySelectorAll('button')) option.setAttribute('role', 'menuitem');
+      for (const option of opened.list.querySelectorAll('button')) if (!option.hasAttribute('role')) option.setAttribute('role', 'menuitem');
       if (action) {
         const option = opened.list.querySelector(`[data-action="${CSS.escape(action)}"]:not(:disabled)`) || opened.list.querySelector('button:not(:disabled)');
         if (option) focusPopupOption(option); else button.focus({ preventScroll: true });
@@ -67,14 +67,14 @@ export function createPhoneActionMenu({ root, onClose }) {
         event.stopPropagation();
         if (event.key === 'Escape') { event.preventDefault(); close(true); }
         else if (event.key === 'Tab') close(true);
-        else if (['ArrowDown', 'ArrowUp'].includes(event.key)) {
+        else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
           event.preventDefault();
           const options = [...opened.list.querySelectorAll('button:not(:disabled)')], index = options.indexOf(event.target), step = event.key === 'ArrowDown' ? 1 : -1;
-          focusPopupOption(options[(index + step + options.length) % options.length]);
+          focusPopupOption(options[event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1 : (index + step + options.length) % options.length]);
         }
         return true;
       }
-      if (['Enter', ' '].includes(event.key) && event.target.matches('[data-action="chat-menu"], [data-action="liangshi-menu"], [data-action="inbox-menu"], [data-action="avatar-menu"], [data-message]')) event.stopPropagation();
+      if (['Enter', ' '].includes(event.key) && event.target.matches('[data-action="chat-menu"], [data-action="liangshi-menu"], [data-action="inbox-menu"], [data-action="avatar-menu"], [data-action="forum-menu"], [data-message]')) event.stopPropagation();
       return false;
     },
   };

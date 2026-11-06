@@ -198,8 +198,9 @@ h3 { font-size: 14px; font-weight: 600; }
 .contact-title { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
 .contact-title strong { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 1.4; font-weight: 500; }
 .contact-time { flex-shrink: 0; font-size: 10px; color: var(--pp-muted); white-space: nowrap; }
-.contact-preview { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--pp-muted); font-size: 12px; line-height: 1.5; margin-top: 3px; }
-.contact-row > svg { width: 14px; color: var(--pp-muted); }
+.contact-preview-row { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.contact-preview { flex: 1; min-width: 0; display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--pp-muted); font-size: 12px; line-height: 1.5; }
+.contact-unread { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--pp-active); color: var(--pp-paper); font-size: 11px; line-height: 1; }
 /* 共用表单操作。 */
 .save-button, .danger-button { min-height: 27.5px; min-width: 0; display: inline-flex; align-items: center; justify-content: center; padding: 0 11px; border: 1px solid var(--pp-active); border-radius: 7px; font-size: 12px; background: var(--pp-active); color: var(--pp-paper); }
 .danger-button { background: var(--pp-danger-fill); border-color: var(--pp-danger-fill); color: var(--pp-danger-text); }
@@ -219,6 +220,10 @@ h3 { font-size: 14px; font-weight: 600; }
 .chat-stage { position: relative; isolation: isolate; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .chat-particles { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; color: var(--pp-mineral); }
 .message-feed { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 3px; background: transparent; overscroll-behavior: contain; }
+.chat-pull-indicator { position: absolute; z-index: 2; top: 4px; left: 50%; display: flex; align-items: center; gap: 5px; padding: 4px 8px; background: var(--pp-paper); color: var(--pp-muted); font-size: 11px; white-space: nowrap; pointer-events: none; }
+.chat-pull-indicator svg { width: 16px; height: 16px; transform: rotate(-90deg); }
+.chat-pull-indicator[data-ready="true"] { color: var(--pp-active); }
+.chat-pull-indicator[data-ready="true"] svg { transform: rotate(90deg); }
 .message-date { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 10px; color: var(--pp-muted); margin: 3px 0 10px; }
 .message-date::before, .message-date::after { content: ''; width: 22px; height: 1px; background: var(--pp-rule); }
 .history-fold { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--pp-muted); font-size: 11px; min-height: 25.3px; flex: 0 0 auto; }
@@ -388,6 +393,15 @@ h3 { font-size: 14px; font-weight: 600; }
 .calendar-event-title small { flex: 0 0 auto; }
 .calendar-event p { margin-top: 3px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 /* 论坛：当前批次、帖子与回帖。 */
+.forum-title-toggle { position: relative; display: inline-block; vertical-align: top; font: inherit; line-height: inherit; letter-spacing: inherit; color: inherit; padding: 0; border: 0; background: none; }
+.forum-title-toggle > svg { position: absolute; left: calc(100% + 5px); top: 50%; width: 12px; height: 12px; transform: translateY(-50%) rotate(90deg); }
+.phone-action-popup .forum-scope-option { display: flex; align-items: center; justify-content: space-between; gap: 10px; white-space: normal; }
+.forum-scope-option[aria-checked="true"] { background: var(--pp-pale); color: var(--pp-active); }
+.forum-scope-copy { display: flex; flex-direction: column; min-width: 0; }
+.forum-scope-option small, .phone-action-popup .forum-scope-edit { font-size: 11px; line-height: 1.5; color: var(--pp-muted); }
+.forum-scope-current { flex: none; color: var(--pp-active); }
+.phone-action-popup .forum-scope-edit { margin-top: 4px; border-top: 1px solid var(--pp-divider-soft); border-radius: 0; }
+.forum-profile-warning { font-size: 11px; color: var(--pp-muted); margin-top: 8px; }
 .forum-posts { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; }
 .forum-card { display: block; width: 100%; padding: 12px 14px; border: 1px solid var(--pp-divider-soft); border-radius: 16px; background: var(--pp-surface); box-shadow: var(--pp-elevation-soft); }
 .post-topline { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--pp-muted); }
@@ -910,3 +924,25 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
 .favorite-detail-header .danger:hover:not(:disabled) { color: var(--pp-error); }
 
 .ls-detail-stats .content-favorite { min-height: 30.8px; align-self: center; }
+
+/* QQJ source-permission UI rules, scoped to the copied control; PP owns host theme and type scale. */
+.source-permission-settings { --ink: var(--pp-ink); --soft: var(--pp-muted); --line: var(--pp-divider-soft); --paper: var(--pp-paper); --panel: transparent; --crimson: var(--pp-active); --knot: var(--pp-active); --qqj-custom-font: var(--pp-text-font); --qqj-font-body: 12px; --qqj-font-caption: 11px; --qqj-font-subheading: 12px; --qqj-control-height: 27.5px; --qqj-control-pad-y: 3px; --qqj-control-pad-x: 6px; --qqj-control-line: 1.5; --qqj-radius-control: 7px; --qqj-space-group: 6px; --qqj-ui-scale: 1; --qqj-motion-fast: 0s; }
+.source-permission-settings{padding:0;border:0;border-radius:0;background:var(--panel);font-size:12px;line-height:1.5}
+.source-permission-settings>.settings-sub-summary{display:flex;align-items:center;justify-content:space-between;gap:calc(7px * 12 / 13);padding:0;cursor:pointer;list-style:none;min-height:calc(31.9px * 12 / 13);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+.source-permission-settings .settings-sub-summary::-webkit-details-marker{display:none}
+.source-permission-settings>.settings-sub-summary::marker{content:""}
+.source-permission-settings>.settings-sub-summary:focus{outline:none}
+.source-permission-settings>.settings-sub-summary:focus-visible{outline:2px solid var(--pp-active);outline-offset:-2px}
+.source-permission-settings>.settings-sub-summary>svg{width:calc(15px * 12 / 13);height:calc(15px * 12 / 13)}
+.source-permission-settings[open]>.settings-sub-summary>svg{transform:rotate(90deg)}
+.source-permission-settings .settings-sub-summary h4{min-width:0;margin:0;font:500 var(--qqj-font-subheading)/var(--qqj-control-line) var(--qqj-custom-font,inherit),-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);font-size:var(--qqj-font-subheading);line-height:var(--qqj-control-line)}
+.source-permission-settings .settings-sub-body{display:grid;padding:2px 2px 12px 14px;gap:var(--qqj-space-group)}
+.source-permission-settings .source-permission-list{display:grid;gap:0;max-height:min(40vh,320px);overflow-y:auto}
+.source-permission-settings .source-toggle-row{display:flex;align-items:flex-start;gap:7px;min-width:0;margin:0;padding:3px 2px;font-size:12px;font-weight:400;line-height:1.5;cursor:pointer}
+.source-permission-settings .source-toggle-row span{display:grid;flex:1;min-width:0;line-height:1.5;overflow-wrap:anywhere}
+.source-permission-settings .source-toggle-row input{flex:0 0 auto;min-height:0;padding:0;margin:1px 0 0;accent-color:var(--crimson);width:calc(16px * var(--qqj-ui-scale,1));height:calc(16px * var(--qqj-ui-scale,1))}
+.source-permission-settings .source-exclude-count{margin:0 0 2px;color:var(--soft);font-size:var(--qqj-font-caption)}
+.source-permission-settings .settings-input:not([type=range]){width:100%;min-width:0;border:1px solid var(--line);background:var(--paper);color:var(--ink);transition:border-color .15s ease,box-shadow .15s ease;min-height:var(--qqj-control-height);padding:var(--qqj-control-pad-y) var(--qqj-control-pad-x);font-size:var(--qqj-font-body);line-height:var(--qqj-control-line);font-weight:400;border-radius:var(--qqj-radius-control)}
+.source-permission-settings .settings-input:focus{outline:none;border-color:var(--knot);box-shadow:inset 0 0 0 1px var(--knot)}
+.source-permission-settings .settings-hint{margin:-1px 0 0;line-height:1.6;color:var(--soft);font-size:var(--qqj-font-caption)}
+.source-permission-settings .source-permission-list{touch-action:pan-y}

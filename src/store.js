@@ -11,6 +11,7 @@ import { groupAudience } from './phone-context.js';
 import { assignIdentityOwner, isUserIdentity, assertIdentitySnapshot } from './identities.js';
 import { archiveNotifications, initializeNotificationHistory } from './notifications.js';
 import { findStorySmsPeople, storySmsBlockMatches, storySmsSourceRows } from './story-sms.js';
+import { forumScope, circleProfile, sameCircleProfile } from './forum-scope.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
 const fillDefaultAvatars = people => {
@@ -143,7 +144,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
           }
           const clock = batch.clock;
           const message = { id: `story:${floor}:${block.index}:${createUuid()}`, role: speakerId === '@user' ? 'user' : 'assistant', speakerId,
-            text: block.text, createdAt: new Date().toISOString(), timeLabel: clock.time, read: true,
+            text: block.text, createdAt: new Date().toISOString(), timeLabel: clock.time, read: speakerId === '@user' || Boolean(isReading(conversationId)),
             ...(clock.source === 'story' ? { storyDate: clock.date, storyWeekday: clock.weekday } : {}),
             batch: { key: batch.key, label: batch.label }, source: { kind: 'main-story', floor, block: block.index, projection, position } };
           const group = groups.find(item => item.id === conversationId);
@@ -247,7 +248,7 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         };
         const conversations = Object.fromEntries(Object.entries(state.conversations).map(([id, messages]) => [id, messages.map(row => clear(row))]));
         const social = state.social && { ...state.social, posts: state.social.posts.map(row => clear(row, false)) };
-        const forum = state.forum && { ...state.forum, posts: state.forum.posts.map(row => clear(row)) };
+        const forum = state.forum && { ...state.forum, posts: state.forum.posts.map(row => clear(row)), ...(state.forum.circle ? { circle: { ...state.forum.circle, posts: state.forum.circle.posts.map(row => clear(row)) } } : {}) };
         const liangshi = state.liangshi && { ...state.liangshi, posts: state.liangshi.posts.map(row => clear(row)) };
         const favorites = state.favorites?.map(entry => { const snapshot = clear(entry.snapshot); return snapshot === entry.snapshot ? entry : { ...entry, snapshot }; });
         const albumPhotos = state.albumPhotos?.filter(photo => !missing.has(imagePath(photo.path)));
@@ -393,10 +394,24 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         return { ...state, [key]: state[key].map(person => person.id === id ? { ...person, background } : person) };
       });
     },
-    updateForum(change, { cleanImages = false, notice } = {}) {
-      return update(state => { assertEnabled(); const current = state.forum || { posts: [] }, next = change(current); return next === current ? state : { ...state, forum: next }; }, cleanImages, notice && [notice]);
+    updateForum(change, { cleanImages = false, notice, scope = 'public', expectedProfile } = {}) {
+      return update(state => {
+        assertEnabled();
+        const forum = state.forum || { posts: [] }, inside = forumScope(scope) === 'circle';
+        const current = inside ? forum.circle || { profile: null, posts: [] } : forum;
+        if (inside && expectedProfile !== undefined && !sameCircleProfile(current.profile, expectedProfile)) throw new Error('圈内范围已修改，本次结果未保存。');
+        const next = change(current);
+        return next === current ? state : { ...state, forum: inside ? { ...forum, circle: next } : { ...forum, ...next } };
+      }, cleanImages, notice && [notice]);
     },
-    replaceForum(posts) { return store.updateForum(current => ({ ...current, posts }), { cleanImages: true, notice: { kind: 'forum' } }); },
+    replaceForum(posts, { scope = 'public', profile, expectedProfile } = {}) {
+      return store.updateForum(current => ({ ...current, posts, ...(forumScope(scope) === 'circle' ? { profile: circleProfile(profile) } : {}) }), { scope, expectedProfile, cleanImages: true, notice: { kind: forumScope(scope) === 'circle' ? 'forum-circle' : 'forum' } });
+    },
+    saveCircleProfile(value) {
+      const profile = circleProfile(value);
+      if (!profile) return Promise.reject(new Error('请填写社区名称和成员范围。'));
+      return store.updateForum(current => sameCircleProfile(current.profile, profile) ? current : { ...current, profile, posts: [] }, { scope: 'circle', cleanImages: true });
+    },
     upsertContacts(items) {
       return update(state => {
         const contacts = new Map(state.contacts.map(item => [item.id, item]));

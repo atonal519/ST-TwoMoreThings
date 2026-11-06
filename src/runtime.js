@@ -1,3 +1,5 @@
+import { createSourcePermissionController } from './source-permission.js';
+import { createSourcePermissionSettings } from './source-permission-settings.js';
 import { getSharedBodyWrappers } from './shared-body-wrappers.js';
 import { initializeSharedProcessingPrompt } from './shared-processing-prompt.js';
 import { createHostAdapter, renderUpdateMarkdown } from './host.js';
@@ -92,6 +94,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
     let currentPhone;
     const store = makeStore(target, { assertEnabled: control.assertEnabled, isReading: id => boundTo(host.captureChat()) && currentPhone?.isReading(id), onNotifications: records => { if (boundTo(target) && boundTo(host.captureChat())) currentPhone?.notifyNotifications(records); } });
     phoneStore = store;
+    const sourcePermissions = createSourcePermissionController({ settings: createSourcePermissionSettings(host), contextProvider: host.captureChat, bookNamesProvider: () => host.listWorldInfoBookNames() });
     const apiSettings = createApiSettings({ host, onBusyChange });
     const client = createModelClient({ host, sourceProvider: apiSettings, onBusyChange });
     const modelClient = { async complete(request) { control.assertEnabled(); const answer = await client.complete(request); control.assertEnabled(); return answer; } };
@@ -102,7 +105,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
       messages: createMessageService({ target, store, contextReader, modelClient }),
       groups: createGroupService({ target, store, contextReader, modelClient }),
       directory: createDirectoryService({ store, contextReader, modelClient }),
-      forum: createForumService({ store, contextReader, modelClient }), apiSettings, calendar, storySmsInstaller: createStorySmsInstaller({ host }),
+      forum: createForumService({ store, contextReader, modelClient }), sourcePermissions, apiSettings, calendar, storySmsInstaller: createStorySmsInstaller({ host }),
       social: createSocialService({ store, contextReader, modelClient, defaultUser: target.user, isReadingPost: id => boundTo(host.captureChat()) && currentPhone?.isReadingSocial(id) }),
       liangshi: createLiangshiService({ store, contextReader, modelClient }),
       wallpaper: createWallpaperService({ host, store }), entries, appearance, authoring: createAuthoringService({ host, store, readEntries: entries.read }), mode: host.mode,

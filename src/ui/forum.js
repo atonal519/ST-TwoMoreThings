@@ -3,6 +3,7 @@ import { readForumTags, forumFilterTags } from '../forum-tags.js';
 import { action, empty, escape, icon, pageHeading, renderBilingual, renderContentImage } from './shared.js';
 import { forumComments } from '../forum.js';
 import { imageSource } from '../image-files.js';
+import { forumData, circleProfile } from '../forum-scope.js';
 
 // UI-only fictional totals: the post ID fixes the baseline across renders.
 export function forumVoteCounts(id) {
@@ -14,7 +15,8 @@ export function forumVoteCounts(id) {
 }
 
 export function renderForum(state, { ui = {}, busy }) {
-  const posts = state.forum?.posts || [];
+  const scope = ui.forumScope || 'public', posts = forumData(state, scope).posts || [];
+  const refreshKey = scope === 'circle' ? 'forum:circle' : 'forum';
   const tags = forumFilterTags(posts);
   if (!tags.includes(ui.forumTag)) ui.forumTag = '';
   const selected = ui.forumTag ? posts.filter(post => readForumTags(post).includes(ui.forumTag)) : posts;
@@ -30,14 +32,19 @@ export function renderForum(state, { ui = {}, busy }) {
       <span>展开看看 ${icon('next')}</span>
     </span>
   </button>`).join('');
-  return `${pageHeading('论坛', action('refresh', busy.has('forum') ? '刷新中' : '刷新', 'refresh', 'quiet-button', busy.has('forum')))}
+  return `<header class="page-heading"><div class="page-title-row"><h1><button type="button" id="forum-title-toggle" class="forum-title-toggle" data-action="forum-menu" aria-label="论坛，当前${scope === 'circle' ? '圈内' : '圈外'}，切换范围" aria-haspopup="menu" aria-expanded="false">论坛${icon('next')}</button></h1>${action('refresh', busy.has(refreshKey) ? '刷新中' : '刷新', 'refresh', 'quiet-button', busy.has(refreshKey))}</div></header>
     ${tags.length ? `<nav class="forum-tags" aria-label="论坛标签">${['', ...tags].map(tag => `<button type="button" class="quiet-button" data-action="forum-tag" data-forum-tag="${escape(tag)}" aria-pressed="${ui.forumTag === tag}">${escape(tag || '全部')}</button>`).join('')}</nav>` : ''}
     <div class="forum-posts">${cards}</div>
-    ${!posts.length ? empty('还没有帖子', '', 'forum') : ''}`;
+    ${!posts.length ? empty(scope === 'circle' ? '圈内还没有帖子' : '还没有帖子', scope === 'circle' && !circleProfile(forumData(state, scope).profile) ? '可刷新识别社区，或从论坛标题菜单手动设置圈内范围。' : '', 'forum') : ''}`;
+}
+
+export function renderForumMenu(state, { ui }) {
+  const scope = ui.forumScope || 'public', profile = circleProfile(forumData(state, 'circle').profile);
+  return ['public', 'circle'].map(value => `<button type="button" class="menu-item forum-scope-option" role="menuitemradio" aria-checked="${scope === value}" data-action="forum-scope" data-forum-scope="${value}"><span class="forum-scope-copy"><span>${value === 'circle' ? '圈内' : '圈外'}</span>${value === 'circle' ? `<small>${escape(profile?.name || '未设置圈内范围')}</small>` : ''}</span>${value === scope ? '<small class="forum-scope-current">当前</small>' : ''}</button>`).join('') + (scope === 'circle' ? '<button type="button" class="menu-item forum-scope-edit" data-action="forum-circle-profile">更改圈内范围</button>' : '');
 }
 
 export function renderPost(state, { ui, busy = new Set() }) {
-  const post = state.forum?.posts.find(post => post.id === ui.postId);
+  const scope = ui.forumScope || 'public', post = forumData(state, scope).posts.find(post => post.id === ui.postId);
   if (!post) return empty('这批帖子已经更新', '返回论坛，看看新的帖子。', 'forum');
   const rows = forumComments(post), byId = new Map(rows.map(row => [row.id, row])), draft = ui.forumDrafts?.get(post.id) || { text: '', replyToId: '' };
   const selected = byId.get(draft.replyToId), vote = ui.forumVotes?.get(post.id), totals = forumVoteCounts(post.id), drawing = busy.has(`forum-image:${post.id}`), loading = busy.has(`forum-more:${post.id}`);
@@ -61,11 +68,11 @@ export function renderPost(state, { ui, busy = new Set() }) {
     <article class="post-detail" tabindex="-1">${(readForumTags(post).length ? readForumTags(post) : ['闲聊']).map(tag => `<span class="post-category">${escape(tag)}</span>`).join(' ')}<h1>${renderBilingual(post.title, post.titleTranslation)}</h1>
       <div class="post-byline"><span class="author-mark">${escape(Array.from(post.author || '友')[0])}</span><span>${escape(post.author)}</span></div>
       <p class="post-body">${renderBilingual(post.content, post.contentTranslation)}</p>${photo}
-      <div class="forum-votes" aria-label="帖子态度">${[['like','赞'],['dislike','踩']].map(([key,label]) => `<button type="button" data-action="forum-vote" data-forum-vote="${key}" aria-pressed="${vote === key}">${icon(key)}${label} <span>${totals[key] + Number(vote === key)}</span></button>`).join('')}${favoriteButton(state, { app: 'forum', kind: 'post', postId: post.id }, busy, ui.defaultUser)}</div>
+      <div class="forum-votes" aria-label="帖子态度">${[['like','赞'],['dislike','踩']].map(([key,label]) => `<button type="button" data-action="forum-vote" data-forum-vote="${key}" aria-pressed="${vote === key}">${icon(key)}${label} <span>${totals[key] + Number(vote === key)}</span></button>`).join('')}${favoriteButton(state, { app: 'forum', kind: 'post', postId: post.id, ...(scope === 'circle' ? { scope } : {}) }, busy, ui.defaultUser)}</div>
     </article>
     <section class="comments"><h2>回帖 <span>${rows.length}</span></h2>${comments}</section>
     <div class="ls-more-area">${action('forum-more',loading ? '加载中…' : '加载更多','','ls-more-button',loading)}</div>
-    <form class="forum-comment-form" data-forum-post="${escape(post.id)}" data-reply-to="${escape(draft.replyToId || '')}"><label class="field-label" for="forum-comment-text">${escape(selected ? targetLabel(selected) : `回复主帖《${post.title}》`)}</label>
+    <form class="forum-comment-form" data-forum-post="${escape(post.id)}" data-forum-scope="${scope}" data-reply-to="${escape(draft.replyToId || '')}"><label class="field-label" for="forum-comment-text">${escape(selected ? targetLabel(selected) : `回复主帖《${post.title}》`)}</label>
       ${selected ? `<div class="forum-reply-context"><span class="forum-quote-text">${escape(excerpt(readable(selected)))}</span></div>` : ''}
       <textarea id="forum-comment-text" name="comment" rows="3" placeholder="说说你的想法…" required>${escape(draft.text)}</textarea>
       <div class="forum-comment-actions">${selected ? action('forum-reply-cancel','取消回复','','quiet-button') : ''}<button type="submit" class="save-button" ${busy.has(`forum-comment:${post.id}`) ? 'disabled' : ''}>发布回帖</button></div>

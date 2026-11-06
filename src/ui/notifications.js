@@ -3,6 +3,7 @@ import { messageText } from '../content.js';
 import { displayName } from '../profiles.js';
 import { getSocialAuthor, readSocialPosts } from '../social.js';
 import { avatar, escape, icon, renderEmojiText } from './shared.js';
+import { forumData } from '../forum-scope.js';
 
 const fallbackPreview = '点击查看';
 
@@ -54,10 +55,10 @@ function socialAuthorNotice(state, id) {
   return noticeButton('social-author', id, `${displayName(author)}的动态已更新`, preview(post?.text || post?.image?.description), avatar(author, true));
 }
 
-function forumNotice(state, id) {
-  const post = id ? state.forum?.posts?.find(row => row.id === id) : state.forum?.posts?.[0];
+function forumNotice(state, id, scope = 'public') {
+  const data = forumData(state, scope), post = id ? data.posts.find(row => row.id === id) : data.posts[0];
   if (!post) return '';
-  return noticeButton(id ? 'forum-post' : 'forum', id, id ? '论坛有新回帖' : '论坛有新内容', preview(post.title || post.content), icon('forum'));
+  return noticeButton(scope === 'circle' ? id ? 'forum-circle-post' : 'forum-circle' : id ? 'forum-post' : 'forum', id, scope === 'circle' ? `${data.profile?.name || '圈内论坛'}${id ? '有新回帖' : '有新内容'}` : id ? '论坛有新回帖' : '论坛有新内容', preview(post.title || post.content), icon('forum'));
 }
 
 function liangshiNotice(state, id, following = false) {
@@ -83,6 +84,8 @@ export function renderPhoneNotice(state, notice) {
     case 'social-author': return notice.id ? socialAuthorNotice(state, notice.id) : '';
     case 'forum': return forumNotice(state);
     case 'forum-post': return forumNotice(state, notice.id);
+    case 'forum-circle': return forumNotice(state, undefined, 'circle');
+    case 'forum-circle-post': return forumNotice(state, notice.id, 'circle');
     case 'liangshi-feed': return liangshiNotice(state);
     case 'liangshi-following': return liangshiNotice(state, undefined, true);
     case 'liangshi-hot': return liangshiHotNotice(state);

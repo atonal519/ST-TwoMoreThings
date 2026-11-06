@@ -4,12 +4,13 @@ import { messageText } from './content.js';
 import { findSticker } from './stickers.js';
 import { imagePath } from './image-files.js';
 import { savedPublication, publicationLabel } from './social-time.js';
+import { forumData } from './forum-scope.js';
 
 export const favoriteApps = [['', '全部'], ['messages', '聊天'], ['liangshi', '两事'], ['social', '动态'], ['forum', '论坛']];
 const copyText = (value, keys) => Object.fromEntries(keys.filter(key => typeof value?.[key] === 'string').map(key => [key, value[key]]));
 const imageCopy = image => image && (image.description || imagePath(image.path)) ? { ...copyText(image, ['description']), ...(imagePath(image.path) ? { path: imagePath(image.path) } : {}) } : undefined;
 const bodyCopy = item => ({ ...copyText(item, ['text', 'translation']), ...(imageCopy(item.image) ? { image: imageCopy(item.image) } : {}) });
-const sourceKey = source => JSON.stringify([source.app, source.kind, source.conversationId || '', source.messageId || '', source.batchKey || '', source.postId || '', source.rowId || '']);
+const sourceKey = source => JSON.stringify([source.app, source.kind, source.conversationId || '', source.messageId || '', source.batchKey || '', source.postId || '', source.rowId || '', ...(source.app === 'forum' && source.scope === 'circle' ? ['circle'] : [])]);
 export function favoriteFor(state, candidate) {
   if (!candidate) return undefined;
   return (state.favorites || []).find(item => sourceKey(item.source) === sourceKey(candidate.source) && (!candidate.source.legacy || JSON.stringify(item.snapshot) === JSON.stringify(candidate.snapshot)));
@@ -20,7 +21,7 @@ function readUnit(state, ref) {
     const unit = state.conversations?.[ref.conversationId]?.find(item => item.id === ref.messageId && (ref.batchKey === undefined || (item.batch?.key ?? 'legacy') === ref.batchKey));
     return person && unit ? { unit, person, group } : null;
   }
-  const post = state[ref.app]?.posts?.find(item => item.id === ref.postId);
+  const post = (ref.app === 'forum' ? forumData(state, ref.scope) : state[ref.app])?.posts?.find(item => item.id === ref.postId);
   if (!post) return null;
   if (ref.kind === 'post') return { post, unit: post };
   const collection = ref.kind === 'repost' ? 'reposts' : 'comments', rows = post[collection] || [];
@@ -49,7 +50,9 @@ export function captureFavorite(state, ref, { defaultUser = '我' } = {}) {
     if (ref.kind !== 'post') { if (unit.id) source.rowId = unit.id; else source.legacy = true; }
     if (ref.app === 'social') { authorName = ref.kind === 'post' ? displayName(getSocialAuthor(state, unit.authorId) || { name: '已移除作者' }) : unit.name || displayName(getSocialAuthor(state, unit.authorId) || { name: '评论者' }); sourceLabel = `ainstgram · ${ref.kind === 'post' ? '动态' : '评论'}`; }
     if (ref.app === 'forum') {
+      if (ref.scope === 'circle') source.scope = 'circle';
       authorName = unit.author || '匿名'; sourceLabel = `论坛 · ${ref.kind === 'post' ? '主帖' : '回帖'}`;
+      if (ref.scope === 'circle') sourceLabel = `圈内论坛 · ${forumData(state, 'circle').profile?.name || '圈内'} · ${ref.kind === 'post' ? '主帖' : '回帖'}`;
       if (ref.kind === 'post') snapshot = { ...snapshot, ...copyText(unit, ['title', 'titleTranslation']), text: unit.content || '', ...(unit.contentTranslation ? { translation: unit.contentTranslation } : {}) };
     }
     if (ref.app === 'liangshi') {

@@ -10,6 +10,7 @@ import { renderChat } from '../src/ui/messages.js';
 import { readTimeline } from '../src/timeline.js';
 import { captureFavorite } from '../src/favorites.js';
 import { replyContext } from '../src/replies.js';
+import { lockNotifications, unreadConversations } from '../src/notifications.js';
 
 const rerollSms = text => `[tmt|群:测试群|甲]${text}[/tmt]`;
 const rerollBody = texts => `<content>当前叙事。${texts.map(rerollSms).join('')}</content><!-- QQJ-end | date=2031年4月8日 | time=10:00 -->`;
@@ -263,7 +264,7 @@ test('latest main-story SMS creates explicit people/groups in one silent transac
   assert.deepEqual(group.memberIds, [b.id]); assert.equal(group.userIsMember, true);
   assert.deepEqual(state.conversations[a.id].map(row => [row.role, row.text]), [['assistant', '晚上八点见。'], ['user', '收到']]);
   for (const row of Object.values(state.conversations).flat()) {
-    assert.equal(row.read, true); assert.equal(row.source.kind, 'main-story'); assert.equal(row.source.floor, 0);
+    assert.equal(row.read, row.role === 'user'); assert.equal(row.source.kind, 'main-story'); assert.equal(row.source.floor, 0);
     assert.deepEqual(JSON.parse(row.batch.key), [0, '2031/4/8', '09:30']);
   }
   await syncStorySms({ ...s, store: createPhoneStore({ target: s.target }) });
@@ -461,7 +462,7 @@ for (const hostKind of ['native', 'luker']) test(`${hostKind}: separated contact
     await syncStorySms({ target, store });
     assert.deepEqual(store.read().contacts, profiles, `${conversation}/${sender}: routing does not rename or add aliases`);
     assert.deepEqual(store.read().conversations.a.map(row => [row.role, row.speakerId, row.text]), [['assistant', 'a', '  完整原话。\n第二行！  '], ['user', '@user', '收到。']]);
-    assert.deepEqual(store.read().conversations.a.map(row => [row.source.floor, row.source.block, row.read]), [[0, 0, true], [0, 1, true]]);
+    assert.deepEqual(store.read().conversations.a.map(row => [row.source.floor, row.source.block, row.read]), [[0, 0, false], [0, 1, true]]);
     assert.equal(target.messages[0].mes, raw); assert.equal(h.metadataSaves, before + 1); assert.equal(h.modelRequests.length, 0);
     await syncStorySms({ target, store }); assert.equal(h.metadataSaves, before + 1, 'same floor imports once');
   }
@@ -528,4 +529,46 @@ test('a failed decorated import rolls back the existing contact and leaves the f
   s.h.saveFailure = null; await syncStorySms(s);
   assert.equal(s.store.read().contacts.length, 1); assert.ok(s.store.read().conversations.a, 'manual retry routes to the original contact'); assert.equal(s.store.read().conversations.a[0].text, '原话。');
   assert.equal(s.h.modelRequests.length, 0);
+});
+
+for (const reading of [false, true]) test(`new story SMS follows current conversation reading status (${reading}) without changing old rows or notification history`, async () => {
+  const h = createHarness({ messages: [{ is_user: false, mes: '[tmt|甲|甲]新私聊。[/tmt][tmt|甲|我]本人私聊。[/tmt][tmt|群:测试群|甲]新群聊。[/tmt][tmt|群:测试群|我]本人群聊。[/tmt]' }], metadata: { pocketPhone: {
+    contacts: [{ id: 'a', name: '甲' }], groups: [{ id: 'g', name: '测试群', memberIds: ['a'], userIsMember: true }],
+    conversations: { a: [{ id: 'old-unread', role: 'assistant', text: '旧未读', read: false }, { id: 'old-read', role: 'assistant', text: '旧已读', read: true }, { id: 'legacy', role: 'assistant', text: '旧无字段' }] },
+    notifications: { initialized: true, items: [{ key: 'keep-existing-history' }] },
+  } } });
+  const target = h.host.captureChat(); let currentlyReading = !reading;
+  const store = createPhoneStore({ target, isReading: id => currentlyReading && id === 'a' });
+  const before = structuredClone(store.read()), pending = syncStorySms({ target, store });
+  currentlyReading = reading; // The original save queue decides at commit, rather than before the queue runs.
+  await pending;
+  const state = store.read();
+  assert.deepEqual(state.conversations.a.slice(0, 3), before.conversations.a);
+  assert.deepEqual(state.conversations.a.slice(3).map(row => [row.role, row.read]), [['assistant', reading], ['user', true]]);
+  assert.deepEqual(state.conversations.g.map(row => [row.role, row.read]), [['assistant', false], ['user', true]]);
+  assert.deepEqual(state.notifications, before.notifications); assert.equal(h.metadataSaves, 1); assert.equal(h.modelRequests.length, 0);
+  assert.equal(await syncStorySms({ target, store }), false); assert.equal(h.metadataSaves, 1);
+  await store.markRead('a'); assert.ok(store.read().conversations.a.every(row => row.role !== 'assistant' || row.read !== false));
+  assert.equal(Object.hasOwn(store.read().conversations.a[2], 'read'), false);
+  const imported = store.read().conversations.g[0]; await store.deleteMessage('g', imported.id);
+  const saves = h.metadataSaves; assert.equal(await syncStorySms({ target, store }), false);
+  assert.equal(h.metadataSaves, saves); assert.ok(!store.read().conversations.g.some(row => row.id === imported.id));
+});
+
+test('unread story SMS stays list-only when notification history is first initialized or cleared', async () => {
+  const s = setup();
+  s.target.metadata.pocketPhone = { contacts: [{ id: 'old', name: '朋友甲' }], groups: [], conversations: { old: [{ id: 'normal-unread', role: 'assistant', text: '原普通未读', read: false }] } };
+  await syncStorySms(s);
+  const imported = Object.values(s.store.read().conversations).flat().filter(row => row.source?.kind === 'main-story');
+  assert.equal(imported.filter(row => row.role === 'assistant' && row.read === false).length, 2);
+  assert.equal(s.store.read().notifications, undefined);
+  assert.deepEqual(lockNotifications(s.store.read()).map(item => item.message.id), ['normal-unread']);
+  assert.equal(unreadConversations(s.store.read()).reduce((count, item) => count + item.count, 0), 3);
+  await s.store.initializeNotifications();
+  assert.deepEqual(s.store.read().notifications.items.map(row => row.key), ['["message","old",["normal-unread"]]']);
+  await s.store.clearNotifications();
+  assert.deepEqual(s.store.read().notifications.items, []);
+  assert.deepEqual(lockNotifications(s.store.read()), []);
+  assert.equal(unreadConversations(s.store.read()).reduce((count, item) => count + item.count, 0), 3);
+  assert.ok(Object.values(s.store.read().conversations).flat().filter(row => row.source?.kind === 'main-story' && row.role === 'assistant').every(row => row.read === false));
 });
