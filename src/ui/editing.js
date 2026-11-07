@@ -1,3 +1,13 @@
+export function submitOnEnter(event, submit, composing = false) {
+  if (event.key !== 'Enter' || !['textarea', 'text', 'email', 'url', 'tel', 'password', 'number'].includes(event.target.type)) return false;
+  if (event.ctrlKey || event.altKey || event.metaKey || event.isComposing || event.keyCode === 229 || composing) return false;
+  if (event.target.type === 'textarea' && !event.target.ownerDocument.defaultView.matchMedia('(hover: hover) and (pointer: fine)').matches) return false;
+  if (event.shiftKey && event.target.type === 'textarea') return false;
+  event.preventDefault();
+  if (!event.shiftKey && !event.repeat) submit();
+  return true;
+}
+
 // Keep only the currently edited branch connected; other content still renders once.
 // Moving a saved textarea out and back would blur it and end a mobile IME session.
 export function createEditingRenderer(surface) {
@@ -14,6 +24,7 @@ export function createEditingRenderer(surface) {
     for (const { name, value } of next.attributes) if ((!editor || name !== 'value') && current.getAttribute(name) !== value) current.setAttribute(name, value);
   }
   return {
+    isComposing(input) { return composing.has(input); },
     hold() {
       const input = root.activeElement;
       if (input?.matches?.('textarea, input:not([type="checkbox"]):not([type="file"]):not([type="radio"])') && input.closest(forms) && input.closest('.phone-main')) held = { input, start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection };

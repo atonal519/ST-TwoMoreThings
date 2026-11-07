@@ -24,7 +24,7 @@ function harness(){
   async fire(type,details={}){for(const fn of this.events[type]??[])await fn({target:this,preventDefault(){},stopPropagation(){},...details});}
   get classList(){return{contains:name=>this.className.split(' ').includes(name)}}
  }
- doc={activeElement:null,createElement:tag=>new Node(tag)};
+ doc={activeElement:null,defaultView:{matchMedia:()=>({matches:true})},createElement:tag=>{const node=new Node(tag);node.ownerDocument=doc;node.type=tag==='textarea'?'textarea':tag==='input'?'text':undefined;return node;}};
  const mount=doc.createElement('main'),dialog=createPhoneDialog({mount,documentRef:doc});
  return{doc,mount,dialog,overlay:()=>mount.children[0],confirm:()=>mount.querySelectorAll('button').find(n=>n.className==='save-button'),content:()=>doc.createElement('form')};
 }
@@ -49,12 +49,14 @@ test('dialog keyboard navigation skips hidden controls and composing Enter does 
  await h.overlay().fire('keydown',{key:'Tab',target:visible});assert.equal(h.doc.activeElement,h.mount.querySelector('.text-button'));
  await h.overlay().fire('keydown',{key:'Enter',target:visible,isComposing:true});await flush();assert.equal(saves,0);assert.equal(h.mount.children.length,1);
  await h.overlay().fire('keydown',{key:'Enter',target:visible,keyCode:229});await flush();assert.equal(saves,0);
+ await h.overlay().fire('keydown',{key:'Enter',target:visible,shiftKey:true});await flush();assert.equal(saves,0);
+ await h.overlay().fire('keydown',{key:'Enter',target:visible,repeat:true});await flush();assert.equal(saves,0);
  await h.overlay().fire('keydown',{key:'Enter',target:visible});await flush();assert.equal(saves,1);assert.equal(await result,true);
 });
 
 function editorSetup(settings,saveSettings){
  const h=createApiHarness({settings}),api=createApiSettings({host:h.host}),dom=harness();if(saveSettings)h.host.saveSettings=saveSettings;
- let config;const open=isNew=>openApiEditor({documentRef:dom.doc,dialog:{custom:options=>{config=options;return Promise.resolve(false);}},apiSettings:api,isNew});
+ let config;const open=(isNew,isComposing)=>openApiEditor({documentRef:dom.doc,isComposing,dialog:{custom:options=>{config=options;return Promise.resolve(false);}},apiSettings:api,isNew});
  const field=id=>config.content.querySelector(`#api-editor-${id}`);
  return{h,api,open,field,config:()=>config};
 }
@@ -88,5 +90,20 @@ test('model search Enter stays a local draft and never submits the connection ed
 });
 test('copy-name Enter saves only the unbound copy and leaves the original draft open',async()=>{
  const settings={pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'p'},apiModel:'own'},'schedule-planner':{apiPresets:[{id:'p',name:'原连接',url:'https://p.invalid',key:'p-key',model:'shared'}]}},t=editorSetup(settings);t.open(false);const original=structuredClone(settings['schedule-planner'].apiPresets[0]),local=structuredClone(settings.pocketPhone);t.field('url').value='https://copy-enter.invalid';await t.config().content.querySelectorAll('button').find(n=>n.textContent==='另存为').fire('click');t.field('copy-name').value='Enter副本';let stopped=false;
+ await t.field('copy-name').fire('keydown',{key:'Enter',shiftKey:true});await flush();assert.equal(settings['schedule-planner'].apiPresets.length,1);
+ await t.field('copy-name').fire('keydown',{key:'Enter',repeat:true});await flush();assert.equal(settings['schedule-planner'].apiPresets.length,1);
  await t.field('copy-name').fire('keydown',{key:'Enter',preventDefault(){},stopPropagation(){stopped=true;}});await flush();if(!stopped)await t.config().submit();assert.equal(settings['schedule-planner'].apiPresets.length,2);assert.deepEqual(settings['schedule-planner'].apiPresets[0],original);assert.deepEqual(settings.pocketPhone,local);assert.equal(t.field('url').value,'https://copy-enter.invalid');
+});
+
+
+test('model search Enter preserves a composition tracked by the shared editor', async () => {
+  const settings = { pocketPhone: { apiSourceRef: { kind: 'shared-preset', presetId: 'p' } }, 'schedule-planner': { apiPresets: [{ id: 'p', name: '连接', url: 'https://p.invalid', key: 'key', model: 'm' }] } };
+  const t = editorSetup(settings);
+  t.h.completion = { models: ['m'] };
+  t.open(false, () => true);
+  await t.config().content.querySelectorAll('button').find(node => node.textContent === '拉取模型').fire('click');
+  let prevented = false;
+  await t.field('model-search').fire('keydown', { key: 'Enter', preventDefault() { prevented = true; } });
+  assert.equal(prevented, false);
+  assert.equal(t.h.settingsSaves, 0);
 });

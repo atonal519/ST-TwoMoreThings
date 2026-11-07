@@ -116,7 +116,7 @@ try {
     await page.getByRole('button', { name: /林舟/ }).click();
     const draft = page.getByRole('textbox', { name: '短信内容' });
     await draft.fill('键盘隔离');
-    await draft.press('ArrowLeft'); await draft.press('Enter');
+    await draft.press('ArrowLeft'); await draft.press('Shift+Enter');
     check(`${kind}: editing keys do not reach host shortcuts`, await page.evaluate(() => hostPhoneKeys), []);
     check(`${kind}: host control CSS does not enter textarea`, await draft.evaluate(x => getComputedStyle(x).fontSize), '13px');
     await draft.press('Escape');

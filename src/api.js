@@ -6,6 +6,7 @@ import { finishGeneratedText } from './generated-text.js';
 import { modelJsonValues } from './model-json.js';
 
 const pool = settings => settings['schedule-planner']?.apiPresets || [];
+const REASONING_MODEL = /^(?:openai\/)?(?:gpt-[56]|o[134])(?:$|[.-])/iu;
 const refKey = ref => ref ? `${ref.kind}:${ref.presetId || ''}` : '';
 const normalizeUrl = value => {
   const url = String(value || '').trim().replace(/\/+$/, '').replace(/\/chat\/completions$/i, '');
@@ -185,6 +186,7 @@ export function createModelClient({ host, sourceProvider, onBusyChange = () => {
         const config = sourceProvider.resolve();
         const body = { chat_completion_source: 'openai', reverse_proxy: config.url, proxy_password: config.key, model: config.model, messages: [{ role: 'system', content: prependProcessingPrompt(system, getSharedProcessingPrompt(host.readSettings())) }, ...messages], stream: false, temperature: 0.8 };
         if (config.excludeParams.includes('temperature')) delete body.temperature;
+        if (REASONING_MODEL.test(String(config.model).trim())) delete body.temperature;
         let response;
         try { response = await host.request('/api/backends/chat-completions/generate', { method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(Math.max(1, Number(config.timeoutSec) || 180) * 1000) }); }
         catch (error) { throw new Error(error.name === 'TimeoutError' ? '生成等待超时，请稍后重试。' : '生成请求未能连接，请检查酒馆和接口连接后重试。'); }

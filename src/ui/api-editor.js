@@ -1,4 +1,6 @@
-export function openApiEditor({ documentRef: doc, dialog, apiSettings, isNew = false, onSaved = () => {} }) {
+import { submitOnEnter } from './editing.js';
+
+export function openApiEditor({ documentRef: doc, dialog, apiSettings, isNew = false, onSaved = () => {}, isComposing = () => false }) {
   const selected = isNew ? null : apiSettings.getSelected(), ref = selected ? { ...selected } : null;
   const source = apiSettings.listSources().find(item => item.ref.kind === ref?.kind && item.ref.presetId === ref?.presetId);
   if (!isNew && !source) throw new Error('这条连接已不存在，请重新选择。');
@@ -30,7 +32,7 @@ export function openApiEditor({ documentRef: doc, dialog, apiSettings, isNew = f
     list.replaceChildren(...shown.map(value => { const node = button(value, async () => { model.value = value; renderModels(); }); node.setAttribute('aria-selected', String(value === model.value)); return node; }));
     if (!shown.length) list.append(element('div', 'model-empty', '无匹配项'));
   };
-  search.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); event.stopPropagation(); } });
+  search.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229 && !isComposing(search)) { event.preventDefault(); event.stopPropagation(); } });
   search.addEventListener('input', renderModels);
   modelRow.append(model, button('拉取模型', async () => {
     const response = await apiSettings.fetchModels(draft(), deleted ? null : ref); if (!alive) return;
@@ -46,7 +48,9 @@ export function openApiEditor({ documentRef: doc, dialog, apiSettings, isNew = f
       if (!copyName.value.trim()) throw new Error('请输入预设名称。');
       await apiSettings.saveAs(draft(), copyName.value, deleted ? null : ref, { select: false }); copy.hidden = true; if (alive) onSaved(); message('共享连接已另存，当前用途保持不变。');
     });
-    copyName.addEventListener('keydown', event => { if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); event.stopPropagation(); saveCopy.click(); } });
+    copyName.addEventListener('keydown', event => {
+      if (submitOnEnter(event, () => saveCopy.click(), isComposing(copyName))) event.stopPropagation();
+    });
     copy.append(field('副本名称', copyName), saveCopy, button('取消另存', async () => { copy.hidden = true; }));
     actions.append(button('另存为', async () => { copyName.value = name.value; copy.hidden = false; copyName.focus(); }));
     const confirm = element('div', 'api-editor-confirm'); confirm.hidden = true;

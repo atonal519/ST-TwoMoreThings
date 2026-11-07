@@ -65,3 +65,36 @@ test('bilingual formal reply and symbol-only text survive parsing and persistent
   assert.equal(input.contact.language, '英语和中文');
   assert.deepEqual(parsePayload('{"messages":[{"text":"Hello","translation":"你好"},{"text":"!"}]}', 'messages'), [{ text: 'Hello.', translation: '你好。' }, { text: '!' }]);
 });
+
+
+test('desktop Enter submission shares native editing, IME, modifier, repeat and mobile rules across text controls', async () => {
+  const { submitOnEnter } = await import('../src/ui/editing.js');
+  assert.equal(typeof submitOnEnter, 'function');
+  const cases = [
+    { name: 'desktop textarea', action: 1, prevented: true },
+    { name: 'single line', type: 'text', action: 1, prevented: true },
+    { name: 'transfer amount', type: 'number', action: 1, prevented: true },
+    { name: 'multiline Shift', shiftKey: true, action: 0, prevented: false },
+    { name: 'single line Shift', type: 'text', shiftKey: true, action: 0, prevented: true },
+    { name: 'held Enter', repeat: true, action: 0, prevented: true },
+    { name: 'native composing flag', isComposing: true, action: 0, prevented: false },
+    { name: 'IME229', keyCode: 229, action: 0, prevented: false },
+    { name: 'tracked composition', composing: true, action: 0, prevented: false },
+    { name: 'control Enter', ctrlKey: true, action: 0, prevented: false },
+    { name: 'alt Enter', altKey: true, action: 0, prevented: false },
+    { name: 'meta Enter', metaKey: true, action: 0, prevented: false },
+    { name: 'mobile textarea', desktop: false, action: 0, prevented: false },
+    { name: 'mobile single line confirmation', type: 'text', desktop: false, action: 1, prevented: true },
+    { name: 'search', type: 'search', action: 0, prevented: false },
+    { name: 'checkbox', type: 'checkbox', action: 0, prevented: false },
+  ];
+  for (const item of cases) {
+    let actions = 0, prevented = false;
+    const event = { key: 'Enter', ...item, target: { type: item.type || 'textarea', ownerDocument: { defaultView: { matchMedia: query => {
+      assert.equal(query, '(hover: hover) and (pointer: fine)'); return { matches: item.desktop !== false };
+    } } } }, preventDefault() { prevented = true; } };
+    submitOnEnter(event, () => { actions++; }, item.composing === true);
+    assert.equal(actions, item.action, item.name);
+    assert.equal(prevented, item.prevented, item.name);
+  }
+});

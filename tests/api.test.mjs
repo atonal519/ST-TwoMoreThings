@@ -189,3 +189,30 @@ test('API overview exposes only source/edit and one global add, keeping connecti
  const html=renderSettings({theme:'day'},{ui,busy:new Set(),apiSettings:{listSources:()=>[source],getSelected:()=>source.ref},entries:{read:()=>({})},appearance:createAppearanceSettings({host:{readSettings:()=>({})}}),control:{isEnabled:()=>true},mode:'plugin'});
  assert.match(html,/data-action="api-edit"/);assert.equal((html.match(/data-action="api-new"/g)||[]).length,1);assert.doesNotMatch(html,/id="api-(?:url|key|model)"/);assert.doesNotMatch(html,/data-action="api-(?:rename|save-as|delete)"/);
 });
+
+test('reasoning model request omits unsupported default temperature with a single dispatch', async () => {
+  const settings={pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'p'},apiModel:'gpt-6-luna'},'schedule-planner':{apiPresets:[{id:'p',url:'https://offline.invalid/v1',key:'offline-key',model:'shared-model'}]}};
+  const h=createHarness({settings});let calls=0;
+  h.host.request=async (_path,options)=>{calls++;const body=JSON.parse(options.body);if(Object.hasOwn(body,'temperature'))return Response.json({error:{message:'Unsupported parameter temperature'}},{status:400});return Response.json({choices:[{message:{content:'ok'}}]});};
+  const client=createModelClient({host:h.host,sourceProvider:createApiSettings({host:h.host})});
+  assert.equal(await client.complete({system:'offline',messages:[]}), 'ok');assert.equal(calls,1);assert.equal(h.settingsSaves,0);
+});
+
+for(const hostKind of ['native','luker']) for(const settingsKey of ['pocketPhone','twoMoreThingsEmbedded']) test(`${hostKind}/${settingsKey}: reasoning compatibility follows the instance model and keeps shared foreign parameters untouched`, async () => {
+  const ref={kind:'shared-preset',presetId:'p'};
+  const settings={pocketPhone:{apiSourceRef:ref,apiModel:'other-instance'},twoMoreThingsEmbedded:{apiSourceRef:ref,apiModel:'other-instance'},'schedule-planner':{apiPresets:[{id:'p',url:'https://first.invalid/v1',key:'first-key',model:'gpt-6-luna',stream:true,spAdditionalParams:'{"temperature":0,"reasoning_effort":"none","max_tokens":123}',qqjAdditionalParams:'{"max_completion_tokens":456}',qqjTemperature:0.4}]}};
+  const h=createHarness({hostKind,settings}),host={...h.host,phoneSettingsKey:settingsKey},api=createApiSettings({host}),client=createModelClient({host,sourceProvider:api});
+  const known=['gpt-5','gpt-5.2-mini','gpt-6-luna','openai/gpt-6-luna','o1-preview','o3-mini','openai/o4-mini'];
+  const models=[...known,'gpt-4o-mini','private-model','gpt-50','o10'];
+  for(const model of models){
+    settings[settingsKey].apiModel=model;const before=structuredClone(settings),start=h.modelRequests.length;
+    await client.complete({system:'offline',messages:[{role:'user',content:'complete input'}]});
+    assert.equal(h.modelRequests.length,start+1);const body=h.modelRequests.at(-1).body;
+    assert.equal(body.model,model);assert.equal(body.stream,false);assert.equal(Object.hasOwn(body,'temperature'),!known.includes(model));if(!known.includes(model))assert.equal(body.temperature,0.8);
+    for(const field of ['max_tokens','max_completion_tokens','reasoning_effort','custom_include_body'])assert.equal(Object.hasOwn(body,field),false);
+    assert.deepEqual(settings,before);assert.equal(h.settingsSaves,0);
+  }
+  Object.assign(settings['schedule-planner'].apiPresets[0],{url:'https://second.invalid/v1',key:'second-key',model:'changed-shared',excludeParams:['temperature']});
+  settings[settingsKey].apiModel='gpt-4o-mini';await client.complete({system:'offline',messages:[]});const body=h.modelRequests.at(-1).body;
+  assert.deepEqual([body.reverse_proxy,body.proxy_password,body.model],['https://second.invalid/v1','second-key','gpt-4o-mini']);assert.equal(Object.hasOwn(body,'temperature'),false);assert.equal(h.settingsSaves,0);
+});

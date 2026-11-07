@@ -305,7 +305,7 @@ export function createBackflowService({ target, store, modelClient, isEnabled = 
       }) }] });
       const answer = parseJsonObject(reply);
       const value = answer.summary ?? answer.reference;
-      if (typeof value !== 'string' || Array.from(value.trim()).length > maxCharacters) throw new Error(`手机参考没有生成${maxCharacters}字以内的有效内容，本次正文未带入手机消息。`);
+      if (typeof value !== 'string') throw new Error('手机参考没有生成有效的摘要文字，本次正文未带入手机消息。');
       const summary = value.trim();
       const current = store.read();
       if (!isEnabled() || !current.injectEnabled) return '';

@@ -40,7 +40,7 @@ import { readSocialPosts } from './social.js';
 import { createPluginUpdatesView } from './ui/plugin-updates-view.js';
 import { createPhoneDialog } from './ui/dialog.js';
 import { openApiEditor } from './ui/api-editor.js';
-import { createEditingRenderer } from './ui/editing.js';
+import { createEditingRenderer, submitOnEnter } from './ui/editing.js';
 import { createPhoneSelects } from './ui/selects.js';
 import { createPhoneActionMenu } from './ui/action-menu.js';
 import { MEMORY_CONFLICT_CODE } from './memory-sources.js';
@@ -112,8 +112,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     onEarlier: expandMessages, onPullStart: cancelAvatarGesture,
     canPull: () => !element.hidden && isFrontmost() && isCurrentChat() && !ui.photo && !ui.conflict && !notificationShade?.isOpen && !root.querySelector('[data-phone-overlay], .phone-action-popup'),
   });
-  const dialog = createPhoneDialog({ mount: surface, documentRef: doc });
   const editing = createEditingRenderer(surface);
+  const dialog = createPhoneDialog({ mount: surface, documentRef: doc, isComposing: editing.isComposing });
   const sourcePermissionView = sourcePermissions ? createSourcePermissionView({ permissions: sourcePermissions, documentRef: doc }) : null;
   let worldbookSettings;
   const selects = createPhoneSelects({ root, beforeOpen: () => { closeSources(); closeModels(); } });
@@ -929,6 +929,16 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     } else if (event.target.matches('input, textarea, select') || event.target.isContentEditable) {
       // Shadow 外只能看到宿主节点的焦点，须在根内阻止编辑键触发酒馆快捷键。
       event.stopPropagation();
+      const input = event.target, form = input.form;
+      if (form) {
+        submitOnEnter(event, () => {
+          const button = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+          if (button) button.click();
+          else form.requestSubmit();
+        }, editing.isComposing(input));
+      } else if (['font-css-url', 'story-reference-floors'].includes(input.id)) {
+        submitOnEnter(event, () => input.blur(), editing.isComposing(input));
+      }
     }
   }
   function click(event) {
@@ -1343,7 +1353,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'models-menu': closeSources(); ui.modelsOpen = !ui.modelsOpen; render(); if (ui.modelsOpen) root.querySelector('#model-search').focus(); break;
       case 'api-edit':
       case 'api-new': {
-        try { void openApiEditor({ documentRef: doc, dialog, apiSettings, isNew: button.dataset.action === 'api-new', onSaved: () => { ui.sourcesOpen = false; render(); } }).catch(error => setFeedback({ error: true, text: error.message })); }
+        try { void openApiEditor({ documentRef: doc, dialog, apiSettings, isComposing: editing.isComposing, isNew: button.dataset.action === 'api-new', onSaved: () => { ui.sourcesOpen = false; render(); } }).catch(error => setFeedback({ error: true, text: error.message })); }
         catch (error) { setFeedback({ error: true, text: error.message }); }
         break;
       }

@@ -1,4 +1,6 @@
-export function createPhoneDialog({ mount, documentRef }) {
+import { submitOnEnter } from './editing.js';
+
+export function createPhoneDialog({ mount, documentRef, isComposing = () => false }) {
   let active;
   const attach = () => {
     if (!active) return;
@@ -37,14 +39,15 @@ export function createPhoneDialog({ mount, documentRef }) {
         };
         const confirm = button(confirmText, danger ? 'danger-button' : 'save-button', runSubmit);
         if (content.classList?.contains('api-editor-form')) panel.className += ' phone-api-dialog';
-        if (String(content.tagName).toLowerCase() === 'form') content.addEventListener('submit', event => { event.preventDefault(); void runSubmit(); });
+        if (String(content.tagName).toLowerCase() === 'form') content.addEventListener('submit', event => { event.preventDefault(); event.stopPropagation(); void runSubmit(); });
         actions.append(confirm); panel.append(heading, content, error, actions); overlay.append(panel);
         if (dismissOnBackdrop) overlay.addEventListener('click', event => { if (event.target === overlay) finish(false); });
         overlay.addEventListener('keydown', event => {
           event.stopPropagation();
-          if (event.isComposing || event.keyCode === 229) return;
+          const composing = isComposing(event.target);
+          if (submitOnEnter(event, () => confirm.click(), composing)) return;
+          if (event.isComposing || event.keyCode === 229 || composing) return;
           if (event.key === 'Escape') { event.preventDefault(); finish(false); }
-          if (event.key === 'Enter' && event.target.matches('input')) { event.preventDefault(); confirm.click(); }
           if (event.key === 'Tab') {
             const buttons = [...panel.querySelectorAll('button, a[href], input, textarea, select')].filter(node => !node.disabled && node.getClientRects().length), index = buttons.indexOf(mount.getRootNode().activeElement);
             event.preventDefault(); buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();

@@ -32,7 +32,7 @@ export function renderForum(state, { ui = {}, busy }) {
       <span>展开看看 ${icon('next')}</span>
     </span>
   </button>`).join('');
-  return `<header class="page-heading"><div class="page-title-row"><h1><button type="button" id="forum-title-toggle" class="forum-title-toggle" data-action="forum-menu" aria-label="论坛，当前${scope === 'circle' ? '圈内' : '圈外'}，切换范围" aria-haspopup="menu" aria-expanded="false">论坛${icon('next')}</button></h1>${action('refresh', busy.has(refreshKey) ? '刷新中' : '刷新', 'refresh', 'quiet-button', busy.has(refreshKey))}</div></header>
+  return `<header class="page-heading"><div class="page-title-row"><h1><button type="button" id="forum-title-toggle" class="forum-title-toggle" data-action="forum-menu" aria-label="论坛，当前${scope === 'circle' ? '圈内' : '圈外'}，切换范围" aria-haspopup="menu" aria-expanded="false">${scope === 'circle' ? '圈内' : '圈外'}${icon('next')}</button></h1>${action('refresh', busy.has(refreshKey) ? '刷新中' : '刷新', 'refresh', 'quiet-button', busy.has(refreshKey))}</div></header>
     ${tags.length ? `<nav class="forum-tags" aria-label="论坛标签">${['', ...tags].map(tag => `<button type="button" class="quiet-button" data-action="forum-tag" data-forum-tag="${escape(tag)}" aria-pressed="${ui.forumTag === tag}">${escape(tag || '全部')}</button>`).join('')}</nav>` : ''}
     <div class="forum-posts">${cards}</div>
     ${!posts.length ? empty(scope === 'circle' ? '圈内还没有帖子' : '还没有帖子', scope === 'circle' && !circleProfile(forumData(state, scope).profile) ? '可刷新识别社区，或从论坛标题菜单手动设置圈内范围。' : '', 'forum') : ''}`;

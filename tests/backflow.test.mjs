@@ -207,7 +207,7 @@ test('same-name arrangements on different dates remain separate real SMS in the 
   assert.deepEqual(store.read(), before);
 });
 
-test('disabled, empty, malformed and over-budget references do not silently inject unfiltered SMS', async () => {
+test('disabled, empty and malformed references do not silently inject unfiltered SMS', async () => {
   const { target, store, batch } = setup();
   const noCall = { complete() { assert.fail('no model call without enabled material'); } };
   const service = createBackflowService({ target, store, modelClient: noCall });
@@ -216,7 +216,7 @@ test('disabled, empty, malformed and over-budget references do not silently inje
   await store.setInjectionEnabled(false);
   assert.equal(await service.prepare(), '');
   await store.setInjectionEnabled(true);
-  for (const reply of ['{}', '{"summary":12}', JSON.stringify({ summary: '字'.repeat(101) })]) {
+  for (const reply of ['{}', '{"summary":12}', '{"reference":false}']) {
     await assert.rejects(createBackflowService({ target, store, modelClient: { complete() { return reply; } } }).prepare(), /参考|带入|字/);
   }
   const requests = [];
@@ -243,4 +243,24 @@ test('quoted SMS remains a short reference while retired tasks are ignored', asy
   const result = await service.prepare();
   for (const value of ['引用林舟：周三把书带来。', '这件事收到。']) assert.ok(result.includes(value), value);
   assert.equal(result.includes('周三还书'), false);
+});
+
+
+for (const field of ['summary', 'reference']) for (const size of [101, 114]) test(`a valid ${size}-character ${field} is included in full after the original single summary request`, async () => {
+  const { h, target, store, batch } = setup();
+  const original = '这是合成的完整短信材料。'.repeat(400);
+  await store.appendMessage('lin', { id: 'long-sms', role: 'user', text: original, batch });
+  const summary = '🙂'.repeat(size - 2) + '收尾';
+  assert.equal(Array.from(summary).length, size);
+  const before = structuredClone(store.read()), saves = h.metadataSaves, requests = [];
+  const reference = await createBackflowService({ target, store, modelClient: { complete(request) {
+    requests.push(request); return JSON.stringify({ [field]: `  ${summary}\n` });
+  } } }).prepare();
+  assert.equal(requests.length, 1);
+  const input = JSON.parse(requests[0].messages[0].content);
+  assert.equal(input.maxCharacters, 100, '100 remains the requested summary target');
+  assert.equal(input.conversations[0].messages[0].text, original);
+  assert.equal(reference.slice(reference.indexOf('\n') + 1), summary, 'the complete valid result is neither clipped nor replaced with original SMS');
+  assert.deepEqual(store.read(), before);
+  assert.equal(h.metadataSaves, saves); assert.equal(h.settingsSaves, 0);
 });
