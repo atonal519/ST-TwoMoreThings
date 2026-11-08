@@ -1,4 +1,4 @@
-import { readChatBounds, observeChatBounds } from './panel-window.js';
+import { readPanelViewport } from './panel-window.js';
 
 // 窗口位置只属于当前 UI 实例；手机布局仍由 CSS 接管，不写入聊天或全局设置。
 export function createPhoneWindow(surface) {
@@ -8,7 +8,7 @@ export function createPhoneWindow(surface) {
   let preferredPosition = null;
 
   function place(left, top, { width, height }) {
-    const view = readChatBounds(surface.ownerDocument, win);
+    const view = readPanelViewport(win);
     surface.style.left = `${Math.max(view.left + 10, Math.min(left, view.left + view.width - width - 10))}px`;
     surface.style.top = `${Math.max(view.top + 10, Math.min(top, view.top + view.height - height - 10))}px`;
     surface.style.right = 'auto';
@@ -45,14 +45,14 @@ export function createPhoneWindow(surface) {
     stop();
   }
   function refresh() {
-    const view = readChatBounds(surface.ownerDocument, win);
+    const view = readPanelViewport(win);
     for (const property of ['left', 'top', 'width', 'height']) surface.style.setProperty(`--pp-window-${property}`, `${view[property]}px`);
     if (!desktop.matches) {
       for (const property of ['left', 'top', 'right', 'width', 'height']) surface.style.removeProperty(property);
       return;
     }
     const width = Math.max(0, Math.min(360, view.width - 20));
-    const height = Math.max(0, Math.min(view.height - 20, Math.max(300, Math.min(600, view.height * .85))));
+    const height = Math.max(0, Math.min(600, view.height - 20));
     surface.style.width = `${width}px`;
     surface.style.height = `${height}px`;
     place(preferredPosition?.left ?? view.left + view.width - width - 20, preferredPosition?.top ?? view.top + 80, { width, height });
@@ -64,7 +64,6 @@ export function createPhoneWindow(surface) {
   win.addEventListener('orientationchange', resize);
   win.visualViewport?.addEventListener('resize', resize);
   win.visualViewport?.addEventListener('scroll', resize);
-  const unobserve = observeChatBounds(surface.ownerDocument, resize);
   return {
     stop, refresh,
     dispose() {
@@ -74,7 +73,6 @@ export function createPhoneWindow(surface) {
       win.removeEventListener('orientationchange', resize);
       win.visualViewport?.removeEventListener('resize', resize);
       win.visualViewport?.removeEventListener('scroll', resize);
-      unobserve();
     },
   };
 }

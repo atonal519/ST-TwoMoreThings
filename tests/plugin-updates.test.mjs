@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { VERSION } from '../src/version.js';
 import { createPluginUpdates, resolvePluginInstallation } from '../src/plugin-updates.js';
 import { createEmbeddedUpdates } from '../src/embedded-updates.js';
-import { readRelease, RELEASE_URL, releaseUrlForCore } from '../src/release.js';
+import { readRelease, RELEASE_URL, releaseUrlForCore, UPDATE_NOTICE_PATH } from '../src/release.js';
 
 const oldSha = '56a6614198bd177f967a9406f7b6f425f9a810af', newSha = 'a'.repeat(40);
 const released = { version: '0.3.7', sha: newSha, update_notice: 'docs/updates-0.3.7.md' };
@@ -118,4 +120,21 @@ test('same or older releases stay stable even when a pointer commit differs; for
   await current.check(); await current.update();
   assert.deepEqual(await current.readNotice('installed'), { ok: true, markdown: '新版公告' });
   assert.deepEqual(calls, ['https://fastly.jsdelivr.net/gh/another-owner/phone@latest/release.json', `https://fastly.jsdelivr.net/gh/another-owner/phone@${newSha}/docs/updates-0.3.7.md`]);
+});
+
+
+test('installed native and embedded notices use the current manifest notice and version', async () => {
+  const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+  const release = JSON.parse(readFileSync(new URL('../release.json', import.meta.url), 'utf8'));
+  assert.equal(manifest.version, VERSION);
+  assert.equal(UPDATE_NOTICE_PATH, manifest.update_notice);
+  const markdown = readFileSync(new URL(`../${manifest.update_notice}`, import.meta.url), 'utf8');
+  assert.ok(markdown.includes(VERSION));
+  const requests = [], fetchImpl = async url => { requests.push(String(url)); return new Response(markdown); };
+  const native = createPluginUpdates({ moduleUrl: 'https://host.invalid/scripts/extensions/third-party/ST-PocketPhone/dist/runtime.js',
+    extensionTypes: () => ({ 'third-party/ST-PocketPhone': 'local' }), noticePath: UPDATE_NOTICE_PATH, fetchImpl });
+  const embedded = createEmbeddedUpdates({ coreUrl: `https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@${oldSha}/embed.js`, version: VERSION, release, fetchImpl });
+  for (const manager of [native, embedded]) assert.deepEqual(await manager.readNotice(), { ok: true, markdown });
+  assert.equal(requests.length, 2);
+  assert.ok(requests.every(url => url.endsWith(`/${manifest.update_notice}`)));
 });

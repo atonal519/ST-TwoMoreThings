@@ -9,7 +9,7 @@
   --pp-active: #397584; --pp-feedback: #e0e9e2; --pp-error-surface: #f4e6dd;
   --pp-like-active: #d64545; --pp-liangshi: #ad592f;
   --pp-elevation-soft: 0 1px 3px rgb(0 0 0 / 6%), 0 1px 2px rgb(0 0 0 / 4%);
-  --pp-panel-height: min(calc(100dvh - 20px), max(300px, min(600px, 85dvh)));
+  --pp-panel-height: min(600px, calc(100dvh - 20px));
   --pp-system-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
   --pp-text-font: var(--pp-custom-font, var(--pp-system-font));
   --pp-foreign: #596561;
@@ -663,13 +663,13 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
   .phone-status { cursor: grab; touch-action: none; user-select: none; }
   .phone-shell.is-dragging .phone-status { cursor: grabbing; }
 }
-/* 千千结手机窗口边界已扣安全区，内部不重复留边。 */
+/* 手机主窗按可视窗口定位，安全区与外侧间距取较大值。 */
 @media (max-width: 640px) {
   .phone-shell {
-    top: calc(var(--pp-window-top, 0px) + 20px + env(safe-area-inset-top, 0px));
+    top: calc(var(--pp-window-top, 0px) + max(40px, env(safe-area-inset-top, 0px)));
     left: calc(var(--pp-window-left, 0px) + var(--pp-window-width, 100dvw) / 2); right: auto; transform: translateX(-50%);
     width: max(0px, calc(var(--pp-window-width, 100dvw) - 20px)); max-width: none;
-    height: max(0px, calc(var(--pp-window-height, 100dvh) - 40px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+    height: max(0px, calc(var(--pp-window-height, 100dvh) - max(40px, env(safe-area-inset-top, 0px)) - max(40px, env(safe-area-inset-bottom, 0px))));
   }
   .home-footer { margin-bottom: 13px; }
 }

@@ -3,18 +3,14 @@ import assert from 'node:assert/strict';
 
 import * as layout from '../src/ui/panel-window.js';
 const rect = (left, top, width, height) => ({ left, top, width, height });
-const fixture = nodes => ({ getElementById: id => nodes[id] && { getBoundingClientRect: () => nodes[id] } });
 
-test('main window uses the visible part of chat including visual viewport offsets', () => {
-  assert.equal(typeof layout.readChatBounds, 'function', 'main-window chat geometry is available');
-  const doc = fixture({ chat: rect(100, 70, 900, 650), sheld: rect(0, 0, 1200, 900) });
-  assert.deepEqual(layout.readChatBounds(doc, { innerWidth: 1200, innerHeight: 900, visualViewport: { offsetLeft: 150, offsetTop: 180, width: 700, height: 420 } }), rect(150, 180, 700, 420));
+test('main window reads the complete visual viewport including offsets', () => {
+  const win = { innerWidth: 1200, innerHeight: 900, visualViewport: { offsetLeft: 50, offsetTop: 80, width: 900, height: 700 } };
+  assert.deepEqual(layout.readPanelViewport(win), rect(50, 80, 900, 700));
 });
 
-test('missing or hidden chat falls back to sheld above the composer and finally the viewport', () => {
-  const doc = fixture({ chat: rect(0, 0, 0, 0), sheld: rect(120, 50, 700, 760), form_sheld: rect(120, 660, 700, 100), send_form: rect(120, 690, 700, 70) });
-  assert.deepEqual(layout.readChatBounds(doc, { innerWidth: 1000, innerHeight: 800 }), rect(120, 50, 700, 610));
-  assert.deepEqual(layout.readChatBounds(fixture({ chat: rect(0, 1000, 400, 300) }), { innerWidth: 390, innerHeight: 300 }), rect(0, 0, 390, 300));
+test('main window uses the browser viewport when visualViewport is unavailable', () => {
+  assert.deepEqual(layout.readPanelViewport({ innerWidth: 390, innerHeight: 844 }), rect(0, 0, 390, 844));
 });
 
 class Target {
