@@ -75,7 +75,7 @@
 
 电脑端有提交动作的文字输入支持 Enter 发送、发布或保存，多行框用 Shift+Enter 换行，中文组字时的回车用于确认文字。手机多行框使用 Enter 换行。
 
-当前版本：**0.6.1**。本版变化见 [更新公告](./docs/updates-0.6.1.md)，插件联动说明见 [INTEGRATIONS.md](./INTEGRATIONS.md)。
+当前版本：**0.6.2**。本版变化见 [更新公告](./docs/updates-0.6.2.md)，插件联动说明见 [INTEGRATIONS.md](./INTEGRATIONS.md)。
 
 ---
 

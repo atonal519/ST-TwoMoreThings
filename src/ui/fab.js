@@ -1,4 +1,5 @@
 import { icon } from './shared.js';
+import { createFabAppearanceController } from './fab-appearance.js';
 
 const KEY = 'tmt-fab-pos';
 const SIZE = 36;
@@ -10,7 +11,7 @@ export function createFab({ onClick, documentRef = globalThis.document, windowRe
   const host = documentRef.createElement('div'); host.id = id; host.attachShadow({ mode: 'open' });
   const root = host.shadowRoot;
   root.innerHTML = `<style>
-    :host{all:initial;isolation:isolate;text-shadow:none;--tmt-fab-primary:var(--SmartThemeQuoteColor,#397584);--tmt-fab-ink:var(--SmartThemeBodyColor,#222a29);--tmt-fab-surface:var(--SmartThemeBlurTintColor,#f3f1e8);--tmt-fab-border:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));--tmt-fab-glow:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));position:fixed;right:106px;top:calc(100dvh - 80px - 44px);z-index:2000000;touch-action:none}
+    :host{all:initial;isolation:isolate;text-shadow:none;--tmt-fab-primary:#a8322f;--tmt-fab-ink:#22282b;--tmt-fab-surface:#f6f8f8;--tmt-fab-border:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));--tmt-fab-glow:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));position:fixed;right:106px;top:calc(100dvh - 80px - 44px);z-index:2000000;touch-action:none}
     :host([hidden]){display:none!important}
     button{width:36px;height:36px;border:1.5px solid var(--tmt-fab-border);border-radius:50%;background:transparent;color:var(--tmt-fab-ink);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);touch-action:none;display:grid;place-items:center;padding:0;opacity:.45;transition:transform .15s,box-shadow .15s,color .15s,background .15s,opacity .2s}
     button:hover{opacity:1;transform:scale(1.1);box-shadow:0 6px 20px rgba(0,0,0,.5)}
@@ -36,5 +37,14 @@ export function createFab({ onClick, documentRef = globalThis.document, windowRe
   setBusy(false);
   button.addEventListener('pointerdown', pointerDown); button.addEventListener('pointermove', pointerMove); button.addEventListener('pointerup', clearGesture); button.addEventListener('pointercancel', clearGesture);
   button.addEventListener('click', event => { if (suppressClick) { event.preventDefault(); suppressClick = false; return; } onClick?.(event); }); windowRef.addEventListener?.('resize', onResize); restore();
-  return { host, root, button, restore, onResize, setBusy, destroy: () => windowRef.removeEventListener?.('resize', onResize) };
+  const setAppearance = ({ mode = 'auto', effectiveTheme = 'day', palette = {} } = {}) => {
+    host.setAttribute('data-theme-mode', mode); host.setAttribute('data-effective-theme', effectiveTheme);
+    if (palette.knot) host.style.setProperty('--tmt-fab-primary', palette.knot);
+    if (palette.ink) host.style.setProperty('--tmt-fab-ink', palette.ink);
+    if (palette.panel) host.style.setProperty('--tmt-fab-surface', palette.panel);
+  };
+  const appearance = createFabAppearanceController({ documentRef, windowRef, onChange: setAppearance });
+  return { host, root, button, restore, onResize, setBusy, setAppearance,
+    destroy() { appearance.destroy(); windowRef.removeEventListener?.('resize', onResize); },
+  };
 }

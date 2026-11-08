@@ -365,18 +365,18 @@ function ie(e) {
 	let t = e?.["schedule-planner"];
 	return N(t, "processingPrompt") ? typeof t.processingPrompt == "string" ? t.processingPrompt : "" : P(e);
 }
-function ae(e) {
+function F(e) {
 	return typeof e == "string" && e.trim() ? e : M;
 }
-function oe(e, t) {
-	let n = typeof e == "string" ? e : "", r = ae(t);
+function ae(e, t) {
+	let n = typeof e == "string" ? e : "", r = F(t);
 	return n ? `${r}\n\n${n}` : r;
 }
 //#endregion
 //#region src/worldbook.js
-var se = (e) => Array.isArray(e) ? e : typeof e == "string" ? [e] : [], ce = (e, t) => String(e).replace(/\{\{\s*(user|char)\s*\}\}/giu, (e, n) => t[n.toLowerCase()] || e), le = (e) => e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-function ue(e, t, n, r, i) {
-	let a = ce(t, i).trim();
+var oe = (e) => Array.isArray(e) ? e : typeof e == "string" ? [e] : [], se = (e, t) => String(e).replace(/\{\{\s*(user|char)\s*\}\}/giu, (e, n) => t[n.toLowerCase()] || e), ce = (e) => e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function le(e, t, n, r, i) {
+	let a = se(t, i).trim();
 	if (!a) return !1;
 	let o = /^\/([\s\S]*)\/([dgimsuvy]*)$/u.exec(a);
 	if (o) try {
@@ -385,9 +385,9 @@ function ue(e, t, n, r, i) {
 		return !1;
 	}
 	let s = n.caseSensitive ?? r.caseSensitive, c = s ? e : e.toLocaleLowerCase(), l = s ? a : a.toLocaleLowerCase();
-	return n.matchWholeWords ?? r.matchWholeWords ? RegExp(`(?:^|\\W)${le(l)}(?:$|\\W)`, "u").test(c) : c.includes(l);
+	return n.matchWholeWords ?? r.matchWholeWords ? RegExp(`(?:^|\\W)${ce(l)}(?:$|\\W)`, "u").test(c) : c.includes(l);
 }
-function de(e, t, { defaults: n = {}, user: r = "", char: i = "" } = {}) {
+function ue(e, t, { defaults: n = {}, user: r = "", char: i = "" } = {}) {
 	let a = {
 		user: r,
 		char: i
@@ -395,21 +395,21 @@ function de(e, t, { defaults: n = {}, user: r = "", char: i = "" } = {}) {
 	return e.filter((e) => {
 		if (e.disable || e.disabled || e.enabled === !1 || typeof e.content != "string") return !1;
 		if (e.constant) return !0;
-		let r = (r) => ue(t, r, e, n, a);
-		if (!se(e.key ?? e.keys).some(r)) return !1;
-		let i = se(e.keysecondary ?? e.secondary_keys);
+		let r = (r) => le(t, r, e, n, a);
+		if (!oe(e.key ?? e.keys).some(r)) return !1;
+		let i = oe(e.keysecondary ?? e.secondary_keys);
 		if (!e.selective || !i.length) return !0;
 		let o = i.map(r);
 		return e.selectiveLogic === 1 ? !o.every(Boolean) : e.selectiveLogic === 2 ? !o.some(Boolean) : e.selectiveLogic === 3 ? o.every(Boolean) : o.some(Boolean);
 	}).sort((e, t) => (t.order || 0) - (e.order || 0)).map((e) => ({
 		...e,
-		content: ce(e.content, a)
+		content: se(e.content, a)
 	}));
 }
 //#endregion
 //#region src/quick-reply.js
-var fe = "两三事", pe = "手机", F = "tmt-open";
-async function me(e, t, { setName: n = fe, label: r = pe, command: i = F, visible: a = !0 } = {}) {
+var de = "两三事", fe = "手机", pe = "tmt-open";
+async function I(e, t, { setName: n = de, label: r = fe, command: i = pe, visible: a = !0 } = {}) {
 	let o = `/${i}`;
 	if (!e) {
 		if (t) throw Error("请先启用酒馆的快速回复功能，再打开 QR 入口。");
@@ -438,7 +438,7 @@ async function me(e, t, { setName: n = fe, label: r = pe, command: i = F, visibl
 }
 //#endregion
 //#region src/uuid.js
-function he() {
+function me() {
 	if (typeof globalThis.crypto?.randomUUID == "function") return globalThis.crypto.randomUUID();
 	let e = (globalThis.SillyTavern || globalThis.Luker)?.getContext?.();
 	return typeof e?.uuidv4 == "function" ? e.uuidv4() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (e) => {
@@ -448,21 +448,21 @@ function he() {
 }
 //#endregion
 //#region src/story-reference.js
-function ge(e) {
+function he(e) {
 	if (typeof e != "number" && typeof e != "string" || typeof e == "string" && !e.trim()) return;
 	let t = Number(e);
 	return Number.isFinite(t) && Number.isInteger(t) && t >= 0 ? t : void 0;
 }
-function _e(e) {
-	return ge(e?.storyReferenceFloors) ?? 1;
+function ge(e) {
+	return he(e?.storyReferenceFloors) ?? 1;
 }
 //#endregion
 //#region src/paths.js
-var ve = new URL(
+var _e = new URL(
 	/* @vite-ignore */
 	"../",
 	import.meta.url
-), ye = (e) => new URL(e, ve).href, be = [
+), ve = (e) => new URL(e, _e).href, ye = [
 	{
 		id: "cream",
 		name: "米白",
@@ -500,20 +500,20 @@ var ve = new URL(
 		night: "#172128"
 	}
 ];
-function xe(e) {
+function be(e) {
 	let [t, n, r, i] = e, a = `<defs><radialGradient id="glow"><stop stop-color="${n}"/><stop offset="1" stop-color="${t}"/></radialGradient><filter id="f"><feGaussianBlur stdDeviation="28"/></filter></defs><g filter="url(#f)"><ellipse cx="385" cy="660" rx="260" ry="330" fill="url(#glow)"/><ellipse cx="35" cy="815" rx="220" ry="155" fill="${r}"/></g><path d="M130 460 455 370 455 970 80 970Z" fill="${r}" fill-opacity=".16" stroke="${i}" stroke-opacity=".35"/><path d="M200 430v460M285 410v480" stroke="${i}" stroke-opacity=".18"/>`;
 	return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="420" height="900" viewBox="0 0 420 900"><path fill="${t}" d="M0 0h420v900H0z"/>${a}</svg>`)}`;
 }
-var Se = [{
+var xe = [{
 	id: "glass-lake",
 	name: "湖蓝玻璃",
-	day: xe([
+	day: be([
 		"#e9f0ed",
 		"#90bdc7",
 		"#e8b9ab",
 		"#d0dfd9"
 	]),
-	night: xe([
+	night: be([
 		"#102b38",
 		"#315e6b",
 		"#8d676d",
@@ -522,21 +522,21 @@ var Se = [{
 }, {
 	id: "paper-petals",
 	name: "花瓣剪纸",
-	day: ye("assets/lock-petals-day.png"),
-	night: ye("assets/lock-petals-night.png")
-}], Ce = (e) => Se.find((t) => `builtin:${t.id}` === e);
-function I(e, t = !1) {
+	day: ve("assets/lock-petals-day.png"),
+	night: ve("assets/lock-petals-night.png")
+}], Se = (e) => xe.find((t) => `builtin:${t.id}` === e);
+function Ce(e, t = !1) {
 	let n = typeof e == "string" ? e.trim() : "";
-	if (!n || (t ? be.some((e) => n === `color:${e.id}`) : Ce(n)) || /^(?:https?:\/\/|\/(?!\/)|data:image\/(?:png|jpeg|webp|gif|avif);base64,)/i.test(n)) return n;
+	if (!n || (t ? ye.some((e) => n === `color:${e.id}`) : Se(n)) || /^(?:https?:\/\/|\/(?!\/)|data:image\/(?:png|jpeg|webp|gif|avif);base64,)/i.test(n)) return n;
 	throw Error("背景图片地址无法使用，请重新选择图片。");
 }
 function we(e, t) {
-	let n = be.find((t) => e === `color:${t.id}`);
-	return n ? `background-color:${n[t === "night" ? "night" : "day"]};--pp-chat-label:${n.id === "slate" || t === "night" ? "#b8c6ce" : "#5f6d69"}` : e ? `background-image:url(${JSON.stringify(I(e, !0))});background-size:cover;background-position:center` : "";
+	let n = ye.find((t) => e === `color:${t.id}`);
+	return n ? `background-color:${n[t === "night" ? "night" : "day"]};--pp-chat-label:${n.id === "slate" || t === "night" ? "#b8c6ce" : "#5f6d69"}` : e ? `background-image:url(${JSON.stringify(Ce(e, !0))});background-size:cover;background-position:center` : "";
 }
 //#endregion
 //#region src/release.js
-var Te = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@f3a5c271882925d8e379dac6ab69da225aebd30f/embed.js", Ee = "docs/updates-0.6.1.md";
+var Te = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@f3a5c271882925d8e379dac6ab69da225aebd30f/embed.js", Ee = "docs/updates-0.6.2.md";
 async function De({ url: e = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@latest/release.json", fetchImpl: t = globalThis.fetch, timeoutMs: n = 5e3 } = {}) {
 	let r = new AbortController(), i = setTimeout(() => r.abort(), n);
 	try {
@@ -590,7 +590,7 @@ var Me = (e, t) => JSON.stringify(je(e)) === JSON.stringify(je(t)), Ne = (e) => 
 		...e.forum,
 		...n
 	}
-}), Fe = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js", Ie = ye("embed.js"), Le = (e) => typeof e == "string" ? e : "", Re = (e) => Object.fromEntries([
+}), Fe = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js", Ie = ve("embed.js"), Le = (e) => typeof e == "string" ? e : "", Re = (e) => Object.fromEntries([
 	"name",
 	"nickname",
 	"avatar",
@@ -613,7 +613,7 @@ function Be(e) {
 	let t = (e.contacts || []).map((e) => ({
 		...Re(e),
 		...e.identityOwnerId ? { identityOwnerId: Le(e.identityOwnerId) } : {},
-		background: I(e.background, !0),
+		background: Ce(e.background, !0),
 		id: Le(e.id),
 		source: { kind: "card" },
 		edited: !0,
@@ -632,7 +632,7 @@ function Be(e) {
 		id: Le(e.id),
 		name: Le(e.name),
 		avatar: Le(e.avatar),
-		background: I(e.background, !0),
+		background: Ce(e.background, !0),
 		memberIds: [...new Set(e.memberIds || [])],
 		userIsMember: e.userIsMember !== !1
 	}));
@@ -651,11 +651,11 @@ function Be(e) {
 		},
 		injectEnabled: e.injectEnabled === !0,
 		defaultLanguage: Le(e.defaultLanguage).trim(),
-		storyReferenceFloors: _e(e),
+		storyReferenceFloors: ge(e),
 		theme: e.theme === "night" ? "night" : "day",
 		wallpapers: {
-			day: I(e.wallpapers?.day),
-			night: I(e.wallpapers?.night)
+			day: Ce(e.wallpapers?.day),
+			night: Ce(e.wallpapers?.night)
 		},
 		...["stacked", "rounded"].includes(e.lockStyle) ? { lockStyle: e.lockStyle } : {},
 		...e.userProfile ? { userProfile: Re(e.userProfile) } : {}
@@ -689,7 +689,7 @@ function He(e) {
 const stableCoreUrl = ${JSON.stringify(e === "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js" ? Te : "")};
 const node = window.parent.document.createElement('script');
 node.type = 'module';
-node.id = 'tmt-card-loader-' + (${he.toString()})();
+node.id = 'tmt-card-loader-' + (${me.toString()})();
 node.owner = window;
 node.preset = getVariables({ type: 'script' }).twoMoreThings;
 node.textContent = '(' + ${JSON.stringify(Ve.toString())} + ')(' + JSON.stringify(node.id) + ',' + JSON.stringify(coreUrl) + ',' + JSON.stringify(stableCoreUrl) + ',' + ${JSON.stringify(JSON.stringify(Oe(e)))} + ',(' + ${JSON.stringify(De.toString())} + '))';
@@ -733,7 +733,7 @@ function Ue({ store: e, host: t, readEntries: n = () => t.readSettings()[t.phone
 			theme: o.theme === "night" ? "night" : "day",
 			injectEnabled: o.injectEnabled === !0,
 			defaultLanguage: o.defaultLanguage || "",
-			storyReferenceFloors: _e(o),
+			storyReferenceFloors: ge(o),
 			contacts: u,
 			groups: d,
 			entries: {
@@ -751,7 +751,7 @@ function Ue({ store: e, host: t, readEntries: n = () => t.readSettings()[t.phone
 		return Be(m), {
 			script: {
 				type: "script",
-				id: he(),
+				id: me(),
 				name: "两三事 · 卡内手机",
 				enabled: !0,
 				content: He(a),
@@ -788,7 +788,7 @@ async function Ge(e) {
 	});
 }
 function Ke({ contextProvider: e = () => (globalThis.SillyTavern || globalThis.Luker)?.getContext(), fetchImpl: t = (...e) => globalThis.fetch(...e), worldInfoBindings: n, mode: r = "standalone" } = {}) {
-	let i = r === "embedded", a = i ? `${We}-card` : We, o = i ? "tmt-card-open" : F, s = () => {
+	let i = r === "embedded", a = i ? `${We}-card` : We, o = i ? "tmt-card-open" : pe, s = () => {
 		let t = e();
 		if (!t) throw Error("暂时无法读取酒馆，请刷新页面后再打开小手机。");
 		return t;
@@ -907,7 +907,7 @@ function Ke({ contextProvider: e = () => (globalThis.SillyTavern || globalThis.L
 			for (let a of r) {
 				let r = await n.load(a);
 				if (!r) throw Error("关联世界书读取失败，请检查世界书是否可用。");
-				let o = Object.values(r.entries || {}), s = t === void 0 ? o : de(o, t, {
+				let o = Object.values(r.entries || {}), s = t === void 0 ? o : ue(o, t, {
 					defaults: n.defaults,
 					user: e.user,
 					char: e.character?.name
@@ -2462,10 +2462,10 @@ var Ye = [
 	label: t,
 	emoji: n,
 	aliases: r,
-	src: ye(`assets/stickers/blob-${e}.svg`)
+	src: ve(`assets/stickers/blob-${e}.svg`)
 })), Xe = new Map(Ye.map((e) => [e.code, e])), Ze = new Map(Ye.map((e) => [e.emoji.replaceAll("️", ""), e])), Qe = new Map(Ye.map((e) => [e.label, e]));
 for (let e of Ye) for (let t of e.aliases) Qe.has(t) || Qe.set(t, e);
-var z = new Intl.Segmenter("und", { granularity: "grapheme" }), $e = /\[(?:表情[:：]\s*)?([^\[\]\r\n]{1,24})\]|【(?:表情[:：]\s*)?([^【】\r\n]{1,24})】/gu, et = (e) => Xe.get(e), tt = () => Ye.map((e) => e.label);
+var $e = new Intl.Segmenter("und", { granularity: "grapheme" }), z = /\[(?:表情[:：]\s*)?([^\[\]\r\n]{1,24})\]|【(?:表情[:：]\s*)?([^【】\r\n]{1,24})】/gu, et = (e) => Xe.get(e), tt = () => Ye.map((e) => e.label);
 function nt(e) {
 	let t = String(e ?? ""), n = [], r = (e, t) => {
 		if (!e) return;
@@ -2480,10 +2480,10 @@ function nt(e) {
 			r(e);
 			return;
 		}
-		for (let { segment: t } of z.segment(e)) r(t, t.includes("︎") ? void 0 : Ze.get(t.replaceAll("️", "")));
+		for (let { segment: t } of $e.segment(e)) r(t, t.includes("︎") ? void 0 : Ze.get(t.replaceAll("️", "")));
 	}
 	let a = 0;
-	for (let e of t.matchAll($e)) i(t.slice(a, e.index)), r(e[0], Qe.get((e[1] || e[2]).trim())), a = e.index + e[0].length;
+	for (let e of t.matchAll(z)) i(t.slice(a, e.index)), r(e[0], Qe.get((e[1] || e[2]).trim())), a = e.index + e[0].length;
 	return i(t.slice(a)), n;
 }
 //#endregion
@@ -2516,7 +2516,7 @@ function st(e) {
 		return (t.startsWith("#") && t.endsWith("#") || t.startsWith("【") && t.endsWith("】")) && (t = t.slice(1, -1).trim()), t ? [t] : [];
 	}))].slice(0, 2);
 }
-function V(e) {
+function ct(e) {
 	let t = /* @__PURE__ */ new Map();
 	for (let n of e) for (let e of st(n)) {
 		let n = t.get(e) || {
@@ -2530,7 +2530,7 @@ function V(e) {
 }
 //#endregion
 //#region src/stickers.js
-var H = [
+var V = [
 	"1f600",
 	"1f601",
 	"1f602",
@@ -2555,7 +2555,7 @@ var H = [
 	"1f64f",
 	"2764",
 	"1f389"
-], ct = [
+], H = [
 	["hello", "打招呼"],
 	["happy", "开心"],
 	["angry", "生气"],
@@ -2570,19 +2570,19 @@ var H = [
 	id: "sepia",
 	name: "Sepia",
 	credit: "David Revoy · CC-BY 4.0 / Framasky 整理"
-}], ut = [...H.map((e) => ({
+}], ut = [...V.map((e) => ({
 	id: `blob.${e}`,
 	pack: "blob",
 	label: et(e).label,
 	file: `blob-${e}.svg`
-})), ...ct.map(([e, t], n) => ({
+})), ...H.map(([e, t], n) => ({
 	id: `sepia.${e}`,
 	pack: "sepia",
 	label: t,
 	file: `sepia-${n}.png`
 }))].map((e) => ({
 	...e,
-	src: ye(`assets/stickers/${e.file}`)
+	src: ve(`assets/stickers/${e.file}`)
 })), dt = (e) => ut.find((t) => t.id === e), ft = () => ut.map(({ id: e, label: t }) => ({
 	id: e,
 	meaning: t
@@ -3120,7 +3120,7 @@ function Cn(e, t, n) {
 }
 async function wn(e, t, n) {
 	let r = {
-		id: he(),
+		id: me(),
 		name: t.name?.trim() || t.model?.trim(),
 		url: bn(t.url),
 		key: t.key?.trim(),
@@ -3308,7 +3308,7 @@ function Tn({ host: e, onBusyChange: t = () => {} }) {
 				stream: !1,
 				...xn(l, o),
 				...u,
-				id: he(),
+				id: me(),
 				name: c
 			}, f = {
 				kind: "shared-preset",
@@ -3355,7 +3355,7 @@ function En({ host: e, sourceProvider: t, onBusyChange: n = () => {} }) {
 				model: n.model,
 				messages: [{
 					role: "system",
-					content: oe(r, ie(e.readSettings()))
+					content: ae(r, ie(e.readSettings()))
 				}, ...i],
 				stream: !1,
 				temperature: .8
@@ -4816,9 +4816,9 @@ var Mn = class extends Error {
 			}), r++);
 		}
 		return r === 0;
-	}, ie = /* @__PURE__ */ RegExp("^[a-z][a-zA-Z0-9]*(:[a-z][a-zA-Z0-9]*)?$", "u"), ae = (e) => {
+	}, ie = /* @__PURE__ */ RegExp("^[a-z][a-zA-Z0-9]*(:[a-z][a-zA-Z0-9]*)?$", "u"), F = (e) => {
 		if (e.length < 2) return !0;
-		if (e.length === 2) return !oe(e[0], e[1]);
+		if (e.length === 2) return !ae(e[0], e[1]);
 		let t = [], n = e.length > 20 ? /* @__PURE__ */ new Set() : null, r = 0, i = 0;
 		for (let a of e) {
 			if (typeof a == "object") t.push(a);
@@ -4827,20 +4827,20 @@ var Mn = class extends Error {
 			} else if (e.indexOf(a, i + 1) !== -1) return !1;
 			i++;
 		}
-		for (let e = 1; e < t.length; e++) for (let n = 0; n < e; n++) if (oe(t[e], t[n])) return !1;
+		for (let e = 1; e < t.length; e++) for (let n = 0; n < e; n++) if (ae(t[e], t[n])) return !1;
 		return !0;
-	}, oe = (e, t) => {
+	}, ae = (e, t) => {
 		if (e === t) return !0;
 		if (!e || !t || typeof e != typeof t || e !== t && typeof e != "object") return !1;
 		let n = Object.getPrototypeOf(e);
 		if (n !== Object.getPrototypeOf(t)) return !1;
-		if (n === Array.prototype) return !Array.isArray(e) || !Array.isArray(t) || e.length !== t.length ? !1 : e.every((e, n) => oe(e, t[n]));
+		if (n === Array.prototype) return !Array.isArray(e) || !Array.isArray(t) || e.length !== t.length ? !1 : e.every((e, n) => ae(e, t[n]));
 		if (n === Object.prototype) {
 			let [n, r] = [Object.keys(e), Object.keys(t)];
-			return n.length === r.length && (/* @__PURE__ */ new Set([...n, ...r])).size === n.length && n.every((n) => oe(e[n], t[n]));
+			return n.length === r.length && (/* @__PURE__ */ new Set([...n, ...r])).size === n.length && n.every((n) => ae(e[n], t[n]));
 		}
 		return !1;
-	}, se = function n(r) {
+	}, oe = function n(r) {
 		n.errors = null;
 		let o = 0;
 		if (!(typeof r == "object" && r && !Array.isArray(r))) n.errors === null && (n.errors = []), n.errors.push({
@@ -4965,7 +4965,7 @@ var Mn = class extends Error {
 										}), o++));
 									}
 								}
-								o === i && (ae(r.variants[s].tags) || (n.errors === null && (n.errors = []), n.errors.push({
+								o === i && (F(r.variants[s].tags) || (n.errors === null && (n.errors = []), n.errors.push({
 									keywordLocation: "#/properties/variants/additionalProperties/properties/tags/uniqueItems",
 									instanceLocation: "#/variants/" + a(s) + "/tags"
 								}), o++));
@@ -4984,7 +4984,7 @@ var Mn = class extends Error {
 			}), o++);
 		}
 		return o === 0;
-	}, ce = function t(n) {
+	}, se = function t(n) {
 		t.errors = null;
 		let r = 0;
 		if (!(typeof n == "object" && n && !Array.isArray(n))) t.errors === null && (t.errors = []), t.errors.push({
@@ -5005,7 +5005,7 @@ var Mn = class extends Error {
 			}), r++);
 		}
 		return r === 0;
-	}, le = /* @__PURE__ */ RegExp("^#([a-fA-F0-9]{3}|[a-fA-F0-9]{4}|[a-fA-F0-9]{6}|[a-fA-F0-9]{8})$", "u"), ue = function e(n) {
+	}, ce = /* @__PURE__ */ RegExp("^#([a-fA-F0-9]{3}|[a-fA-F0-9]{4}|[a-fA-F0-9]{6}|[a-fA-F0-9]{8})$", "u"), le = function e(n) {
 		e.errors = null;
 		let r = 0;
 		if (typeof n != "string") e.errors === null && (e.errors = []), e.errors.push({
@@ -5017,7 +5017,7 @@ var Mn = class extends Error {
 			n.length > 9 && t(n) > 9 && (e.errors === null && (e.errors = []), e.errors.push({
 				keywordLocation: "#/maxLength",
 				instanceLocation: "#"
-			}), r++), r === i && (le.test(n) || (e.errors === null && (e.errors = []), e.errors.push({
+			}), r++), r === i && (ce.test(n) || (e.errors === null && (e.errors = []), e.errors.push({
 				keywordLocation: "#/pattern",
 				instanceLocation: "#"
 			}), r++));
@@ -5213,10 +5213,10 @@ var Mn = class extends Error {
 						n.errors = t, r || (n.errors === null && (n.errors = []), n.errors.push(...o.map((t) => i(t, "#/properties/components/propertyNames/$ref", "#/components/" + a(e)))), s++);
 					}
 					for (let e of Object.keys(o.components)) (() => {
-						let t = 0, r = n.errors, s = se(o.components[e]), c = se.errors;
+						let t = 0, r = n.errors, s = oe(o.components[e]), c = oe.errors;
 						return n.errors = r, s || (n.errors === null && (n.errors = []), n.errors.push(...c.map((t) => i(t, "#/properties/components/additionalProperties/anyOf/0/$ref", "#/components/" + a(e)))), t++), t === 0;
 					})() || (() => {
-						let t = 0, r = n.errors, s = ce(o.components[e]), c = ce.errors;
+						let t = 0, r = n.errors, s = se(o.components[e]), c = se.errors;
 						return n.errors = r, s || (n.errors === null && (n.errors = []), n.errors.push(...c.map((t) => i(t, "#/properties/components/additionalProperties/anyOf/1/$ref", "#/components/" + a(e)))), t++), t === 0;
 					})() || (n.errors === null && (n.errors = []), n.errors.push({
 						keywordLocation: "#/properties/components/additionalProperties/anyOf",
@@ -5260,7 +5260,7 @@ var Mn = class extends Error {
 									instanceLocation: "#/colors/" + a(t) + "/values"
 								}), s++);
 								for (let r = 0; r < o.colors[t].values.length; r++) if (o.colors[t].values[r] !== void 0 && e(o.colors[t].values, r)) {
-									let e = n.errors, c = ue(o.colors[t].values[r]), l = ue.errors;
+									let e = n.errors, c = le(o.colors[t].values[r]), l = le.errors;
 									n.errors = e, c || (n.errors === null && (n.errors = []), n.errors.push(...l.map((e) => i(e, "#/properties/colors/additionalProperties/properties/values/items/$ref", "#/colors/" + a(t) + "values/" + r))), s++);
 								}
 							}
@@ -7989,7 +7989,7 @@ var Va = {
 		] }
 	}
 }, Ha = new Kr(Va), Ua = Object.keys(Va.components.shape.variants).filter((e) => e !== "taper"), Wa = "<svg data-tmt-avatar=\"cameo\" ", Ga = "data:image/svg+xml;charset=utf-8,", Ka = Ga + encodeURIComponent(Wa), qa = (e) => typeof e == "string" && e.startsWith(Ka);
-function Ja(e = he()) {
+function Ja(e = me()) {
 	let t = new ja(Ha, {
 		seed: e,
 		shapeVariant: Ua
@@ -8275,7 +8275,7 @@ function Xo(e, t, n, r) {
 			if (!r || e.authorId && !i.has(e.authorId)) return [];
 			let a = e.authorId ? i.get(e.authorId) : null, s = a?.nickname || a?.name || Vo(e.name ?? e.author), c = B(Vo(e.translation ?? e.translatedText), { preserveStyle: t });
 			return s ? [{
-				id: he(),
+				id: me(),
 				name: s,
 				text: r,
 				...c ? { translation: c } : {},
@@ -8285,7 +8285,7 @@ function Xo(e, t, n, r) {
 			}] : [];
 		}).slice(0, 2);
 		return a.set(l, (a.get(l) || 0) + 1), [{
-			id: he(),
+			id: me(),
 			authorId: l,
 			text: d,
 			...d && f ? { translation: f } : {},
@@ -8326,7 +8326,7 @@ function Qo({ store: e, contextReader: t, modelClient: n, random: r = Math.rando
 		async refresh() {
 			let i = e.read(), a = Yo((i.contacts || []).filter((e) => !Ao(i, e.id)), r);
 			for (; a.length < 15;) a.push({
-				id: `npc:${he()}`,
+				id: `npc:${me()}`,
 				kind: "npc",
 				name: "",
 				description: ""
@@ -8448,7 +8448,7 @@ function Qo({ store: e, contextReader: t, modelClient: n, random: r = Math.rando
 			let d = Wo(c, l.authorId);
 			if (!d) throw Error("这条动态的作者已不存在，请返回动态列表。");
 			let f = Ko(l), p = f.map((e) => e.authorId).filter(Boolean).map((e) => Wo(c, e)).filter(Boolean), m = [...new Map([d, ...p].filter((e) => !Ao(c, e.id)).map((e) => [e.id, e])).values()], h = Vo(c.userProfile?.nickname || c.userProfile?.name || i) || "我", g = t.readClock?.(), _ = {
-				id: he(),
+				id: me(),
 				role: "user",
 				name: h,
 				text: u,
@@ -8521,7 +8521,7 @@ function Qo({ store: e, contextReader: t, modelClient: n, random: r = Math.rando
 					if (!n) throw Error("这条动态已不存在，请返回动态列表。");
 					let i = new Set([...t.contacts || [], ...t.social?.npcs || []].filter((e) => !Ao(t, e.id) && No(t, e.id, y[Fo])).map((e) => e.id)), o = !!a(r), s = (/* @__PURE__ */ new Date()).toISOString(), c = S.filter((e) => !e.authorId || i.has(e.authorId)).map((e) => ({
 						...e,
-						id: he(),
+						id: me(),
 						replyToId: _.id,
 						createdAt: s,
 						publishedAt: [y.clock?.date, y.clock?.time].filter(Boolean).join(" "),
@@ -8705,7 +8705,7 @@ function us(e) {
 }
 //#endregion
 //#region src/forum.js
-var ds = (e) => typeof e == "string" ? e.trim() : "", fs = () => he(), ps = (e) => [e?.date, e?.time].filter(Boolean).join(" "), ms = [
+var ds = (e) => typeof e == "string" ? e.trim() : "", fs = () => me(), ps = (e) => [e?.date, e?.time].filter(Boolean).join(" "), ms = [
 	"河边捡石头",
 	"晚饭吃什么",
 	"纸袋装月亮",
@@ -8873,7 +8873,7 @@ function ys({ store: e, contextReader: t, modelClient: n, random: r = Math.rando
 }
 //#endregion
 //#region src/liangshi.js
-var X = (e) => typeof e == "string" ? e.trim() : "", bs = (e) => Array.isArray(e) ? e : e && typeof e == "object" ? [e] : [], xs = (e) => Number.isFinite(Number(e)) ? Math.max(0, Math.floor(Number(e))) : 0, Ss = () => he(), Cs = (e) => X(e).replace(/^@/, "").toLowerCase(), ws = () => ({
+var X = (e) => typeof e == "string" ? e.trim() : "", bs = (e) => Array.isArray(e) ? e : e && typeof e == "object" ? [e] : [], xs = (e) => Number.isFinite(Number(e)) ? Math.max(0, Math.floor(Number(e))) : 0, Ss = () => me(), Cs = (e) => X(e).replace(/^@/, "").toLowerCase(), ws = () => ({
 	accounts: [],
 	posts: [],
 	topics: []
@@ -10394,7 +10394,7 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 				if (t(), !r) throw Error("原内容已移除，无法收藏。");
 				if (ss(e, r)) return e;
 				let n = {
-					id: he(),
+					id: me(),
 					savedAt: (/* @__PURE__ */ new Date()).toISOString(),
 					...r
 				};
@@ -10479,7 +10479,7 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 					if (t.length > 1) return null;
 					if (t.length) return t[0];
 					let n = {
-						id: `story:${he()}`,
+						id: `story:${me()}`,
 						name: e,
 						avatar: Ja(),
 						source: { kind: "story" }
@@ -10495,7 +10495,7 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 						if (o.sender !== "我" && !t) continue;
 						let n = e[0], i = {
 							...n,
-							id: n?.id || `group:${he()}`,
+							id: n?.id || `group:${me()}`,
 							name: o.name,
 							memberIds: [.../* @__PURE__ */ new Set([...n?.memberIds || [], ...t ? [t.id] : []])],
 							userIsMember: !0
@@ -10510,7 +10510,7 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 						r = n.id, s = o.sender === "我" ? "@user" : n.id;
 					}
 					let c = a.clock, l = {
-						id: `story:${e}:${o.index}:${he()}`,
+						id: `story:${e}:${o.index}:${me()}`,
 						role: s === "@user" ? "user" : "assistant",
 						speakerId: s,
 						text: o.text,
@@ -10785,8 +10785,8 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 		async saveContact(e, t) {
 			let n = {
 				...Je(t, !0),
-				..."background" in t ? { background: I(t.background, !0) } : {}
-			}, r = e || `manual:${he()}`;
+				..."background" in t ? { background: Ce(t.background, !0) } : {}
+			}, r = e || `manual:${me()}`;
 			return await l((i) => {
 				let a = i.contacts.find((e) => e.id === r);
 				if (e && !a) throw Error("这个联系人已不存在，请返回短信重新选择。");
@@ -10884,7 +10884,7 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 					let t = Array.isArray(e?.memberIds) ? [...new Set(e.memberIds)] : [], n = typeof e?.name == "string" ? e.name.trim() : "";
 					if (!n || typeof e.userIsMember != "boolean" || !t.length || t.length + Number(e.userIsMember) < 2 || t.some((e) => !a.has(e)) || o.some((n) => n.userIsMember === e.userIsMember && n.memberIds.length === t.length && t.every((e) => n.memberIds.includes(e)))) continue;
 					let i = {
-						id: `group:${he()}`,
+						id: `group:${me()}`,
 						name: n,
 						memberIds: t,
 						userIsMember: e.userIsMember
@@ -10904,9 +10904,9 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 			let { avatar: r } = Je({
 				...t,
 				name: n
-			}), i = "background" in t ? { background: I(t.background, !0) } : {}, a = [...new Set(t.memberIds || [])], o = t.userIsMember !== !1;
+			}), i = "background" in t ? { background: Ce(t.background, !0) } : {}, a = [...new Set(t.memberIds || [])], o = t.userIsMember !== !1;
 			if (!a.length || a.length + Number(o) < 2) throw Error("请至少选择两位群成员，可以包含自己。");
-			let c = e || `group:${he()}`;
+			let c = e || `group:${me()}`;
 			return await l((t) => {
 				if (a.some((e) => !t.contacts.some((t) => t.id === e))) throw Error("有群成员不在联系人中，请重新选择。");
 				let s = t.groups || [], l = s.find((t) => t.id === e);
@@ -10945,7 +10945,7 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 		setStoryReferenceFloors(e) {
 			return l((n) => {
 				t();
-				let r = ge(e);
+				let r = he(e);
 				if (r === void 0) throw Error("参考正文楼请输入非负整数。");
 				return {
 					...n,
@@ -10960,7 +10960,7 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 			}));
 		},
 		setWallpaper(e, t) {
-			let n = I(t);
+			let n = Ce(t);
 			return l((t) => ({
 				...t,
 				wallpapers: {
@@ -10970,7 +10970,7 @@ function ml({ target: e, assertEnabled: t = () => {}, isReading: n = () => !1, o
 			}));
 		},
 		setChatBackground(e, t) {
-			let n = I(t, !0);
+			let n = Ce(t, !0);
 			return l((t) => {
 				let r = t.contacts.some((t) => t.id === e) ? "contacts" : "groups";
 				if (!t[r]?.some((t) => t.id === e)) throw Error("这个聊天已删除，无法更改背景。");
@@ -11140,7 +11140,7 @@ function xl(e, t, n, r) {
 	return ne(i?.size ? tl(e.mes, i) : e.mes, r);
 }
 function Sl(e, t = e.length, n = {}, r) {
-	let i = _e(r), a = [];
+	let i = ge(r), a = [];
 	if (!i) return [];
 	for (let n = t - 1; n >= 0 && a.length < i; n--) {
 		let t = e[n];
@@ -11663,7 +11663,7 @@ function jl({ target: e, store: t, modelClient: n, isEnabled: r = () => !0, wrap
 function Ml(e, t, n, r, i) {
 	let a = /* @__PURE__ */ new Date();
 	return {
-		id: he(),
+		id: me(),
 		role: e,
 		text: t,
 		createdAt: a.toISOString(),
@@ -11892,8 +11892,91 @@ function Rl({ store: e, contextReader: t, modelClient: n }) {
 	} };
 }
 //#endregion
+//#region src/ui/panel-window.js
+function zl(e, t = e.defaultView) {
+	let n = t.visualViewport, r = {
+		left: Number(n?.offsetLeft) || 0,
+		top: Number(n?.offsetTop) || 0,
+		width: Math.max(0, Number(n?.width) || t.innerWidth),
+		height: Math.max(0, Number(n?.height) || t.innerHeight)
+	};
+	for (let t of ["chat", "sheld"]) {
+		let n = e.getElementById(t)?.getBoundingClientRect();
+		if (!(n?.width > 0 && n?.height > 0)) continue;
+		let i = Math.max(r.left, n.left), a = Math.max(r.top, n.top), o = Math.min(r.left + r.width, n.left + n.width), s = Math.min(r.top + r.height, n.top + n.height);
+		if (t === "sheld") for (let t of ["form_sheld", "send_form"]) {
+			let n = e.getElementById(t)?.getBoundingClientRect();
+			n?.height > 0 && n.top > a && (s = Math.min(s, n.top));
+		}
+		if (o > i && s > a) return {
+			left: i,
+			top: a,
+			width: o - i,
+			height: s - a
+		};
+	}
+	return r;
+}
+function Bl(e, t) {
+	let n = e.defaultView?.ResizeObserver;
+	if (!n) return () => {};
+	let r = new n(t);
+	for (let t of [
+		"chat",
+		"sheld",
+		"form_sheld",
+		"send_form"
+	]) {
+		let n = e.getElementById(t);
+		n && r.observe(n);
+	}
+	return () => r.disconnect();
+}
+function Vl({ target: e, panel: t, close: n, canClose: r = () => !0, nativeDialog: i = !1 }) {
+	let a = null, o = (e) => {
+		if (i) {
+			if (e.target !== t) return !1;
+			let n = t.getBoundingClientRect();
+			return e.clientX < n.left || e.clientX > n.left + n.width || e.clientY < n.top || e.clientY > n.top + n.height;
+		}
+		return !(e.composedPath?.().includes(t) ?? t.contains(e.target));
+	}, s = (e) => {
+		a = e.button === 0 && e.isPrimary !== !1 && o(e) && r() ? {
+			id: e.pointerId,
+			x: e.clientX,
+			y: e.clientY,
+			up: !1,
+			moved: !1
+		} : null;
+	}, c = (e) => {
+		a?.id === e.pointerId && Math.hypot(e.clientX - a.x, e.clientY - a.y) > 5 && (a.moved = !0);
+	}, l = (e) => {
+		if (a?.id !== e.pointerId) {
+			a = null;
+			return;
+		}
+		c(e), a.up = o(e);
+	}, u = () => {
+		a = null;
+	}, d = [
+		["pointerdown", s],
+		["pointermove", c],
+		["pointerup", l],
+		["pointercancel", u],
+		["click", (e) => {
+			let t = a?.up && !a.moved && o(e) && r();
+			u(), t && n();
+		}]
+	];
+	for (let [t, n] of d) e.addEventListener(t, n);
+	return () => {
+		u();
+		for (let [t, n] of d) e.removeEventListener(t, n);
+	};
+}
+//#endregion
 //#region src/ui/settings-drawer.js
-var zl = Object.freeze({
+var Hl = Object.freeze({
 	block: {
 		drawer: "settings-block settings-drawer",
 		summary: "settings-drawer-summary",
@@ -11913,9 +11996,9 @@ var zl = Object.freeze({
 		body: "settings-sub-body"
 	}
 });
-function Bl({ documentRef: e = globalThis.document, title: t, className: n = "", id: r = "", open: i = !1, level: a = "block", onToggle: o } = {}) {
+function Ul({ documentRef: e = globalThis.document, title: t, className: n = "", id: r = "", open: i = !1, level: a = "block", onToggle: o } = {}) {
 	if (!e?.createElement) throw TypeError("settings drawer documentRef 无效");
-	let s = zl[a] ?? zl.block, c = e.createElement("details");
+	let s = Hl[a] ?? Hl.block, c = e.createElement("details");
 	c.className = [s.drawer, n].filter(Boolean).join(" "), r && (c.id = r), c.open = i === !0;
 	let l = e.createElement("summary");
 	l.className = s.summary;
@@ -11931,10 +12014,10 @@ function Bl({ documentRef: e = globalThis.document, title: t, className: n = "",
 }
 //#endregion
 //#region src/ui/source-permission-view.js
-function Vl(e) {
+function Wl(e) {
 	return String(e ?? "").trim().normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase("zh-Hans-CN");
 }
-function Hl({ permissions: e, documentRef: t = globalThis.document } = {}) {
+function Gl({ permissions: e, documentRef: t = globalThis.document } = {}) {
 	if (typeof e?.inspectCurrent != "function") throw TypeError("来源许可控制器无效");
 	let n = (e, n = "", r = "") => {
 		let i = t.createElement(e);
@@ -11956,7 +12039,7 @@ function Hl({ permissions: e, documentRef: t = globalThis.document } = {}) {
 		};
 	};
 	function a({ open: a = !1, onDrawerToggle: o } = {}) {
-		let { drawer: s, body: c } = Bl({
+		let { drawer: s, body: c } = Ul({
 			documentRef: t,
 			title: "世界书排除",
 			className: "source-permission-settings",
@@ -11969,7 +12052,7 @@ function Hl({ permissions: e, documentRef: t = globalThis.document } = {}) {
 		let d = n("div", "source-permission-list");
 		c.append(l, u, d);
 		let f = null, p = 0, m = 0, h = () => {
-			let e = new Set(f.excludedBooks.map(Vl)), t = f.bookNames.filter((t) => e.has(Vl(t))).length;
+			let e = new Set(f.excludedBooks.map(Wl)), t = f.bookNames.filter((t) => e.has(Wl(t))).length;
 			l.textContent = `已排除 ${t} / 共 ${f.bookNames.length} 本`;
 		}, g = async () => {
 			let t = ++p, i = r(d);
@@ -11986,7 +12069,7 @@ function Hl({ permissions: e, documentRef: t = globalThis.document } = {}) {
 				l.textContent = "", d.append(n("p", "settings-hint", "当前世界书暂时无法读取。角色卡与开场白仍按原规则可用。"));
 				return;
 			}
-			let t = u.value.trim().toLocaleLowerCase("zh-Hans-CN"), a = new Set(f.excludedBooks.map(Vl));
+			let t = u.value.trim().toLocaleLowerCase("zh-Hans-CN"), a = new Set(f.excludedBooks.map(Wl));
 			h();
 			let o = f.bookNames.filter((e) => !t || e.toLocaleLowerCase("zh-Hans-CN").includes(t));
 			if (!o.length) {
@@ -11994,7 +12077,7 @@ function Hl({ permissions: e, documentRef: t = globalThis.document } = {}) {
 				return;
 			}
 			for (let t of o) {
-				let { row: n } = i(t, a.has(Vl(t)), (n) => {
+				let { row: n } = i(t, a.has(Wl(t)), (n) => {
 					let r = e.setBookExcluded(t, n.currentTarget.checked);
 					f = {
 						...f,
@@ -12012,7 +12095,7 @@ function Hl({ permissions: e, documentRef: t = globalThis.document } = {}) {
 }
 //#endregion
 //#region src/ui/shared.js
-var Ul = {
+var Kl = {
 	favorites: "<g fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"><path d=\"M3 11.0975V16.0909C3 19.1875 3 20.7358 3.73411 21.4123C4.08422 21.735 4.52615 21.9377 4.99692 21.9915C5.98402 22.1045 7.13675 21.0849 9.44216 19.0458C10.4612 18.1445 10.9708 17.6938 11.5603 17.5751C11.8506 17.5166 12.1494 17.5166 12.4397 17.5751C13.0292 17.6938 13.5388 18.1445 14.5578 19.0458C16.8633 21.0849 18.016 22.1045 19.0031 21.9915C19.4739 21.9377 19.9158 21.735 20.2659 21.4123C21 20.7358 21 19.1875 21 16.0909V11.0975C21 6.80891 21 4.6646 19.682 3.3323C18.364 2 16.2426 2 12 2C7.75736 2 5.63604 2 4.31802 3.3323C3.5108 4.14827 3.19796 5.26881 3.07672 7\"/><path d=\"M15 6H9\"/></g>",
 	"favorites-active": "<path fill=\"currentColor\" fill-rule=\"evenodd\" d=\"M3 11.0975V16.0909C3 19.1875 3 20.7358 3.73411 21.4123C4.08422 21.735 4.52615 21.9377 4.99692 21.9915C5.98402 22.1045 7.13675 21.0849 9.44216 19.0458C10.4612 18.1445 10.9708 17.6938 11.5603 17.5751C11.8506 17.5166 12.1494 17.5166 12.4397 17.5751C13.0292 17.6938 13.5388 18.1445 14.5578 19.0458C16.8633 21.0849 18.016 22.1045 19.0031 21.9915C19.4739 21.9377 19.9158 21.735 20.2659 21.4123C21 20.7358 21 19.1875 21 16.0909V11.0975C21 6.80891 21 4.6646 19.682 3.3323C18.364 2 16.2426 2 12 2C7.75736 2 5.63604 2 4.31802 3.3323C3 4.6646 3 6.80891 3 11.0975ZM9 5.25H15a.75.75 0 0 1 0 1.5H9a.75.75 0 0 1 0-1.5Z\"/>",
 	like: "<g fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"><path d=\"M3 21.5127V10.2341\"/><path d=\"M3 10.2342L3.9716 21.4707C3.99621 21.7553 3.77207 22 3.48671 22C3.21791 22 3 21.7818 3 21.5127\"/><path d=\"M13.9951 5.22145C14.1027 4.56438 14.072 3.89203 13.9048 3.24756\"/><path d=\"M8.59634 22C7.73256 22 7.01226 21.3386 6.93776 20.4771L6.1256 11.0844C6.07944 10.5506 6.29247 10.027 6.69813 9.67749L8.13687 8.43769C8.8044 7.86246 9.44659 7.24017 9.86194 6.46261C10.1462 5.93045 10.3667 5.36723 10.518 4.78374L10.9938 2.94989C11.0859 2.59473 11.3344 2.29611 11.6742 2.13239C11.9829 1.98365 12.3402 1.95918 12.6676 2.06435L12.8126 2.11093C13.3543 2.28495 13.7662 2.71364 13.9047 3.24753\"/><path d=\"M13.9949 5.22135L13.3322 9.26591C13.2491 9.77321 13.6401 10.2341 14.1536 10.2341H19.3347\"/><path d=\"M19.3349 10.2342C20.3678 10.2342 21.1515 11.1662 20.9752 12.1852L20.2697 16.265C19.6974 19.5744 16.7263 22 13.2451 22H8.59644\"/></g>",
@@ -12047,67 +12130,67 @@ var Ul = {
 	close: "<g fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"><path d=\"M19.0071 5L15.5071 8.5\"/><path d=\"M12.0071 12L5.00708 19\"/><path d=\"M19 19L5 5\"/></g>",
 	"phone-close": "<g fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"><path d=\"M14.5 9.50002L9.5 14.5M9.49998 9.5L14.5 14.5\"/><path d=\"M7 3.33782C8.47087 2.48697 10.1786 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 10.1786 2.48697 8.47087 3.33782 7\"/></g>",
 	home: "<g fill=\"none\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-width=\"1.5\"><path d=\"M22 12.2039V13.725C22 17.6258 22 19.5763 20.8284 20.7881C19.6569 22 17.7712 22 14 22H10C6.22876 22 4.34315 22 3.17157 20.7881C2 19.5763 2 17.6258 2 13.725V12.2039C2 9.91549 2 8.77128 2.5192 7.82274C3.0384 6.87421 3.98695 6.28551 5.88403 5.10813L7.88403 3.86687C9.88939 2.62229 10.8921 2 12 2C13.1079 2 14.1106 2.62229 16.116 3.86687L18.116 5.10812C20.0131 6.28551 20.9616 6.87421 21.4808 7.82274\"/><path d=\"M15 18H9\"/></g>"
-}, Wl = (e) => ye(`assets/${e}`), Z = (e) => ["messages", "forum"].includes(e) ? `<span class="app-icon" style="--pp-app-icon:url('${Wl(`${e}.svg`)}')" aria-hidden="true"></span>` : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">${Ul[e === "album" ? "image" : e] || ""}</svg>`, Q = (e) => String(e ?? "").replace(/[&<>"']/g, (e) => ({
+}, ql = (e) => ve(`assets/${e}`), Z = (e) => ["messages", "forum"].includes(e) ? `<span class="app-icon" style="--pp-app-icon:url('${ql(`${e}.svg`)}')" aria-hidden="true"></span>` : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">${Kl[e === "album" ? "image" : e] || ""}</svg>`, Q = (e) => String(e ?? "").replace(/[&<>"']/g, (e) => ({
 	"&": "&amp;",
 	"<": "&lt;",
 	">": "&gt;",
 	"\"": "&quot;",
 	"'": "&#39;"
-})[e]), Gl = (e) => e ? `${e.kind}:${e.presetId || ""}` : "";
-function Kl(e) {
+})[e]), Jl = (e) => e ? `${e.kind}:${e.presetId || ""}` : "";
+function Yl(e) {
 	return nt(e).map((e) => e.emoji ? `<img class="inline-emoji" src="${Q(e.emoji.src)}" alt="${Q(e.text)}" title="${Q(e.emoji.label)}" draggable="false" loading="lazy">` : Q(e.text)).join("");
 }
-function ql(e, t = []) {
+function Xl(e, t = []) {
 	let n = [...new Set(t.flatMap((e) => [e?.name, e?.nickname]).filter(Boolean))].sort((e, t) => t.length - e.length);
-	if (!n.length) return Kl(e);
+	if (!n.length) return Yl(e);
 	let r = RegExp(`(@(?:${n.map((e) => String(e).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}))`, "gu");
 	return nt(e).map((e) => e.emoji ? `<img class="inline-emoji" src="${Q(e.emoji.src)}" alt="${Q(e.text)}" title="${Q(e.emoji.label)}" draggable="false" loading="lazy">` : e.text.split(r).map((e, t) => t % 2 ? `<mark class="message-mention">${Q(e)}</mark>` : Q(e)).join("")).join("");
 }
-function Jl(e, t, n = Kl) {
-	let r = Xl(e, t), i = `<span class="message-original"${/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(String(e || "")) ? " lang=\"ja\"" : ""}>${n(e)}</span>`;
+function Zl(e, t, n = Yl) {
+	let r = $l(e, t), i = `<span class="message-original"${/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(String(e || "")) ? " lang=\"ja\"" : ""}>${n(e)}</span>`;
 	return r ? `<span class="bilingual-copy">${i}<span class="message-translation" lang="zh-CN">${n(r)}</span></span>` : i;
 }
-function Yl(e) {
+function Ql(e) {
 	return nt(e).filter((e) => !e.emoji).map((e) => e.text).join("").replace(/[\s。，、！？!?；;：“”‘’"'「」『』《》〈〉….,:]/gu, (e, t, n) => {
 		let r = /\p{N}$/u.test(n.slice(0, t)), i = /^\p{N}/u.test(n.slice(t + e.length));
 		return /[.,:，：]/u.test(e) && i && (r || e === ".") ? e : "";
 	});
 }
-function Xl(e, t) {
+function $l(e, t) {
 	if (!t) return "";
-	let n = Yl(e);
-	return n && n === Yl(t) ? "" : t;
+	let n = Ql(e);
+	return n && n === Ql(t) ? "" : t;
 }
-function Zl(e, t = !1) {
+function eu(e, t = !1) {
 	let n = qe(e.avatar);
 	return `<span class="avatar ${t ? "avatar-small" : ""}" data-tone="${Q(e.tone || "blue")}" aria-hidden="true"><span>${Q(Array.from(R(e))[0])}</span>${n ? `<img${qa(n) ? " class=\"avatar-cameo\"" : ""} src="${Q(n)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}</span>`;
 }
-function Ql(e, { open: t = !1, canRestore: n = !1, busy: r = !1 } = {}) {
-	return `<div class="avatar-editor"><div class="profile-avatar">${Zl(e)}</div><div class="avatar-controls">
+function tu(e, { open: t = !1, canRestore: n = !1, busy: r = !1 } = {}) {
+	return `<div class="avatar-editor"><div class="profile-avatar">${eu(e)}</div><div class="avatar-controls">
     <button type="button" class="icon-button avatar-menu-toggle" data-action="avatar-menu" data-avatar-can-restore="${!!n}" aria-label="头像操作" aria-haspopup="menu" aria-expanded="${t}" ${r ? "disabled" : ""}>${Z("more")}</button>
     <label class="avatar-picker" hidden><input type="file" accept="image/*" aria-label="选择头像图片"></label>
   </div></div>`;
 }
-function $l(e) {
+function nu(e) {
 	return `<button type="button" class="menu-item" data-action="upload-avatar">上传</button><button type="button" class="menu-item" data-action="remove-avatar" aria-label="移除头像">移除</button>${e ? "<button type=\"button\" class=\"menu-item\" data-action=\"restore-avatar\" aria-label=\"恢复自动头像\">恢复</button>" : ""}`;
 }
 function $(e, t, n, r = "", i = !1) {
 	return `<button type="button" class="${r}" data-action="${e}" aria-label="${t}" ${i ? "disabled" : ""}>${n ? Z(n) : ""}<span>${t}</span></button>`;
 }
-function eu(e, t = "") {
+function ru(e, t = "") {
 	return `<header class="page-heading"><div class="page-title-row"><h1>${Q(e)}</h1><div class="heading-actions">${t}</div></div></header>`;
 }
-function tu(e, t, n = "messages") {
+function iu(e, t, n = "messages") {
 	return `<div class="empty-state"><div class="empty-symbol">${Z(n)}</div><h2>${e}</h2>${t ? `<p>${t}</p>` : ""}</div>`;
 }
-function nu(e, { action: t, data: n = {}, busy: r = !1, label: i = "配图" } = {}) {
+function au(e, { action: t, data: n = {}, busy: r = !1, label: i = "配图" } = {}) {
 	if (!e?.description) return "";
 	let a = Object.entries(n).map(([e, t]) => `data-${e}="${Q(t)}"`).join(" ");
 	return `<button type="button" class="content-photo" data-action="${Q(t)}" ${a} aria-label="${e.path ? "查看" : "生成"}${Q(i)}" aria-busy="${r}" ${r ? "disabled" : ""}>${e.path ? `<img data-phone-image="${Q(e.path)}" src="${Q(es(e.path))}" alt="${Q(e.description)}" loading="lazy" draggable="false">` : `<span>${Z(r ? "refresh" : "image")}<span>${r ? "生成中…" : Q(e.description)}</span>${r ? "" : "<small>点击生成图片</small>"}</span>`}</button>`;
 }
 //#endregion
 //#region src/ui/cards.js
-function ru(e, t = !1) {
+function ou(e, t = !1) {
 	if (e.type === "sticker") {
 		let t = dt(e.stickerId);
 		return t ? `<img src="${Q(t.src)}" alt="${Q(t.label)}" draggable="false" loading="lazy">` : Q(e.text);
@@ -12123,14 +12206,14 @@ function ru(e, t = !1) {
 		accepted: "已收下",
 		returned: "已退回"
 	}[e.transfer.status] || "待收款"}</small>` : e.type === "image" ? `${e.image.path ? `<img class="message-photo" data-phone-image="${Q(e.image.path)}" src="${Q(es(e.image.path))}" alt="${Q(e.image.description)}" loading="lazy">` : `<span class="photo-placeholder${t ? " is-generating" : ""}">${t ? `${Z("refresh")}<span role="status">生成中…</span>` : `${Z("image")}<small>点击生成</small>`}</span>`}
-      <span class="photo-description">${Q(e.image.description)}</span>` : Jl(e.text, e.translation);
+      <span class="photo-description">${Q(e.image.description)}</span>` : Zl(e.text, e.translation);
 }
-function iu(e, { readOnly: t, busy: n, selected: r = !1 }) {
+function su(e, { readOnly: t, busy: n, selected: r = !1 }) {
 	let i = e.transfer, a = e.type === "transfer" && !t && i.recipientId === "@user" && i.status === "pending" ? `<button type="button" data-transfer-id="${Q(e.id)}" data-transfer-status="accepted" ${n.has(`transfer:${e.id}`) ? "disabled" : ""}>收下</button>
       <button type="button" data-transfer-id="${Q(e.id)}" data-transfer-status="returned" ${n.has(`transfer:${e.id}`) ? "disabled" : ""}>退回</button>` : "", o = e.type === "image" ? `<button type="button" class="icon-button card-more" aria-expanded="${r}" data-message="${Q(e.id)}" aria-label="图片消息操作">${Z("more")}</button>` : "";
 	return a || o ? `<div class="card-actions">${a}${o}</div>` : "";
 }
-function au(e, t, n, r, i) {
+function cu(e, t, n, r, i) {
 	if (!t.attachment) return "";
 	let a = `<div class="attachment-heading">
     <span>${{
@@ -12192,7 +12275,7 @@ function au(e, t, n, r, i) {
     </form>
   </section>`;
 }
-function ou(e) {
+function lu(e) {
 	return e ? `<div class="photo-viewer" role="dialog" aria-label="查看图片" aria-modal="true">
     ${$("close-photo", "关闭图片", "close", "icon-button")}
     <img ${e.derived ? "" : `data-phone-image="${Q(e.path)}"`} src="${Q(es(e.path))}" alt="${Q(e.description)}">
@@ -12201,26 +12284,26 @@ function ou(e) {
 }
 //#endregion
 //#region src/ui/favorites.js
-function su(e, t, n, r) {
-	return cu(t, ss(e, ls(e, t, { defaultUser: r })), n.has(`favorite-add:${JSON.stringify(t)}`));
+function uu(e, t, n, r) {
+	return du(t, ss(e, ls(e, t, { defaultUser: r })), n.has(`favorite-add:${JSON.stringify(t)}`));
 }
-function cu(e, t, n, { message: r = !1 } = {}) {
+function du(e, t, n, { message: r = !1 } = {}) {
 	let i = t ? "已收藏" : "收藏";
 	return `<button type="button" class="${r ? "message-action message-favorite" : "content-favorite"}" data-action="favorite-add" ${us(e)} ${t ? `data-favorite-id="${Q(t.id)}"` : ""} aria-label="${i}" aria-pressed="${!!t}" ${n ? "disabled" : ""}>${Z(t ? "favorites-active" : "favorites")}<span>收藏</span></button>`;
 }
-var lu = (e) => e?.path ? `<span class="favorite-thumbnail"><img data-phone-image="${Q(e.path)}" src="${Q(es(e.path))}" alt="${Q(e.description || "")}" loading="lazy" draggable="false"></span>` : "", uu = (e) => {
+var fu = (e) => e?.path ? `<span class="favorite-thumbnail"><img data-phone-image="${Q(e.path)}" src="${Q(es(e.path))}" alt="${Q(e.description || "")}" loading="lazy" draggable="false"></span>` : "", pu = (e) => {
 	let t = Array.from(e || "");
 	return t.slice(0, 110).join("") + (t.length > 110 ? "…" : "");
-}, du = (e) => Jl(e.text, e.translation, Kl), fu = (e) => e.publishedAt ? `<time>${Q(To(e.publishedAt))}</time>` : "";
-function pu(e, { ui: t }) {
+}, mu = (e) => Zl(e.text, e.translation, Yl), hu = (e) => e.publishedAt ? `<time>${Q(To(e.publishedAt))}</time>` : "";
+function gu(e, { ui: t }) {
 	let n = (e.favorites || []).filter((e) => !t.favoriteFilter || e.source.app === t.favoriteFilter).slice().reverse();
-	return `${eu("收藏夹")}<nav class="forum-tags favorite-filters" aria-label="收藏来源">${ns.map(([e, n]) => `<button type="button" data-action="favorite-filter" data-favorite-filter="${e}" aria-pressed="${t.favoriteFilter === e}">${n}</button>`).join("")}</nav>
+	return `${ru("收藏夹")}<nav class="forum-tags favorite-filters" aria-label="收藏来源">${ns.map(([e, n]) => `<button type="button" data-action="favorite-filter" data-favorite-filter="${e}" aria-pressed="${t.favoriteFilter === e}">${n}</button>`).join("")}</nav>
     <div class="forum-posts favorite-list">${n.map((e) => {
 		let t = e.snapshot;
-		return `<button type="button" class="forum-card favorite-card" data-action="favorite-open" data-favorite-id="${Q(e.id)}"><span class="post-topline"><span>${Q(t.sourceLabel)}</span><span class="post-author">${Q(t.authorName)}</span></span>${t.title ? `<span class="post-title">${Jl(t.title, t.titleTranslation)}</span>` : ""}<span class="post-excerpt favorite-card-content"><span>${Jl(uu(t.text || t.image?.description), uu(t.translation), Kl)}</span>${lu(t.image)}</span>${t.publishedAt ? `<span class="post-footer">${fu(t)}</span>` : ""}</button>`;
-	}).join("")}</div>${n.length ? "" : tu("还没有收藏", "在消息或帖子旁的操作里，留下想再看的内容。", "favorites")}`;
+		return `<button type="button" class="forum-card favorite-card" data-action="favorite-open" data-favorite-id="${Q(e.id)}"><span class="post-topline"><span>${Q(t.sourceLabel)}</span><span class="post-author">${Q(t.authorName)}</span></span>${t.title ? `<span class="post-title">${Zl(t.title, t.titleTranslation)}</span>` : ""}<span class="post-excerpt favorite-card-content"><span>${Zl(pu(t.text || t.image?.description), pu(t.translation), Yl)}</span>${fu(t.image)}</span>${t.publishedAt ? `<span class="post-footer">${hu(t)}</span>` : ""}</button>`;
+	}).join("")}</div>${n.length ? "" : iu("还没有收藏", "在消息或帖子旁的操作里，留下想再看的内容。", "favorites")}`;
 }
-function mu(e, t) {
+function _u(e, t) {
 	if (!e?.path && !e?.description) return "";
 	let n = {
 		forum: "forum-photo",
@@ -12229,41 +12312,41 @@ function mu(e, t) {
 	}[t], r = t === "social" ? "social-photo-placeholder" : t === "liangshi" ? "ls-photo-placeholder" : "", i = e.path ? `<img data-phone-image="${Q(e.path)}" src="${Q(es(e.path))}" alt="${Q(e.description || "")}" loading="lazy" draggable="false">` : `<span class="${r}">${Z("image")}<span class="photo-description">${Q(e.description)}</span><small>尚未生成图片</small></span>`;
 	return e.path ? `<button type="button" class="${n} favorite-photo" data-action="favorite-photo" aria-label="查看收藏图片">${i}</button>${e.description ? `<p class="photo-description">${Q(e.description)}</p>` : ""}` : `<div class="${n} favorite-photo">${i}</div>`;
 }
-function hu(e) {
-	return e ? `<div class="ls-quote favorite-quote"><strong class="ls-quote-name">${Q(e.authorName)}</strong>${Jl(e.text, e.translation, Kl)}</div>` : "";
+function vu(e) {
+	return e ? `<div class="ls-quote favorite-quote"><strong class="ls-quote-name">${Q(e.authorName)}</strong>${Zl(e.text, e.translation, Yl)}</div>` : "";
 }
-function gu(e) {
-	if (e.type === "pat") return `<div class="message-row pat-row"><div class="pat-copy"><div class="pat-message favorite-copy">${du(e)}</div></div></div>`;
+function yu(e) {
+	if (e.type === "pat") return `<div class="message-row pat-row"><div class="pat-copy"><div class="pat-message favorite-copy">${mu(e)}</div></div></div>`;
 	let t = [
 		"sticker",
 		"location",
 		"transfer"
-	].includes(e.type), n = e.type === "image" || !e.type && !!e.image, r = n ? `${e.type ? "" : du(e)}${e.image?.path ? `<img class="message-photo" data-phone-image="${Q(e.image.path)}" src="${Q(es(e.image.path))}" alt="${Q(e.image.description || "")}" loading="lazy">` : `<span class="photo-placeholder">${Z("image")}<small>尚未生成图片</small></span>`}<span class="photo-description">${Q(e.image?.description || "")}</span>` : t ? ru(e) : du(e), i = `bubble favorite-copy${n ? " image-message favorite-rich" : e.type ? ` ${Q(e.type)}-message favorite-rich` : ""}`, a = n && e.image?.path ? `<button type="button" class="${i}" data-action="favorite-photo" aria-label="查看收藏图片">${r}</button>` : `<div class="${i}">${r}</div>`;
-	return `<div class="message-row"><div class="message-copy"><h2 class="message-sender">${Q(e.authorName)}</h2>${a}<span class="message-foot">${fu(e)}</span></div></div>`;
+	].includes(e.type), n = e.type === "image" || !e.type && !!e.image, r = n ? `${e.type ? "" : mu(e)}${e.image?.path ? `<img class="message-photo" data-phone-image="${Q(e.image.path)}" src="${Q(es(e.image.path))}" alt="${Q(e.image.description || "")}" loading="lazy">` : `<span class="photo-placeholder">${Z("image")}<small>尚未生成图片</small></span>`}<span class="photo-description">${Q(e.image?.description || "")}</span>` : t ? ou(e) : mu(e), i = `bubble favorite-copy${n ? " image-message favorite-rich" : e.type ? ` ${Q(e.type)}-message favorite-rich` : ""}`, a = n && e.image?.path ? `<button type="button" class="${i}" data-action="favorite-photo" aria-label="查看收藏图片">${r}</button>` : `<div class="${i}">${r}</div>`;
+	return `<div class="message-row"><div class="message-copy"><h2 class="message-sender">${Q(e.authorName)}</h2>${a}<span class="message-foot">${hu(e)}</span></div></div>`;
 }
-function _u(e) {
+function bu(e) {
 	let t = e.snapshot, { app: n, kind: r } = e.source;
 	if (n === "forum") {
-		let e = `${t.text || t.translation ? `<p class="post-body favorite-copy">${du(t)}</p>` : ""}${mu(t.image, n)}`;
-		return r === "post" ? `<article class="post-detail">${t.title ? `<h1>${Jl(t.title, t.titleTranslation)}</h1>` : ""}<div class="post-byline"><span>${Q(t.authorName)}</span>${fu(t)}</div>${e}</article>` : `<article class="comment-row"><div><h3>${Q(t.authorName)}</h3>${fu(t)}${e}</div></article>`;
+		let e = `${t.text || t.translation ? `<p class="post-body favorite-copy">${mu(t)}</p>` : ""}${_u(t.image, n)}`;
+		return r === "post" ? `<article class="post-detail">${t.title ? `<h1>${Zl(t.title, t.titleTranslation)}</h1>` : ""}<div class="post-byline"><span>${Q(t.authorName)}</span>${hu(t)}</div>${e}</article>` : `<article class="comment-row"><div><h3>${Q(t.authorName)}</h3>${hu(t)}${e}</div></article>`;
 	}
 	if (n === "social") {
-		let e = `<div class="social-author"><div class="social-author-copy"><h2><strong>${Q(t.authorName)}</strong></h2>${fu(t)}</div></div>`;
-		return r === "post" ? `<article class="social-post">${e}${mu(t.image, n)}<p class="social-caption favorite-copy">${du(t)}</p></article>` : `<article class="social-post">${e}<p class="social-comment favorite-copy">${du(t)}</p>${mu(t.image, n)}</article>`;
+		let e = `<div class="social-author"><div class="social-author-copy"><h2><strong>${Q(t.authorName)}</strong></h2>${hu(t)}</div></div>`;
+		return r === "post" ? `<article class="social-post">${e}${_u(t.image, n)}<p class="social-caption favorite-copy">${mu(t)}</p></article>` : `<article class="social-post">${e}<p class="social-comment favorite-copy">${mu(t)}</p>${_u(t.image, n)}</article>`;
 	}
 	if (n === "liangshi") {
-		let e = `<div class="ls-author"><div class="ls-author-copy"><h2 class="ls-name">${Q(t.authorName)}</h2><span class="ls-meta">${fu(t)}</span></div></div>`;
-		return r === "comment" ? `<article class="ls-comment"><div class="ls-comment-body">${e}<p class="favorite-copy">${du(t)}</p>${mu(t.image, n)}${hu(t.quote)}</div></article>` : `<article class="${r === "repost" ? "ls-repost" : "ls-post"}">${e}<p class="ls-copy favorite-copy">${du(t)}</p>${mu(t.image, n)}${hu(t.quote)}</article>`;
+		let e = `<div class="ls-author"><div class="ls-author-copy"><h2 class="ls-name">${Q(t.authorName)}</h2><span class="ls-meta">${hu(t)}</span></div></div>`;
+		return r === "comment" ? `<article class="ls-comment"><div class="ls-comment-body">${e}<p class="favorite-copy">${mu(t)}</p>${_u(t.image, n)}${vu(t.quote)}</div></article>` : `<article class="${r === "repost" ? "ls-repost" : "ls-post"}">${e}<p class="ls-copy favorite-copy">${mu(t)}</p>${_u(t.image, n)}${vu(t.quote)}</article>`;
 	}
-	return gu(t);
+	return yu(t);
 }
-function vu(e, { ui: t, busy: n }) {
+function xu(e, { ui: t, busy: n }) {
 	let r = (e.favorites || []).find((e) => e.id === t.favoriteId);
-	return r ? `${eu("收藏详情", $("favorite-back", "返回收藏夹", "arrow", "icon-button"))}<section class="favorite-detail" data-favorite-app="${Q(r.source.app)}"><div class="favorite-detail-header"><p class="favorite-origin">${Q(r.snapshot.sourceLabel)}</p>${$("favorite-remove", "取消收藏", "", "quiet-button danger", n.has(`favorite-remove:${r.id}`))}</div>${_u(r)}</section>` : `${eu("收藏详情", $("favorite-back", "返回收藏夹", "arrow", "icon-button"))}${tu("这条收藏已移除")}`;
+	return r ? `${ru("收藏详情", $("favorite-back", "返回收藏夹", "arrow", "icon-button"))}<section class="favorite-detail" data-favorite-app="${Q(r.source.app)}"><div class="favorite-detail-header"><p class="favorite-origin">${Q(r.snapshot.sourceLabel)}</p>${$("favorite-remove", "取消收藏", "", "quiet-button danger", n.has(`favorite-remove:${r.id}`))}</div>${bu(r)}</section>` : `${ru("收藏详情", $("favorite-back", "返回收藏夹", "arrow", "icon-button"))}${iu("这条收藏已移除")}`;
 }
 //#endregion
 //#region src/ui/status.js
-function yu(e) {
+function Su(e) {
 	return `<div class="lock-meta">
     <span class="lock-weather" title="${e.source === "decoration" ? "装饰天气" : "构画剧情天气"}">
       ${Z("sun")}<span>${Q(e.text)} ${Q(e.temperature)}</span>
@@ -12271,7 +12354,7 @@ function yu(e) {
     <span class="home-date"></span>
   </div>`;
 }
-function bu({ notificationsEnabled: e = !0 } = {}) {
+function Cu({ notificationsEnabled: e = !0 } = {}) {
 	return `<header class="phone-status" aria-label="手机状态栏">
     <time class="status-time"></time>
     <button type="button" class="notification-shade-toggle" data-action="toggle-notification-shade" aria-label="打开通知与快捷设置" aria-expanded="false"${e ? "" : " disabled"}>${Z("arrow")}</button>
@@ -12282,7 +12365,7 @@ function bu({ notificationsEnabled: e = !0 } = {}) {
     </span>
   </header>`;
 }
-function xu({ root: e, element: t, readTime: n, onRefresh: r = () => {} }) {
+function wu({ root: e, element: t, readTime: n, onRefresh: r = () => {} }) {
 	let i;
 	function a() {
 		if (clearTimeout(i), t.hidden) return;
@@ -12314,24 +12397,24 @@ function xu({ root: e, element: t, readTime: n, onRefresh: r = () => {} }) {
 }
 //#endregion
 //#region src/ui/home.js
-function Su(e) {
-	let t = e.theme === "night", n = e.wallpapers?.[t ? "night" : "day"], r = Ce(n || (e.lockStyle === "stacked" ? "builtin:glass-lake" : e.lockStyle === "rounded" ? "builtin:paper-petals" : ""));
+function Tu(e) {
+	let t = e.theme === "night", n = e.wallpapers?.[t ? "night" : "day"], r = Se(n || (e.lockStyle === "stacked" ? "builtin:glass-lake" : e.lockStyle === "rounded" ? "builtin:paper-petals" : ""));
 	return {
 		custom: !!n,
-		src: r?.[t ? "night" : "day"] || n || Wl(t ? "night-fold-foreground.png" : "echo-foreground.png"),
+		src: r?.[t ? "night" : "day"] || n || ql(t ? "night-fold-foreground.png" : "echo-foreground.png"),
 		alt: r?.name || (n ? "自定义主页背景" : t ? "银白与深蓝折叠线带，内折处一抹朱红" : "矿蓝与青铜色的回声线环")
 	};
 }
-function Cu(e, { weather: t } = {}) {
-	let n = e.theme === "night", r = Su(e);
+function Eu(e, { weather: t } = {}) {
+	let n = e.theme === "night", r = Tu(e);
 	return `${e.lockStyle === "rounded" ? `<img class="home-wallpaper" src="${Q(r.src)}" alt="${r.alt}" draggable="false">
     <div class="round-stage">
-      ${yu(t)}
+      ${Su(t)}
       <div class="home-clock round-clock" data-clock-digits role="img" aria-label="当前时间"><span></span><span></span><span></span><span></span></div>
     </div>` : e.lockStyle === "stacked" ? `<img class="home-wallpaper" src="${Q(r.src)}" alt="${r.alt}" draggable="false">
     <div class="stack-stage">
       <div class="home-clock stack-clock" data-clock-digits role="img" aria-label="当前时间"><span></span><span></span><span></span><span></span></div>
-      ${yu(t)}
+      ${Su(t)}
     </div>` : `<div class="home-artboard">
     ${r.custom ? `<img class="home-wallpaper" src="${Q(r.src)}" alt="${r.alt}" draggable="false">` : ""}
     <div class="classic-clock-stage"><svg class="home-clock" viewBox="0 0 340 420" preserveAspectRatio="none" role="img" aria-label="当前时间">
@@ -12345,14 +12428,14 @@ function Cu(e, { weather: t } = {}) {
     ${Hc(e).map((e) => `<button type="button" class="lock-notification"
       ${e.notificationKey ? `data-action="open-lock-notice" data-notification-key="${Q(e.notificationKey)}" data-notice-kind="${e.isSocial ? "social-reply" : "message"}" data-notice-id="${Q(e.id)}"` : e.isSocial ? `data-action="open-social-reply" data-social-post="${Q(e.id)}"` : `data-${e.isGroup ? "group" : "contact"}="${Q(e.id)}"`}>
       <span class="notification-app-icon">${Z(e.isSocial ? "social" : "messages")}</span>
-      <span class="notification-copy"><strong>${Q(R(e))}${e.isSocial ? " 回复了你" : ""}</strong><span>${Kl(e.preview)}</span></span>
+      <span class="notification-copy"><strong>${Q(R(e))}${e.isSocial ? " 回复了你" : ""}</strong><span>${Yl(e.preview)}</span></span>
       <small>${e.count}</small>
     </button>`).join("")}
   </div>`;
 }
 //#endregion
 //#region src/ui/conflict.js
-function wu({ mode: e, busy: t, feedbackMarkup: n = "" }) {
+function Du({ mode: e, busy: t, feedbackMarkup: n = "" }) {
 	return `<div class="phone-dialog-backdrop">
     <section class="phone-dialog" role="alertdialog" aria-modal="true" aria-labelledby="phone-conflict-title">
       <h2 id="phone-conflict-title">两份手机同时启用</h2>
@@ -12368,38 +12451,38 @@ function wu({ mode: e, busy: t, feedbackMarkup: n = "" }) {
 }
 //#endregion
 //#region src/ui/shell.js
-function Tu(e, t) {
+function Ou(e, t) {
 	return `<nav class="bottom-nav system-nav" aria-label="手机导航">
     ${$("system-back", "返回", "back", "nav-item", !t || e === "desktop")}
     ${$("system-home", "主页", "home", "nav-item", !t)}
     ${$("close", "关闭手机", "phone-close", "nav-item close-button")}
   </nav>`;
 }
-function Eu(e) {
+function ku(e) {
 	return e ? `<div class="feedback ${e.error ? "is-error" : e.compact ? "is-compact" : ""}" role="${e.error ? "alert" : "status"}">
     <span>${Q(e.text)}</span>${$("dismiss", "关闭提示", "close", "icon-button")}
   </div>` : "";
 }
-function Du({ content: e, view: t, enabled: n, weather: r, feedback: i, photo: a, conflict: o, mode: s, conflictBusy: c, lockStyle: l, settingsVersion: u = "" }) {
+function Au({ content: e, view: t, enabled: n, weather: r, feedback: i, photo: a, conflict: o, mode: s, conflictBusy: c, lockStyle: l, settingsVersion: u = "" }) {
 	let d = t === "home", f = d && ["stacked", "rounded"].includes(l), p = `<footer class="phone-footer ${d ? "home-footer" : ""}">
     ${d ? `${$("unlock", "进入桌面", "fingerprint", "icon-button unlock-button")}
-    ${f ? "" : yu(r)}
-    ${$("close", "关闭手机", "phone-close", "icon-button close-button lock-close")}` : Tu(t, n)}
+    ${f ? "" : Su(r)}
+    ${$("close", "关闭手机", "phone-close", "icon-button close-button lock-close")}` : Ou(t, n)}
   </footer>`;
-	return `${bu({ notificationsEnabled: n && !o && !a })}
+	return `${Cu({ notificationsEnabled: n && !o && !a })}
     <main class="phone-main view-${t}${f ? l === "rounded" ? " is-rounded" : " is-stacked" : d ? " is-classic" : ""}">${e}${d ? p : ""}</main>
-    ${o ? "" : Eu(i)}
+    ${o ? "" : ku(i)}
     ${u}
-    ${d ? "" : p}${ou(a)}
-    ${o ? wu({
+    ${d ? "" : p}${lu(a)}
+    ${o ? Du({
 		mode: s,
 		busy: c,
-		feedbackMarkup: Eu(i)
+		feedbackMarkup: ku(i)
 	}) : ""}`;
 }
 //#endregion
 //#region src/ui/desktop.js
-function Ou(e = /* @__PURE__ */ new Date()) {
+function ju(e = /* @__PURE__ */ new Date()) {
 	let t = e.getFullYear(), n = e.getMonth(), r = e.getDate(), i = [
 		"一",
 		"二",
@@ -12423,9 +12506,9 @@ function Ou(e = /* @__PURE__ */ new Date()) {
 		}))
 	};
 }
-function ku(e, t) {
+function Mu(e, t) {
 	let n = typeof e?.today == "string" && e.today.trim() && Array.isArray(e.days) && e.days.some((e) => e.isToday);
-	n || (e = Ou(t));
+	n || (e = ju(t));
 	let r = e.days.findIndex((e) => e.isToday), i = Math.max(0, r), a = Math.max(0, i - (i + e.leading) % e.columns), o = e.days.slice(a, a + e.columns), s = e.days[r]?.items.map((e) => e.name).join(" · ") || "", c = n ? "button" : "section";
 	return `<${c} class="desktop-calendar" ${n ? "type=\"button\" data-action=\"open-calendar\" aria-label=\"打开日历\"" : "aria-label=\"日历\""}>
     <span class="desktop-calendar-copy">
@@ -12444,12 +12527,12 @@ function ku(e, t) {
     </span>
   </${c}>`;
 }
-function Au(e, { apps: t, calendar: n, now: r }) {
-	let i = Su(e);
+function Nu(e, { apps: t, calendar: n, now: r }) {
+	let i = Tu(e);
 	return `<img class="desktop-wallpaper ${i.custom ? "is-custom" : ""}"
       src="${Q(i.src)}" alt="" draggable="false">
     <div class="desktop-content">
-      ${ku(n, r)}
+      ${Mu(n, r)}
       <nav class="desktop-apps" aria-label="桌面应用">
         ${t.map(({ id: e, label: t }) => `<button type="button" class="desktop-app" data-tab="${e}" aria-label="${t}">
           <span class="desktop-app-icon desktop-app-${e}">${Z(e)}</span>
@@ -12461,8 +12544,8 @@ function Au(e, { apps: t, calendar: n, now: r }) {
 }
 //#endregion
 //#region src/ui/messages.js
-var ju = (e) => [e?.storyDate, e?.timeLabel].filter(Boolean).join(" ");
-function Mu(e, { ui: t, busy: n }) {
+var Pu = (e) => [e?.storyDate, e?.timeLabel].filter(Boolean).join(" ");
+function Fu(e, { ui: t, busy: n }) {
 	let r = [...(e.groups || []).map((e) => ({
 		kind: "group",
 		person: e
@@ -12482,21 +12565,21 @@ function Mu(e, { ui: t, busy: n }) {
 	}).sort((e, t) => e.rank - t.rank || (e.rank === 0 ? t.time - e.time : 0) || e.index - t.index), i = `<div class="inbox-options"><button type="button" class="icon-button" data-action="inbox-menu" aria-label="通讯录操作" aria-haspopup="menu" aria-expanded="${t.inboxMenu}">${Z("plus")}</button></div>`, a = r.map(({ kind: t, person: n, last: r, unread: i }) => {
 		let a = t === "group", o = a && e.contacts.find((e) => e.id === r?.speakerId), s = a ? r ? `${r.role === "user" ? "我" : R(o || { name: "群成员" })}：${vt(r)}` : `${n.memberIds.length + Number(n.userIsMember)} 位成员` : r ? vt(r) : "";
 		return `<button type="button" class="contact-row" data-${t}="${Q(n.id)}">
-      ${Zl(n)}
+      ${eu(n)}
       <span class="contact-copy">
         <span class="contact-title">
           <strong>${Q(a ? n.name : R(n))}</strong>
-          <span class="contact-time">${Q(ju(r))}</span>
+          <span class="contact-time">${Q(Pu(r))}</span>
         </span>
-        ${a || r ? `<span class="contact-preview-row"><span class="contact-preview">${Kl(s)}</span>${i ? `<small class="contact-unread"><span aria-hidden="true">${i > 99 ? "99+" : i}</span><span class="sr-only">未读 ${i} 条</span></small>` : ""}</span>` : ""}
+        ${a || r ? `<span class="contact-preview-row"><span class="contact-preview">${Yl(s)}</span>${i ? `<small class="contact-unread"><span aria-hidden="true">${i > 99 ? "99+" : i}</span><span class="sr-only">未读 ${i} 条</span></small>` : ""}</span>` : ""}
       </span>
     </button>`;
 	}).join("");
-	return `${eu("短信", i)}
+	return `${ru("短信", i)}
     <div class="contact-list">${a}</div>
-    ${r.length ? "" : tu("还没有联系人")}`;
+    ${r.length ? "" : iu("还没有联系人")}`;
 }
-function Nu(e, { ui: t, busy: n }) {
+function Iu(e, { ui: t, busy: n }) {
 	let r = t.view === "group-chat", i = r ? t.groupId : t.contactId, a = n.has(`continue:${i}`), o = n.has(`send:${i}`);
 	return `<div class="phone-menu-actions">
     ${$(r ? "edit-group" : "profile", r ? "编辑群聊" : "编辑联系人", "", "menu-item")}
@@ -12506,19 +12589,19 @@ function Nu(e, { ui: t, busy: n }) {
     </div>
   </div>`;
 }
-function Pu(e) {
+function Lu(e) {
 	return `${$("organize", e.has("directory") ? "整理中…" : "整理通讯录", "", "menu-item", e.has("directory"))}${$("add-contact", "添加联系人", "", "menu-item")}${$("add-group", "创建群聊", "", "menu-item")}`;
 }
-function Fu(e, t, n, { contact: r, user: i, selected: a, deleting: o, isGroup: s, busy: c, readOnly: l = !1, state: u, ui: d, conversationId: f }) {
+function Ru(e, t, n, { contact: r, user: i, selected: a, deleting: o, isGroup: s, busy: c, readOnly: l = !1, state: u, ui: d, conversationId: f }) {
 	let p = e.role === "user", m = (e) => e && e.type !== "pat" && (e.speakerId || e.role), h = m(t) === m(e), g = m(n) === m(e), _ = `${h ? " grouped-top" : ""}${g ? " grouped-bottom" : ""}${t && !h ? " group-start" : ""}`, v = a === e.id, y = {
 		app: "messages",
 		kind: "message",
 		conversationId: f,
 		messageId: e.id,
 		batchKey: e.batch?.key ?? "legacy"
-	}, b = v ? cu(y, ss(u, ls(u, y, { defaultUser: d.defaultUser })), c.has(`favorite-add:${JSON.stringify(y)}`), { message: !0 }) : "";
+	}, b = v ? du(y, ss(u, ls(u, y, { defaultUser: d.defaultUser })), c.has(`favorite-add:${JSON.stringify(y)}`), { message: !0 }) : "";
 	if (e.type === "pat") return `<div data-message-id="${Q(e.id)}" class="message-row pat-row${v ? " is-selected" : ""}">
-    <div class="pat-copy"><button type="button" class="pat-message" data-message="${Q(e.id)}" aria-label="拍一拍：${Q(vt(e))}" aria-expanded="${v}">${Jl(e.text, e.translation, Kl)}</button>
+    <div class="pat-copy"><button type="button" class="pat-message" data-message="${Q(e.id)}" aria-label="拍一拍：${Q(vt(e))}" aria-expanded="${v}">${Zl(e.text, e.translation, Yl)}</button>
       ${v ? `<div class="message-actions" role="group" aria-label="短信操作">${b}</div>` : ""}
     </div>
   </div>`;
@@ -12533,7 +12616,7 @@ function Fu(e, t, n, { contact: r, user: i, selected: a, deleting: o, isGroup: s
 	}, ...(u.contacts || []).filter((e) => r.memberIds?.includes(e.id))] : [], w = s && !p ? u.contacts?.find((t) => t.id === e.speakerId) || { name: "群成员" } : null, T = p ? {
 		tone: "lilac",
 		...i
-	} : s ? w : r, E = p ? "@user" : s ? w?.id : r.id, D = E && (!s || r.userIsMember && (E === "@user" || r.memberIds.includes(E))), O = s && !p ? w?.id : "", k = D || O ? `<button type="button" class="message-avatar${O ? " mention-avatar" : ""}" ${D ? `data-pat-target="${Q(E)}"` : ""} ${O ? `data-mention-id="${Q(O)}"` : ""} aria-label="${O ? `提及${Q(R(T))}` : `双击拍一拍${p ? "自己" : Q(R(T))}`}"${D ? " title=\"双击拍一拍\"" : ""}>${Zl(T, !0)}</button>` : Zl(T, !0), A = s ? mt(e, u.conversations?.[f] || []) : void 0, j = A && !A.missing ? R(A.role === "user" ? i : u.contacts.find((e) => e.id === A.speakerId) || { name: "已移除联系人" }) : "", ee = (e) => ql(e, C), te = A ? `<div class="message-reply${A.missing ? " is-missing" : ""}"><small>引用${j ? ` ${Q(j)}` : ""}</small>${A.missing ? "<span>原消息已删除</span>" : Jl(A.messageText, A.translation, ee)}</div>` : "", ne = !e.type && e.source?.kind === "main-story" ? Zc(e.text) : e.text, M = e.type ? ru(e, c.has(`image:${e.id}`)) : Jl(ne, e.translation, ee);
+	} : s ? w : r, E = p ? "@user" : s ? w?.id : r.id, D = E && (!s || r.userIsMember && (E === "@user" || r.memberIds.includes(E))), O = s && !p ? w?.id : "", k = D || O ? `<button type="button" class="message-avatar${O ? " mention-avatar" : ""}" ${D ? `data-pat-target="${Q(E)}"` : ""} ${O ? `data-mention-id="${Q(O)}"` : ""} aria-label="${O ? `提及${Q(R(T))}` : `双击拍一拍${p ? "自己" : Q(R(T))}`}"${D ? " title=\"双击拍一拍\"" : ""}>${eu(T, !0)}</button>` : eu(T, !0), A = s ? mt(e, u.conversations?.[f] || []) : void 0, j = A && !A.missing ? R(A.role === "user" ? i : u.contacts.find((e) => e.id === A.speakerId) || { name: "已移除联系人" }) : "", ee = (e) => Xl(e, C), te = A ? `<div class="message-reply${A.missing ? " is-missing" : ""}"><small>引用${j ? ` ${Q(j)}` : ""}</small>${A.missing ? "<span>原消息已删除</span>" : Zl(A.messageText, A.translation, ee)}</div>` : "", ne = !e.type && e.source?.kind === "main-story" ? Zc(e.text) : e.text, M = e.type ? ou(e, c.has(`image:${e.id}`)) : Zl(ne, e.translation, ee);
 	return `<div data-message-id="${Q(e.id)}" class="message-row ${p ? "is-mine" : "is-theirs"}${v ? " is-selected" : ""}${!g && e.timeLabel ? " has-time" : ""}${_}">
     ${k}
     <div class="message-body">
@@ -12547,7 +12630,7 @@ function Fu(e, t, n, { contact: r, user: i, selected: a, deleting: o, isGroup: s
             <button type="button" class="message-action message-delete danger" data-action="delete-message" data-message-target="${Q(e.id)}" aria-label="删除这条短信" ${o ? "disabled" : ""}>${Z("message-delete")}<span>删除</span></button>
           </div>` : ""}
         </div>
-        ${iu(e, {
+        ${su(e, {
 		readOnly: l,
 		busy: c,
 		selected: v
@@ -12557,9 +12640,9 @@ function Fu(e, t, n, { contact: r, user: i, selected: a, deleting: o, isGroup: s
     </div>
   </div>`;
 }
-function Iu(e, { ui: t, busy: n }) {
+function zu(e, { ui: t, busy: n }) {
 	let r = t.view === "group-chat", i = r ? e.groups?.find((e) => e.id === t.groupId) : e.contacts.find((e) => e.id === t.contactId);
-	if (!i) return tu("还没有选择联系人", "返回消息页，选择一个想聊的人。");
+	if (!i) return iu("还没有选择联系人", "返回消息页，选择一个想聊的人。");
 	let { current: a, past: o } = Cc(e.conversations[i.id] || [], t.batch), s = a.slice(-t.visibleMessages), c = n.has(`continue:${i.id}`), l = n.has(`send:${i.id}`), u = r ? !i.memberIds.some((t) => !Ao(e, t)) : Ao(e, i.id), d = {
 		contact: i,
 		user: e.userProfile || { name: t.defaultUser },
@@ -12570,7 +12653,7 @@ function Iu(e, { ui: t, busy: n }) {
 		deleting: n.has(`delete:${i.id}`),
 		isGroup: r,
 		busy: n
-	}, f = r ? "edit-group" : "profile", p = r && !i.userIsMember, m = r && t.replyToId ? mt({ replyToId: t.replyToId }, e.conversations[i.id] || []) : void 0, h = m && !p ? `<div class="reply-preview"><div><small>引用${m.missing ? " · 原消息已删除" : ""}</small>${m.missing ? "<span>原消息已删除</span>" : Jl(m.messageText, void 0, Q)}</div>${$("cancel-reply", "取消引用", "close", "icon-button")}</div>` : "", g = (e, t = !1) => e.map((n, r) => Fu(n, e[r - 1], e[r + 1], {
+	}, f = r ? "edit-group" : "profile", p = r && !i.userIsMember, m = r && t.replyToId ? mt({ replyToId: t.replyToId }, e.conversations[i.id] || []) : void 0, h = m && !p ? `<div class="reply-preview"><div><small>引用${m.missing ? " · 原消息已删除" : ""}</small>${m.missing ? "<span>原消息已删除</span>" : Zl(m.messageText, void 0, Q)}</div>${$("cancel-reply", "取消引用", "close", "icon-button")}</div>` : "", g = (e, t = !1) => e.map((n, r) => Ru(n, e[r - 1], e[r + 1], {
 		...d,
 		readOnly: t,
 		contact: i
@@ -12594,10 +12677,10 @@ function Iu(e, { ui: t, busy: n }) {
       ${$("send", "发送", "send", "send-button", l)}
     </div>
   </form>
-  ${au(e, t, n, i, r)}`;
+  ${cu(e, t, n, i, r)}`;
 	return `<header class="conversation-heading">
       ${$("back-inbox", "返回消息", "arrow", "icon-button back-button")}
-      ${Zl(i, !0)}
+      ${eu(i, !0)}
       <button type="button" class="conversation-person" data-action="${f}" aria-label="聊天资料">
         <h1>${Q(R(i))}</h1>
         ${r ? `<small>${i.memberIds.length + Number(i.userIsMember)} 位成员${p ? " · 旁观" : ""}</small>` : ""}
@@ -12615,7 +12698,7 @@ function Iu(e, { ui: t, busy: n }) {
         ${s.length ? `<div class="message-date current-batch-label"><span>${Q(t.batch.label)}</span></div>` : ""}
         ${g(s)}
         ${c ? `<div class="message-row is-theirs">
-          ${Zl(i, !0)}
+          ${eu(i, !0)}
           <div class="typing" role="status" aria-label="正在生成回复"><i></i><i></i><i></i></div>
         </div>` : ""}
       </div>
@@ -12624,7 +12707,7 @@ function Iu(e, { ui: t, busy: n }) {
 }
 //#endregion
 //#region src/ui/forum.js
-function Lu(e) {
+function Bu(e) {
 	let t = 2166136261;
 	for (let n of String(e)) t = Math.imul(t ^ n.codePointAt(0), 16777619) >>> 0;
 	let n = [
@@ -12638,16 +12721,16 @@ function Lu(e) {
 		dislike: t % 5 == 0 ? r + 1 + (t >>> 6) % n : (t >>> 8) % Math.max(2, Math.floor(r / 3))
 	};
 }
-function Ru(e, { ui: t = {}, busy: n }) {
-	let r = t.forumScope || "public", i = L(e, r).posts || [], a = r === "circle" ? "forum:circle" : "forum", o = V(i);
+function Vu(e, { ui: t = {}, busy: n }) {
+	let r = t.forumScope || "public", i = L(e, r).posts || [], a = r === "circle" ? "forum:circle" : "forum", o = ct(i);
 	o.includes(t.forumTag) || (t.forumTag = "");
 	let s = (t.forumTag ? i.filter((e) => st(e).includes(t.forumTag)) : i).map((e, t) => `<button type="button" class="forum-card" data-post="${Q(e.id)}">
     <span class="post-topline">
       ${(st(e).length ? st(e) : ["闲聊"]).map((e) => `<span class="post-category category-${t % 3}">${Q(e)}</span>`).join("")}
       <span class="post-author">${Q(e.author)}</span>
     </span>
-    <strong class="post-title">${Jl(e.title, e.titleTranslation)}</strong>
-    <span class="post-excerpt">${Jl(e.content, e.contentTranslation)}</span>
+    <strong class="post-title">${Zl(e.title, e.titleTranslation)}</strong>
+    <span class="post-excerpt">${Zl(e.content, e.contentTranslation)}</span>
     <span class="post-footer">
       <span>${Z("messages")}${e.comments?.length || 0} 条回帖${e.image ? `${Z("image")}1 张图片` : ""}</span>
       <span>展开看看 ${Z("next")}</span>
@@ -12656,19 +12739,19 @@ function Ru(e, { ui: t = {}, busy: n }) {
 	return `<header class="page-heading"><div class="page-title-row"><h1><button type="button" id="forum-title-toggle" class="forum-title-toggle" data-action="forum-menu" aria-label="论坛，当前${r === "circle" ? "圈内" : "圈外"}，切换范围" aria-haspopup="menu" aria-expanded="false">${r === "circle" ? "圈内" : "圈外"}${Z("next")}</button></h1>${$("refresh", n.has(a) ? "刷新中" : "刷新", "refresh", "quiet-button", n.has(a))}</div></header>
     ${o.length ? `<nav class="forum-tags" aria-label="论坛标签">${["", ...o].map((e) => `<button type="button" class="quiet-button" data-action="forum-tag" data-forum-tag="${Q(e)}" aria-pressed="${t.forumTag === e}">${Q(e || "全部")}</button>`).join("")}</nav>` : ""}
     <div class="forum-posts">${s}</div>
-    ${i.length ? "" : tu(r === "circle" ? "圈内还没有帖子" : "还没有帖子", r === "circle" && !je(L(e, r).profile) ? "可刷新识别社区，或从论坛标题菜单手动设置圈内范围。" : "", "forum")}`;
+    ${i.length ? "" : iu(r === "circle" ? "圈内还没有帖子" : "还没有帖子", r === "circle" && !je(L(e, r).profile) ? "可刷新识别社区，或从论坛标题菜单手动设置圈内范围。" : "", "forum")}`;
 }
-function zu(e, { ui: t }) {
+function Hu(e, { ui: t }) {
 	let n = t.forumScope || "public", r = je(L(e, "circle").profile);
 	return ["public", "circle"].map((e) => `<button type="button" class="menu-item forum-scope-option" role="menuitemradio" aria-checked="${n === e}" data-action="forum-scope" data-forum-scope="${e}"><span class="forum-scope-copy"><span>${e === "circle" ? "圈内" : "圈外"}</span>${e === "circle" ? `<small>${Q(r?.name || "未设置圈内范围")}</small>` : ""}</span>${e === n ? "<small class=\"forum-scope-current\">当前</small>" : ""}</button>`).join("") + (n === "circle" ? "<button type=\"button\" class=\"menu-item forum-scope-edit\" data-action=\"forum-circle-profile\">更改圈内范围</button>" : "");
 }
-function Bu(e, { ui: t, busy: n = /* @__PURE__ */ new Set() }) {
+function Uu(e, { ui: t, busy: n = /* @__PURE__ */ new Set() }) {
 	let r = t.forumScope || "public", i = L(e, r).posts.find((e) => e.id === t.postId);
-	if (!i) return tu("这批帖子已经更新", "返回论坛，看看新的帖子。", "forum");
+	if (!i) return iu("这批帖子已经更新", "返回论坛，看看新的帖子。", "forum");
 	let a = gs(i), o = new Map(a.map((e) => [e.id, e])), s = t.forumDrafts?.get(i.id) || {
 		text: "",
 		replyToId: ""
-	}, c = o.get(s.replyToId), l = t.forumVotes?.get(i.id), u = Lu(i.id), d = n.has(`forum-image:${i.id}`), f = n.has(`forum-more:${i.id}`), p = (e) => e.text || e.content || (e.image?.description ? `[图片] ${e.image.description}` : ""), m = (e) => {
+	}, c = o.get(s.replyToId), l = t.forumVotes?.get(i.id), u = Bu(i.id), d = n.has(`forum-image:${i.id}`), f = n.has(`forum-more:${i.id}`), p = (e) => e.text || e.content || (e.image?.description ? `[图片] ${e.image.description}` : ""), m = (e) => {
 		let t = Array.from(String(e || "").replace(/\s+/g, " ").trim());
 		return t.slice(0, 100).join("") + (t.length > 100 ? "…" : "");
 	}, h = (e) => `回复 #${a.findIndex((t) => t.id === e.id) + 1} · ${e.author}`, g = (e) => {
@@ -12678,7 +12761,7 @@ function Bu(e, { ui: t, busy: n = /* @__PURE__ */ new Set() }) {
     <span class="comment-avatar tone-${t % 3}" aria-hidden="true">${Q(Array.from(e.author || "路人")[0])}</span>
     <div><h3>${Q(e.author)}${e.userAuthored ? "<small class=\"forum-self\">我</small>" : ""}</h3>
       ${e.replyToId ? g(e.replyToId) : ""}
-      ${e.text ? `<p>${Jl(e.text, e.translation)}</p>` : ""}${nu(e.image, {
+      ${e.text ? `<p>${Zl(e.text, e.translation)}</p>` : ""}${au(e.image, {
 		action: "forum-image",
 		data: { "forum-comment": e.id },
 		busy: n.has(`forum-image:${i.id}:${e.id}`),
@@ -12687,10 +12770,10 @@ function Bu(e, { ui: t, busy: n = /* @__PURE__ */ new Set() }) {
     </div></article>`).join(""), v = i.image ? `<button type="button" class="forum-photo" data-action="forum-image" aria-label="${i.image.path ? "查看论坛图片" : "生成论坛图片"}" ${d ? "disabled" : ""}>
     ${i.image.path ? `<img data-phone-image="${Q(i.image.path)}" src="${Q(es(i.image.path))}" alt="${Q(i.image.description)}" draggable="false">` : `<span>${Z(d ? "refresh" : "image")}<span>${d ? "生成中…" : Q(i.image.description)}</span>${d ? "" : "<small>点击生成图片</small>"}</span>`}</button>` : "";
 	return `<header class="post-heading">${$("back-forum", "返回论坛", "arrow", "back-link")}<span>帖子详情</span></header>
-    <article class="post-detail" tabindex="-1">${(st(i).length ? st(i) : ["闲聊"]).map((e) => `<span class="post-category">${Q(e)}</span>`).join(" ")}<h1>${Jl(i.title, i.titleTranslation)}</h1>
+    <article class="post-detail" tabindex="-1">${(st(i).length ? st(i) : ["闲聊"]).map((e) => `<span class="post-category">${Q(e)}</span>`).join(" ")}<h1>${Zl(i.title, i.titleTranslation)}</h1>
       <div class="post-byline"><span class="author-mark">${Q(Array.from(i.author || "友")[0])}</span><span>${Q(i.author)}</span></div>
-      <p class="post-body">${Jl(i.content, i.contentTranslation)}</p>${v}
-      <div class="forum-votes" aria-label="帖子态度">${[["like", "赞"], ["dislike", "踩"]].map(([e, t]) => `<button type="button" data-action="forum-vote" data-forum-vote="${e}" aria-pressed="${l === e}">${Z(e)}${t} <span>${u[e] + Number(l === e)}</span></button>`).join("")}${su(e, {
+      <p class="post-body">${Zl(i.content, i.contentTranslation)}</p>${v}
+      <div class="forum-votes" aria-label="帖子态度">${[["like", "赞"], ["dislike", "踩"]].map(([e, t]) => `<button type="button" data-action="forum-vote" data-forum-vote="${e}" aria-pressed="${l === e}">${Z(e)}${t} <span>${u[e] + Number(l === e)}</span></button>`).join("")}${uu(e, {
 		app: "forum",
 		kind: "post",
 		postId: i.id,
@@ -12707,9 +12790,9 @@ function Bu(e, { ui: t, busy: n = /* @__PURE__ */ new Set() }) {
 }
 //#endregion
 //#region src/ui/models.js
-function Vu(e, t, n) {
-	let r = Gl(n), i = t.map((e) => ({
-		value: Gl(e.ref),
+function Wu(e, t, n) {
+	let r = Jl(n), i = t.map((e) => ({
+		value: Jl(e.ref),
 		label: e.label
 	}));
 	return `<div class="source-picker">
@@ -12717,19 +12800,19 @@ function Vu(e, t, n) {
     ${e.sourcesOpen ? `<div class="model-popup source-popup"><div class="model-options source-options" role="listbox" aria-label="可用配置">${i.map((e) => `<button type="button" role="option" data-api-source="${Q(e.value)}" aria-selected="${e.value === r}">${Q(e.label)}</button>`).join("")}</div></div>` : ""}
   </div>`;
 }
-function Hu(e) {
+function Gu(e) {
 	let t = e.modelSearch.trim().toLocaleLowerCase(), n = e.models.filter((e) => e.toLocaleLowerCase().includes(t));
 	return n.length ? n.map((t) => `<button type="button" role="option" aria-selected="${t === e.apiDraft.model}" data-model="${Q(t)}">${Q(t)}</button>`).join("") : "<div class=\"model-empty\" role=\"status\">无匹配项</div>";
 }
 //#endregion
 //#region src/ui/backgrounds.js
-function Uu({ value: e = "", theme: t, busy: n, chat: r = !1, preview: i, defaultPreset: a }) {
+function Ku({ value: e = "", theme: t, busy: n, chat: r = !1, preview: i, defaultPreset: a }) {
 	e === `builtin:${a}` && (e = "");
-	let o = r ? be.map((e) => ({
+	let o = r ? ye.map((e) => ({
 		value: `color:${e.id}`,
 		name: e.name,
 		color: e[t === "night" ? "night" : "day"]
-	})) : Se.filter((e) => e.id !== a).map((e) => ({
+	})) : xe.filter((e) => e.id !== a).map((e) => ({
 		value: `builtin:${e.id}`,
 		name: e.name,
 		src: e[t === "night" ? "night" : "day"]
@@ -12742,19 +12825,19 @@ function Uu({ value: e = "", theme: t, busy: n, chat: r = !1, preview: i, defaul
 }
 //#endregion
 //#region src/version.js
-var Wu = "0.6.1";
+var qu = "0.6.2";
 //#endregion
 //#region src/ui/settings.js
-function Gu(e, t, n) {
+function Ju(e, t, n) {
 	let r = e.storySmsStatus?.state, i = t.has("story-sms-status"), a = t.has("story-sms-install");
 	return `<div class="compact-switch-row" data-story-sms-install><span>楼内信息注入</span>
     <button type="button" class="switch-button" data-action="install-story-sms" ${i || a || r === "installed" || !n.isEnabled() ? "disabled" : ""}>${i ? "读取中" : a ? "注入中" : r === "installed" ? "已注入" : r === "outdated" ? "更新" : "注入"}</button></div>`;
 }
-function Ku(e, t) {
-	return `<small class="app-version"><span class="app-version-label"><span>两三事 ${Wu}</span> · <span>${e === "embedded" ? "随卡版" : "插件版"}</span></span>${t ? "<span data-update-notice></span>" : ""}</small>`;
+function Yu(e, t) {
+	return `<small class="app-version"><span class="app-version-label"><span>两三事 ${qu}</span> · <span>${e === "embedded" ? "随卡版" : "插件版"}</span></span>${t ? "<span data-update-notice></span>" : ""}</small>`;
 }
-function qu(e, { ui: t, busy: n, apiSettings: r, imageProviders: i, entries: a, appearance: o, control: s, mode: c, updates: l, sourcePermissions: u, sourcePermissionMarkup: d = "" }) {
-	let f = r.listSources(), p = r.getSelected(), m = f.find((e) => Gl(e.ref) === Gl(p)), h = a.read(), g = c === "embedded" ? "随卡版" : "插件版", _ = (e, n, r) => `<section class="settings-drawer">
+function Xu(e, { ui: t, busy: n, apiSettings: r, imageProviders: i, entries: a, appearance: o, control: s, mode: c, updates: l, sourcePermissions: u, sourcePermissionMarkup: d = "" }) {
+	let f = r.listSources(), p = r.getSelected(), m = f.find((e) => Jl(e.ref) === Jl(p)), h = a.read(), g = c === "embedded" ? "随卡版" : "插件版", _ = (e, n, r) => `<section class="settings-drawer">
     <button type="button" class="settings-drawer-toggle" data-drawer="${e}" aria-expanded="${t.drawers[e]}">
       <span>${n}</span>${Z("next")}
     </button>
@@ -12766,7 +12849,7 @@ function qu(e, { ui: t, busy: n, apiSettings: r, imageProviders: i, entries: a, 
       <span></span>
     </span>
   </label>`, y = `<label class="field-label" for="api-source">使用的配置</label>
-    <div class="api-source-row">${Vu(t, f, p)}${$("api-edit", "编辑", "", "quiet-button", n.has("api") || !m)}</div>
+    <div class="api-source-row">${Wu(t, f, p)}${$("api-edit", "编辑", "", "quiet-button", n.has("api") || !m)}</div>
     <div class="api-actions">${$("api-new", "新增 API", "", "quiet-button", n.has("api"))}</div>
     <p class="setting-note">新增连接后，可在用途中选择。</p>`, b = `<label class="field-label" for="phone-theme">主题</label>
     <select id="phone-theme" aria-label="外观主题">
@@ -12796,12 +12879,12 @@ function qu(e, { ui: t, busy: n, apiSettings: r, imageProviders: i, entries: a, 
     <p class="setting-note">留空使用系统字体，日韩原文保留手写体。</p>
     <span class="field-label">锁屏背景</span>
     <div class="wallpaper-editor">
-      ${Uu({
+      ${Ku({
 		value: e.wallpapers?.[e.theme === "night" ? "night" : "day"],
 		theme: e.theme,
 		defaultPreset: e.lockStyle === "stacked" ? "glass-lake" : e.lockStyle === "rounded" ? "paper-petals" : void 0,
 		busy: n.has("wallpaper"),
-		preview: Su({
+		preview: Tu({
 			...e,
 			wallpapers: {}
 		}).src
@@ -12813,9 +12896,9 @@ function qu(e, { ui: t, busy: n, apiSettings: r, imageProviders: i, entries: a, 
       <span></span>
     </span>
   </label>
-  ${Gu(t, n, s)}
+  ${Ju(t, n, s)}
   <label class="compact-switch-row story-reference-row" for="story-reference-floors"><span>参考正文楼</span>
-    <input id="story-reference-floors" class="story-reference-floors" type="number" inputmode="numeric" min="0" step="1" aria-label="参考正文楼" value="${Q(t.storyReferenceFloorsDraft ?? _e(e))}" ${n.has("story-reference-floors") ? "disabled" : ""}>
+    <input id="story-reference-floors" class="story-reference-floors" type="number" inputmode="numeric" min="0" step="1" aria-label="参考正文楼" value="${Q(t.storyReferenceFloorsDraft ?? ge(e))}" ${n.has("story-reference-floors") ? "disabled" : ""}>
   </label>
   <p class="setting-note">最近N楼，含AI与用户；0为不参考正文。</p>
   <label class="compact-switch-row" for="default-language"><span>默认语言</span>
@@ -12838,7 +12921,7 @@ function qu(e, { ui: t, busy: n, apiSettings: r, imageProviders: i, entries: a, 
     </select>
   </label>
   ${u ? `<div data-worldbook-settings>${d}</div>` : ""}`;
-	return `${eu("设置")}
+	return `${ru("设置")}
     <div class="master-switch-row">
     <label for="phone-enabled">启用两三事</label>
     <div class="master-switch-actions">
@@ -12852,7 +12935,7 @@ function qu(e, { ui: t, busy: n, apiSettings: r, imageProviders: i, entries: a, 
     ${s.isEnabled() ? "" : `<p class="setting-note">${g}已在当前角色卡停用，重新开启后可使用其他页面。</p>`}
     <section class="settings-section">
       <button type="button" class="my-profile" data-action="edit-user" aria-label="编辑我的资料" ${s.isEnabled() ? "" : "disabled"}>
-        ${Zl(e.userProfile || { name: t.defaultUser })}
+        ${eu(e.userProfile || { name: t.defaultUser })}
         <span>
           <strong>${Q(R(e.userProfile || { name: t.defaultUser }))}</strong>
           <small>我的资料</small>
@@ -12870,7 +12953,7 @@ function qu(e, { ui: t, busy: n, apiSettings: r, imageProviders: i, entries: a, 
 }
 //#endregion
 //#region src/ui/profiles.js
-function Ju(e, t) {
+function Zu(e, t) {
 	return `<div class="model-popup identity-popup"><div class="model-options" role="listbox" aria-label="选择所属人物">${[
 		{
 			id: "",
@@ -12886,7 +12969,7 @@ function Ju(e, t) {
 		}))
 	].map((e) => `<button type="button" role="option" data-identity-owner="${Q(e.id)}" aria-selected="${e.id === (t.profileDraft.identityOwnerId || "")}">${Q(e.name)}</button>`).join("")}</div></div>`;
 }
-function Yu(e, { ui: t, busy: n, profileAvatar: r }) {
+function Qu(e, { ui: t, busy: n, profileAvatar: r }) {
 	let i = t.profileDraft, a = t.editor === "contact", o = a && e.contacts.find((e) => e.id === t.editId), s = o && !Ao(e, o.id) ? `<label class="field-label" for="profile-remark">TA 给我的备注</label><output id="profile-remark" class="profile-readonly">${Q(typeof o.remarkForUser == "string" && o.remarkForUser.trim() ? o.remarkForUser : "—")}</output>` : "", c = i.identityOwnerId === "@user" ? "我" : e.contacts.find((e) => e.id === i.identityOwnerId)?.nickname || e.contacts.find((e) => e.id === i.identityOwnerId)?.name || "此联系人本人", l = a ? `
     <div class="field-label profile-expression-heading">
       <label for="profile-expression">线上聊天方式</label>
@@ -12900,7 +12983,7 @@ function Yu(e, { ui: t, busy: n, profileAvatar: r }) {
       <span>${a ? t.editId ? "联系人资料" : "添加联系人" : "我的资料"}</span>
     </header>
     <form class="profile-form">
-      ${Ql(r || i, {
+      ${tu(r || i, {
 		open: t.avatarMenuOpen,
 		canRestore: a,
 		busy: n.has("avatar") || n.has("profile")
@@ -12912,9 +12995,9 @@ function Yu(e, { ui: t, busy: n, profileAvatar: r }) {
       ${s}
       <label class="field-label" for="profile-avatar">头像地址</label>
       <input id="profile-avatar" name="avatar" type="url" value="${Q(i.avatar?.startsWith("data:") ? "" : i.avatar)}" placeholder="https://…，也可从上方选择图片">
-      ${a ? `<label class="field-label" for="identity-owner">所属人物</label><div class="identity-picker"><button type="button" id="identity-owner" class="model-list-toggle" data-action="identity-menu" aria-haspopup="listbox" aria-expanded="${!!t.identityOwnersOpen}"><span>${Q(c)}</span>${Z("next")}</button>${t.identityOwnersOpen ? Ju(e, t) : ""}</div>` : ""}
+      ${a ? `<label class="field-label" for="identity-owner">所属人物</label><div class="identity-picker"><button type="button" id="identity-owner" class="model-list-toggle" data-action="identity-menu" aria-haspopup="listbox" aria-expanded="${!!t.identityOwnersOpen}"><span>${Q(c)}</span>${Z("next")}</button>${t.identityOwnersOpen ? Zu(e, t) : ""}</div>` : ""}
       ${l}
-      ${a ? `<span class="field-label">聊天背景</span>${Uu({
+      ${a ? `<span class="field-label">聊天背景</span>${Ku({
 		value: i.background,
 		theme: e.theme,
 		busy: n.has("chat-background"),
@@ -12928,7 +13011,7 @@ function Yu(e, { ui: t, busy: n, profileAvatar: r }) {
 }
 //#endregion
 //#region src/ui/images.js
-async function Xu(e, t, n = 384) {
+async function $u(e, t, n = 384) {
 	let r = await createImageBitmap(e).catch(() => {
 		throw Error("这张图片无法读取，请换一张图片。");
 	}), i = Math.min(1, n / Math.max(r.width, r.height)), a = t.createElement("canvas");
@@ -12936,9 +13019,9 @@ async function Xu(e, t, n = 384) {
 }
 //#endregion
 //#region src/ui/groups.js
-function Zu(e, { ui: t, busy: n }) {
+function ed(e, { ui: t, busy: n }) {
 	let r = t.groupDraft, i = (e, t, n) => `<label class="group-member">
-    ${Zl(t, !0)}
+    ${eu(t, !0)}
     <span>${Q(R(t))}</span>
     <input type="checkbox" name="member" value="${Q(e)}" ${n ? "checked" : ""}>
   </label>`;
@@ -12947,7 +13030,7 @@ function Zu(e, { ui: t, busy: n }) {
       <h1>${t.groupEditId ? "编辑群聊" : "创建群聊"}</h1>
     </header>
     <form class="group-form">
-      ${Ql({
+      ${tu({
 		...r,
 		name: r.name || "群聊"
 	}, {
@@ -12959,7 +13042,7 @@ function Zu(e, { ui: t, busy: n }) {
       <label class="field-label" for="group-avatar">头像地址</label>
       <input id="group-avatar" name="avatar" type="url" value="${Q(r.avatar?.startsWith("data:") ? "" : r.avatar)}" placeholder="https://…，也可从上方选择图片">
       <span class="field-label">聊天背景</span>
-      ${Uu({
+      ${Ku({
 		value: r.background,
 		theme: e.theme,
 		busy: n.has("chat-background"),
@@ -12981,7 +13064,7 @@ function Zu(e, { ui: t, busy: n }) {
 }
 //#endregion
 //#region src/ui/deletion.js
-function Qu({ kind: e, name: t }) {
+function td({ kind: e, name: t }) {
 	let n = e === "group";
 	return `<section class="delete-confirm">
       <p>确认删除“${Q(t)}”？</p>
@@ -12991,7 +13074,7 @@ function Qu({ kind: e, name: t }) {
 }
 //#endregion
 //#region src/weather.js
-function $u(e = globalThis.STSevenDaysCal) {
+function nd(e = globalThis.STSevenDaysCal) {
 	if (e?.apiVersion === 1 && typeof e.getPhoneSnapshot == "function") {
 		let t = e.getPhoneSnapshot();
 		if (t?.weather?.text) return {
@@ -13008,8 +13091,8 @@ function $u(e = globalThis.STSevenDaysCal) {
 }
 //#endregion
 //#region src/ui/authoring.js
-function ed(e, { ui: t, busy: n }) {
-	return `${eu("酒馆助手脚本")}
+function rd(e, { ui: t, busy: n }) {
+	return `${ru("酒馆助手脚本")}
     <div class="authoring-summary">${e.contacts.length} 位联系人 · ${(e.groups || []).length} 个群聊</div>
     <label class="field-label" for="export-source">核心来源</label>
     <select id="export-source" aria-label="核心来源">
@@ -13024,8 +13107,8 @@ function ed(e, { ui: t, busy: n }) {
 }
 //#endregion
 //#region src/ui/calendar.js
-function td(e, { ui: t, calendar: n }) {
-	let r = eu("日历", n ? $("calendar-today", "回到本月", "", "quiet-button") : "");
+function id(e, { ui: t, calendar: n }) {
+	let r = ru("日历", n ? $("calendar-today", "回到本月", "", "quiet-button") : "");
 	if (!n) return r;
 	let i = n.days.find((e) => e.day === t.calendarDay), a = i ? [i] : n.days, o = n.yearLabel, s = [...new Map(a.flatMap((e) => e.items).map((e) => [e.id, e])).values()], c = [n.title === n.eraLabel ? "" : n.title, o].filter(Boolean).join(" · "), l = n.days.map((e) => {
 		let t = [...new Set(e.items.map((e) => e.type))], n = `${Q(e.label)}${e.items.length ? `：${Q(e.items.map((e) => e.name).join("、"))}` : ""}`;
@@ -13074,7 +13157,7 @@ function td(e, { ui: t, calendar: n }) {
 }
 //#endregion
 //#region src/ui/particles.js
-function nd(e) {
+function ad(e) {
 	let t = e.ownerDocument, n = t.defaultView, r = t.createElement("canvas");
 	r.className = "chat-particles", r.setAttribute("aria-hidden", "true"), e.append(r);
 	let i = r.getContext("2d"), a = n.matchMedia("(prefers-reduced-motion: reduce)"), o = Array.from({ length: 12 }, () => ({
@@ -13116,13 +13199,13 @@ function nd(e) {
 }
 //#endregion
 //#region src/appearance.js
-var rd = "tmt-appearance-changed", id = "https://fontsapi.zeoseven.com/387/main/result.css", ad = "Nowar Rounded TW Wc", od = (e) => String(e || "").trim().replace(/^(['"])(.*)\1$/, "$2").replace(/["\\\r\n]/g, " ").replace(/\s+/g, " ").trim();
-function sd({ host: e, documentRef: t = globalThis.document }) {
+var od = "tmt-appearance-changed", sd = "https://fontsapi.zeoseven.com/387/main/result.css", cd = "Nowar Rounded TW Wc", ld = (e) => String(e || "").trim().replace(/^(['"])(.*)\1$/, "$2").replace(/["\\\r\n]/g, " ").replace(/\s+/g, " ").trim();
+function ud({ host: e, documentRef: t = globalThis.document }) {
 	let n = () => e.readSettings().pocketPhone || {}, r = () => {
-		let e = n(), t = typeof e.fontCssUrl == "string" ? e.fontCssUrl.trim() : id;
+		let e = n(), t = typeof e.fontCssUrl == "string" ? e.fontCssUrl.trim() : sd;
 		return {
 			cssUrl: t,
-			family: t === "https://fontsapi.zeoseven.com/387/main/result.css" ? ad : t ? od(e.fontFamily) : ""
+			family: t === "https://fontsapi.zeoseven.com/387/main/result.css" ? cd : t ? ld(e.fontFamily) : ""
 		};
 	};
 	async function i(n) {
@@ -13136,7 +13219,7 @@ function sd({ host: e, documentRef: t = globalThis.document }) {
 			throw r.pocketPhone === a && (r.pocketPhone = i), Error("外观设置保存失败，请重试。");
 		}
 		let o = t?.defaultView?.Event || globalThis.Event;
-		t?.dispatchEvent(new o(rd));
+		t?.dispatchEvent(new o(od));
 	}
 	return {
 		particlesEnabled: () => n().particlesEnabled !== !1,
@@ -13146,19 +13229,19 @@ function sd({ host: e, documentRef: t = globalThis.document }) {
 			let t = String(e || "").trim();
 			t !== r().cssUrl && await i({
 				fontCssUrl: t,
-				fontFamily: t === "https://fontsapi.zeoseven.com/387/main/result.css" ? ad : ""
+				fontFamily: t === "https://fontsapi.zeoseven.com/387/main/result.css" ? cd : ""
 			});
 		},
 		async cacheFontFamily(e, t) {
-			let n = r(), a = od(t);
+			let n = r(), a = ld(t);
 			n.cssUrl !== e || !a || n.family === a || await i({ fontFamily: a });
 		},
 		subscribe(e) {
-			return t?.addEventListener(rd, e), () => t?.removeEventListener(rd, e);
+			return t?.addEventListener(od, e), () => t?.removeEventListener(od, e);
 		}
 	};
 }
-async function cd(e, t, n = /* @__PURE__ */ new Set(), r = !1) {
+async function dd(e, t, n = /* @__PURE__ */ new Set(), r = !1) {
 	if (n.has(e.href)) return {
 		css: "",
 		family: ""
@@ -13175,15 +13258,15 @@ async function cd(e, t, n = /* @__PURE__ */ new Set(), r = !1) {
 	}
 	let a = [], o = "";
 	for (let r of i) if (r.type === 3 && r.styleSheet) {
-		let e = await cd(r.styleSheet, t, n, !0);
+		let e = await dd(r.styleSheet, t, n, !0);
 		e.css && a.push(e.css), o ||= e.family;
-	} else r.type === 5 && (o ||= od(r.style.getPropertyValue("font-family")), a.push(r.cssText.replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)/gi, (t, n, r, i) => `url(${JSON.stringify(new URL(n ?? r ?? i, e.href).href)})`)));
+	} else r.type === 5 && (o ||= ld(r.style.getPropertyValue("font-family")), a.push(r.cssText.replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)/gi, (t, n, r, i) => `url(${JSON.stringify(new URL(n ?? r ?? i, e.href).href)})`)));
 	return {
 		css: a.join("\n"),
 		family: o
 	};
 }
-function ld({ appearance: e, root: t, element: n, documentRef: r = globalThis.document }) {
+function fd({ appearance: e, root: t, element: n, documentRef: r = globalThis.document }) {
 	let i, a, o, s = !1, c = /* @__PURE__ */ new Set(), l = (e) => {
 		e ? n.style.setProperty("--pp-custom-font", `${JSON.stringify(e)}, var(--pp-system-font)`) : n.style.removeProperty("--pp-custom-font");
 	}, u = () => {
@@ -13214,7 +13297,7 @@ function ld({ appearance: e, root: t, element: n, documentRef: r = globalThis.do
 					i.add(o), c.add(o), a.onload = () => n(a.sheet), a.onerror = () => n(null), t.append(a);
 				});
 				try {
-					let t = await cd(f.sheet, a);
+					let t = await dd(f.sheet, a);
 					if (!p()) return;
 					if (!t.css || !t.family) {
 						l("");
@@ -13239,9 +13322,9 @@ function ld({ appearance: e, root: t, element: n, documentRef: r = globalThis.do
 }
 //#endregion
 //#region src/ui/avatar-cropper.js
-var ud = (e, t, n) => Math.min(n, Math.max(t, e));
-function dd({ naturalWidth: e, naturalHeight: t, frameSize: n, zoom: r = 1, offsetX: i = 0, offsetY: a = 0 }) {
-	let o = ud(r, 1, 3), s = Math.max(n / e, n / t) * o, c = e * s, l = t * s, u = ud(i, -(c - n) / 2, (c - n) / 2), d = ud(a, -(l - n) / 2, (l - n) / 2);
+var pd = (e, t, n) => Math.min(n, Math.max(t, e));
+function md({ naturalWidth: e, naturalHeight: t, frameSize: n, zoom: r = 1, offsetX: i = 0, offsetY: a = 0 }) {
+	let o = pd(r, 1, 3), s = Math.max(n / e, n / t) * o, c = e * s, l = t * s, u = pd(i, -(c - n) / 2, (c - n) / 2), d = pd(a, -(l - n) / 2, (l - n) / 2);
 	return {
 		zoom: o,
 		width: c,
@@ -13252,7 +13335,7 @@ function dd({ naturalWidth: e, naturalHeight: t, frameSize: n, zoom: r = 1, offs
 		offsetY: d
 	};
 }
-function fd(e, t) {
+function hd(e, t) {
 	let n = e.ownerDocument, r = n.defaultView, i = n.createElement("div");
 	i.className = "phone-dialog-backdrop avatar-crop-backdrop", i.dataset.phoneOverlay = "", i.innerHTML = "<section class=\"phone-dialog avatar-crop-dialog\" role=\"dialog\" aria-modal=\"true\" aria-label=\"调整头像\">\n    <h2>调整头像</h2>\n    <div class=\"avatar-crop-frame\"><img alt=\"头像裁剪预览\" draggable=\"false\"></div>\n    <p class=\"avatar-crop-hint\" role=\"status\">正在读取图片…</p>\n    <label class=\"avatar-crop-zoom\"><span>缩放</span><input type=\"range\" aria-label=\"缩放\" min=\"1\" max=\"3\" step=\"0.01\" value=\"1\" disabled></label>\n    <div class=\"form-actions\"><button type=\"button\" class=\"text-button\" data-crop=\"cancel\">取消</button><button type=\"button\" class=\"save-button\" data-crop=\"confirm\" disabled>确定</button></div>\n  </section>";
 	let a = i.querySelector(".avatar-crop-frame"), o = a.querySelector("img"), s = i.querySelector("input"), c = i.querySelector("[data-crop=\"confirm\"]"), l = r.URL.createObjectURL(t), u, d, f = new Promise((e, t) => {
@@ -13260,7 +13343,7 @@ function fd(e, t) {
 	}), p = !1, m = !1, h = null, g = 1, _ = 0, v = 0;
 	function y() {
 		if (!m || p) return;
-		let e = a.clientWidth, t = dd({
+		let e = a.clientWidth, t = md({
 			naturalWidth: o.naturalWidth,
 			naturalHeight: o.naturalHeight,
 			frameSize: e,
@@ -13292,7 +13375,7 @@ function fd(e, t) {
 	function C() {
 		let e = n.createElement("canvas");
 		e.width = e.height = 512;
-		let t = dd({
+		let t = md({
 			naturalWidth: o.naturalWidth,
 			naturalHeight: o.naturalHeight,
 			frameSize: 512,
@@ -13344,17 +13427,18 @@ function fd(e, t) {
 }
 //#endregion
 //#region src/ui/window.js
-function pd(e) {
-	let t = e.ownerDocument.defaultView, n = t.matchMedia("(min-width: 641px)"), r = null;
-	function i(n, r, { width: i, height: a }) {
-		e.style.left = `${Math.max(10, Math.min(n, t.innerWidth - i - 10))}px`, e.style.top = `${Math.max(10, Math.min(r, t.innerHeight - a - 10))}px`, e.style.right = "auto";
+function gd(e) {
+	let t = e.ownerDocument.defaultView, n = t.matchMedia("(min-width: 641px)"), r = null, i = null;
+	function a(n, r, { width: i, height: a }) {
+		let o = zl(e.ownerDocument, t);
+		e.style.left = `${Math.max(o.left + 10, Math.min(n, o.left + o.width - i - 10))}px`, e.style.top = `${Math.max(o.top + 10, Math.min(r, o.top + o.height - a - 10))}px`, e.style.right = "auto";
 	}
-	function a() {
+	function o() {
 		if (!r) return;
 		let t = r.id;
 		r = null, e.classList.remove("is-dragging"), e.hasPointerCapture(t) && e.releasePointerCapture(t);
 	}
-	function o(t) {
+	function s(t) {
 		if (!n.matches || t.button !== 0 || r || !t.target.closest(".phone-status") || t.target.closest("button")) return;
 		let i = e.getBoundingClientRect();
 		r = {
@@ -13368,48 +13452,72 @@ function pd(e) {
 			moved: !1
 		}, e.setPointerCapture(t.pointerId), t.preventDefault(), t.stopPropagation();
 	}
-	function s(t) {
+	function c(t) {
 		if (!r || t.pointerId !== r.id) return;
-		let n = t.clientX - r.x, a = t.clientY - r.y;
-		!r.moved && Math.hypot(n, a) <= 5 || (r.moved = !0, e.classList.add("is-dragging"), i(r.left + n, r.top + a, r));
+		let n = t.clientX - r.x, i = t.clientY - r.y;
+		!r.moved && Math.hypot(n, i) <= 5 || (r.moved = !0, e.classList.add("is-dragging"), a(r.left + n, r.top + i, r));
 	}
-	function c(e) {
-		e.pointerId === r?.id && a();
-	}
-	function l() {
-		if (!n.matches) for (let t of [
-			"left",
-			"top",
-			"right"
-		]) e.style.removeProperty(t);
-		else if (e.style.left && e.getClientRects().length) {
-			let t = e.getBoundingClientRect();
-			i(t.left, t.top, t);
+	function l(t) {
+		if (t.pointerId === r?.id) {
+			if (t.type === "pointerup" && r.moved) {
+				let t = e.getBoundingClientRect();
+				i = {
+					left: t.left,
+					top: t.top
+				};
+			}
+			o();
 		}
 	}
-	let u = () => {
-		a(), l();
-	}, d = [
-		["pointerdown", o],
-		["pointermove", s],
-		["pointerup", c],
-		["pointercancel", c],
-		["lostpointercapture", c]
+	function u() {
+		let r = zl(e.ownerDocument, t);
+		for (let t of [
+			"left",
+			"top",
+			"width",
+			"height"
+		]) e.style.setProperty(`--pp-window-${t}`, `${r[t]}px`);
+		if (!n.matches) {
+			for (let t of [
+				"left",
+				"top",
+				"right",
+				"width",
+				"height"
+			]) e.style.removeProperty(t);
+			return;
+		}
+		let o = Math.max(0, Math.min(360, r.width - 20)), s = Math.max(0, Math.min(r.height - 20, Math.max(300, Math.min(600, r.height * .85))));
+		e.style.width = `${o}px`, e.style.height = `${s}px`, a(i?.left ?? r.left + r.width - o - 20, i?.top ?? r.top + 80, {
+			width: o,
+			height: s
+		});
+	}
+	let d = () => {
+		o(), u();
+	}, f = [
+		["pointerdown", s],
+		["pointermove", c],
+		["pointerup", l],
+		["pointercancel", l],
+		["lostpointercapture", l]
 	];
-	for (let [t, n] of d) e.addEventListener(t, n);
-	return t.addEventListener("resize", u), {
-		stop: a,
-		refresh: l,
+	for (let [t, n] of f) e.addEventListener(t, n);
+	t.addEventListener("resize", d), t.addEventListener("orientationchange", d), t.visualViewport?.addEventListener("resize", d), t.visualViewport?.addEventListener("scroll", d);
+	let p = Bl(e.ownerDocument, d);
+	return {
+		stop: o,
+		refresh: u,
 		dispose() {
-			a();
-			for (let [t, n] of d) e.removeEventListener(t, n);
-			t.removeEventListener("resize", u);
+			o();
+			for (let [t, n] of f) e.removeEventListener(t, n);
+			t.removeEventListener("resize", d), t.removeEventListener("orientationchange", d), t.visualViewport?.removeEventListener("resize", d), t.visualViewport?.removeEventListener("scroll", d), p();
 		}
 	};
 }
 //#endregion
 //#region src/ui/chat-scroll.js
-function md(e, { onEarlier: t, onPullStart: n, canPull: r = () => !0 } = {}) {
+function _d(e, { onEarlier: t, onPullStart: n, canPull: r = () => !0 } = {}) {
 	let i = e.ownerDocument.defaultView, a, o = 0, s, c, l, u, d, f = !1, p = ".social-comment-form, .forum-comment-form, .ls-reply-form, .ls-compose-form", m = (e) => e?.id === "sms-draft" || e?.matches?.("textarea, input") && e.closest(p), h = () => !!m(e.activeElement);
 	function g() {
 		!a || !h() || s || f || (s = i.requestAnimationFrame(() => {
@@ -13521,25 +13629,25 @@ function md(e, { onEarlier: t, onPullStart: n, canPull: r = () => !0 } = {}) {
 }
 //#endregion
 //#region src/ui/social.js
-function hd(e, t, n, r) {
+function vd(e, t, n, r) {
 	let i = Wo(t, e.authorId);
 	if (!i) return "";
 	let a = n.has(`social-image:${e.id}`), o = e.image ? `<button type="button" class="social-photo" data-action="social-image" data-social-image="${Q(e.id)}"
       aria-label="${e.image.path ? "查看动态图片" : "生成动态图片"}" ${a ? "disabled" : ""}>
       ${e.image.path ? `<img data-phone-image="${Q(e.image.path)}" src="${Q(es(e.image.path))}" alt="${Q(e.image.description)}" loading="lazy" draggable="false">` : `<span class="social-photo-placeholder">${Z("image")}<span>${Q(e.image.description)}</span><small>${a ? "生成中…" : "点击生成图片"}</small></span>`}
-    </button>` : "", s = (e.comments || []).map((e, t) => `<p class="social-comment" data-social-comment="${Q(e.id || `legacy:${t}`)}" ${e.replyToId && e.read === !1 ? "data-unread-reply" : ""}><strong class="social-comment-name">${Q(e.name)}</strong>${Jl(e.text, e.translation)}</p>`).join(""), c = r.socialCommentOpen.has(e.id), l = r.socialDrafts.get(e.id) || "", u = n.has(`social-comment:${e.id}`), d = To(wo(e)), f = !!e.userLiked, p = (Number(e.likes) || 0) + Number(f);
+    </button>` : "", s = (e.comments || []).map((e, t) => `<p class="social-comment" data-social-comment="${Q(e.id || `legacy:${t}`)}" ${e.replyToId && e.read === !1 ? "data-unread-reply" : ""}><strong class="social-comment-name">${Q(e.name)}</strong>${Zl(e.text, e.translation)}</p>`).join(""), c = r.socialCommentOpen.has(e.id), l = r.socialDrafts.get(e.id) || "", u = n.has(`social-comment:${e.id}`), d = To(wo(e)), f = !!e.userLiked, p = (Number(e.likes) || 0) + Number(f);
 	return `<article class="social-post" data-social-post="${Q(e.id)}">
     <button type="button" class="social-author" data-action="social-author" data-social-author="${Q(i.id)}" aria-label="查看${Q(R(i))}的主页">
-      ${Zl(i, !0)}
+      ${eu(i, !0)}
       <span class="social-author-copy">
         <strong>${Q(R(i))}</strong>
         ${i.nickname && i.name !== i.nickname ? `<span>${Q(i.name)}</span>` : ""}
       </span>
     </button>
     ${o}
-    ${e.text ? `<p class="social-caption">${Jl(e.text, e.translation)}</p>` : ""}
+    ${e.text ? `<p class="social-caption">${Zl(e.text, e.translation)}</p>` : ""}
     <div class="social-stats" aria-label="动态统计">
-      <button type="button" class="social-like" data-action="social-like" data-social-post="${Q(e.id)}" aria-pressed="${f}" aria-label="${f ? "取消点赞" : "点赞"}" ${n.has(`social-like:${e.id}`) ? "disabled" : ""}>${Z(f ? "heart-active" : "heart")}${p} 赞</button><span>${Z("repost")}${e.reposts || 0} 转发</span><button type="button" class="social-comment-toggle" data-action="social-comment-toggle" data-social-post="${Q(e.id)}" aria-expanded="${c}">${Z("comment")}${e.commentsCount || 0} 评论</button>${su(t, {
+      <button type="button" class="social-like" data-action="social-like" data-social-post="${Q(e.id)}" aria-pressed="${f}" aria-label="${f ? "取消点赞" : "点赞"}" ${n.has(`social-like:${e.id}`) ? "disabled" : ""}>${Z(f ? "heart-active" : "heart")}${p} 赞</button><span>${Z("repost")}${e.reposts || 0} 转发</span><button type="button" class="social-comment-toggle" data-action="social-comment-toggle" data-social-post="${Q(e.id)}" aria-expanded="${c}">${Z("comment")}${e.commentsCount || 0} 评论</button>${uu(t, {
 		app: "social",
 		kind: "post",
 		postId: e.id
@@ -13554,23 +13662,23 @@ function hd(e, t, n, r) {
     ${d ? `<time class="social-time">${Q(d)}</time>` : ""}
   </article>`;
 }
-function gd(e, { ui: t, busy: n }) {
+function yd(e, { ui: t, busy: n }) {
 	let r = Go(e), i = qo(e, r), a = new Set(i.map((e) => e.id)), o = r.filter((e) => !a.has(e.id)), s = t.socialLimit || 30;
 	return `<header class="social-header">
       <h1 class="social-wordmark">ainstgram</h1>
       ${$("social-refresh", n.has("social") ? "刷新动态中" : "刷新动态", "refresh", "icon-button", n.has("social"))}
     </header>
-    <div class="social-feed">${i.map((r) => hd(r, e, n, t)).join("")}</div>
-    ${i.length ? "" : tu(n.has("social") ? "正在整理动态" : "暂无动态", "", "image")}
+    <div class="social-feed">${i.map((r) => vd(r, e, n, t)).join("")}</div>
+    ${i.length ? "" : iu(n.has("social") ? "正在整理动态" : "暂无动态", "", "image")}
     ${o.length ? `<section class="social-history">
       <button type="button" class="history-fold" data-action="social-past" aria-expanded="${!!t.socialPastOpen}"><span>${t.socialPastOpen ? "收起过去的动态" : "查看过去的动态"}</span></button>
-      ${t.socialPastOpen ? `${o.slice(0, s).map((r) => hd(r, e, n, t)).join("")}
+      ${t.socialPastOpen ? `${o.slice(0, s).map((r) => vd(r, e, n, t)).join("")}
         ${o.length > s ? $("social-earlier", "查看更早的动态", "", "earlier-button") : ""}` : ""}
     </section>` : ""}`;
 }
-function _d(e, { ui: t, busy: n }) {
+function bd(e, { ui: t, busy: n }) {
 	let r = Wo(e, t.socialAuthorId);
-	if (!r) return `${$("social-back", "返回动态", "arrow", "back-link")}${tu("这位作者已不存在", "返回动态列表查看其他内容。", "image")}`;
+	if (!r) return `${$("social-back", "返回动态", "arrow", "back-link")}${iu("这位作者已不存在", "返回动态列表查看其他内容。", "image")}`;
 	let i = Go(e, { authorId: r.id }), a = t.socialLimit || 30, o = n.has(`social-author:${r.id}`);
 	return `<header class="social-header">
       ${$("social-back", "返回动态", "arrow", "back-link")}
@@ -13578,7 +13686,7 @@ function _d(e, { ui: t, busy: n }) {
       ${$("social-author-refresh", "补充个人动态", "refresh", "icon-button", o)}
     </header>
     <section class="social-profile">
-      ${Zl(r)}
+      ${eu(r)}
       <div class="social-profile-copy">
         <h2>${Q(R(r))}</h2>
         ${r.description ? `<p>${Q(r.description)}</p>` : ""}
@@ -13586,14 +13694,14 @@ function _d(e, { ui: t, busy: n }) {
       </div>
     </section>
     ${o ? "<p class=\"social-loading\" role=\"status\">正在补充个人动态…</p>" : ""}
-    <div class="social-profile-posts">${i.slice(0, a).map((r) => hd(r, e, n, t)).join("")}</div>
+    <div class="social-profile-posts">${i.slice(0, a).map((r) => vd(r, e, n, t)).join("")}</div>
     ${i.length > a ? $("social-earlier", "查看更早的动态", "", "earlier-button") : ""}
-    ${!i.length && !o ? tu("暂无动态", "", "image") : ""}`;
+    ${!i.length && !o ? iu("暂无动态", "", "image") : ""}`;
 }
 //#endregion
 //#region src/ui/liangshi.js
-var vd = (e, t) => Array.from(e || "").length > t ? Array.from(e).slice(0, t).join("") + "…" : e || "", yd = (e) => e >= 1e8 ? `${+(e / 1e8).toFixed(1)}亿` : e >= 1e4 ? `${+(e / 1e4).toFixed(1)}万` : String(e), bd = (e, t, n) => e.ownerId === "@user" ? "" : `<button type="button" class="ls-follow${n || e.followed === !0 || Fs(t, e) ? " is-followed" : ""}" disabled>${n || e.followed === !0 || Fs(t, e) ? "已关注" : "＋关注"}</button>`;
-function xd(e, t) {
+var xd = (e, t) => Array.from(e || "").length > t ? Array.from(e).slice(0, t).join("") + "…" : e || "", Sd = (e) => e >= 1e8 ? `${+(e / 1e8).toFixed(1)}亿` : e >= 1e4 ? `${+(e / 1e4).toFixed(1)}万` : String(e), Cd = (e, t, n) => e.ownerId === "@user" ? "" : `<button type="button" class="ls-follow${n || e.followed === !0 || Fs(t, e) ? " is-followed" : ""}" disabled>${n || e.followed === !0 || Fs(t, e) ? "已关注" : "＋关注"}</button>`;
+function wd(e, t) {
 	let n = e.id, r = js(e), i = [
 		"liangshi-more",
 		"liangshi-replies",
@@ -13603,7 +13711,7 @@ function xd(e, t) {
 	].some((e) => t.has(`${e}:${n}`)) || [...t].some((e) => e.startsWith(`liangshi-image:${n}:`));
 	return `<div class="phone-menu-actions"><button type="button" data-action="liangshi-generate-replies" data-liangshi-id="${Q(n)}" ${i || !r.pending.length ? "disabled" : ""}>生成回应</button><button type="button" data-action="liangshi-regenerate-replies" data-liangshi-id="${Q(n)}" ${i || !r.last?.inputIds?.length ? "disabled" : ""}>重新生成</button><button type="button" data-action="liangshi-edit" data-liangshi-id="${Q(n)}" ${i ? "disabled" : ""}>编辑微博</button><div class="phone-menu-danger"><button type="button" class="danger" data-action="liangshi-delete" data-liangshi-id="${Q(n)}" ${i ? "disabled" : ""}>删除微博</button></div></div>`;
 }
-function Sd(e, { ui: t, busy: n }) {
+function Td(e, { ui: t, busy: n }) {
 	let r = e.liangshi || {
 		accounts: [],
 		posts: [],
@@ -13615,11 +13723,11 @@ function Sd(e, { ui: t, busy: n }) {
 		...e,
 		name: o,
 		avatar: a.avatar || ""
-	} : e])), _ = new Map(r.posts.map((e) => [e.id, e])), v = (e, t = !1) => `<button type="button" class="ls-like" data-action="liangshi-like" data-liangshi-like="${Q(e.id)}" aria-pressed="${!!e.userLiked}" aria-label="${e.userLiked ? "取消点赞" : "点赞"}" ${n.has(`liangshi-like:${e.id}`) ? "disabled" : ""}>${Z(e.userLiked ? "heart-active" : "heart")}${t ? "<span>赞</span><strong>" : ""}${yd(Ls(e).likes + Number(!!e.userLiked))}${t ? "</strong>" : ""}</button>`, y = (e, t) => {
-		let n = Jl(e, t);
+	} : e])), _ = new Map(r.posts.map((e) => [e.id, e])), v = (e, t = !1) => `<button type="button" class="ls-like" data-action="liangshi-like" data-liangshi-like="${Q(e.id)}" aria-pressed="${!!e.userLiked}" aria-label="${e.userLiked ? "取消点赞" : "点赞"}" ${n.has(`liangshi-like:${e.id}`) ? "disabled" : ""}>${Z(e.userLiked ? "heart-active" : "heart")}${t ? "<span>赞</span><strong>" : ""}${Sd(Ls(e).likes + Number(!!e.userLiked))}${t ? "</strong>" : ""}</button>`, y = (e, t) => {
+		let n = Zl(e, t);
 		for (let e of h) n = n.replaceAll(`#${Q(e)}#`, `<button type="button" class="ls-topic" data-liangshi-topic="${Q(e)}" data-liangshi-topic-source="${p ? "mine" : f ? "following" : "square"}">#${Q(e)}#</button>`);
 		return n;
-	}, b = (t, n) => `<div class="ls-author">${Zl(t)}<div class="ls-author-copy"><span class="ls-name">${Q(t.name)}</span><span class="ls-meta"><span>${Q(n || "")}</span>${t.handle && t.ownerId !== "@user" ? `<span>@${Q(t.handle)}</span>` : ""}</span></div>${bd(t, e, d.has(t.id))}</div>`, x = (e) => e ? `<button type="button" class="ls-quote" data-liangshi-open="${Q(e.id)}" aria-label="查看引用的原博"><span class="ls-quote-name">@${Q(g.get(e.authorId)?.name || "作者")}</span>：${Jl(vd(e.text || (e.image?.description ? `[图片] ${e.image.description}` : ""), 110), vd(e.translation, 110))}</button>` : "<div class=\"ls-quote is-missing\">原博已删除</div>";
+	}, b = (t, n) => `<div class="ls-author">${eu(t)}<div class="ls-author-copy"><span class="ls-name">${Q(t.name)}</span><span class="ls-meta"><span>${Q(n || "")}</span>${t.handle && t.ownerId !== "@user" ? `<span>@${Q(t.handle)}</span>` : ""}</span></div>${Cd(t, e, d.has(t.id))}</div>`, x = (e) => e ? `<button type="button" class="ls-quote" data-liangshi-open="${Q(e.id)}" aria-label="查看引用的原博"><span class="ls-quote-name">@${Q(g.get(e.authorId)?.name || "作者")}</span>：${Zl(xd(e.text || (e.image?.description ? `[图片] ${e.image.description}` : ""), 110), xd(e.translation, 110))}</button>` : "<div class=\"ls-quote is-missing\">原博已删除</div>";
 	function S(r, i = !1) {
 		let a = g.get(r.authorId), o = Ls(r);
 		if (!a) return "";
@@ -13627,11 +13735,11 @@ function Sd(e, { ui: t, busy: n }) {
       ${r.image.path ? `<img data-phone-image="${Q(r.image.path)}" src="${Q(es(r.image.path))}" alt="${Q(r.image.description)}" loading="lazy" draggable="false">` : `<span class="ls-photo-placeholder${l ? " is-generating" : ""}">${Z(l ? "refresh" : "image")}<span${l ? " role=\"status\"" : ""}>${l ? "生成中…" : Q(r.image.description)}</span>${l ? "" : "<small>点击生成图片</small>"}</span>`}
     </button>` : "";
 		return `<article class="ls-post" data-liangshi-id="${Q(r.id)}">${b(a, To(r.publishedAt) + (r.editedAt ? " · 已编辑" : ""))}${r.promoted ? "<span class=\"ls-ad-label\">推广</span>" : ""}
-      <p class="ls-copy" data-liangshi-open="${Q(r.id)}">${y(s || !c ? r.text : vd(r.text, 120), s || !c ? r.translation : vd(r.translation, 120))}</p>
+      <p class="ls-copy" data-liangshi-open="${Q(r.id)}">${y(s || !c ? r.text : xd(r.text, 120), s || !c ? r.translation : xd(r.translation, 120))}</p>
       ${u}
       ${c && !i ? `<button type="button" class="ls-expand" data-action="liangshi-expand" data-liangshi-id="${Q(r.id)}">${s ? "收起" : "展开全文"}</button>` : ""}
       ${r.quoteId ? x(_.get(r.quoteId)) : ""}
-      <div class="ls-post-footer">${i ? "" : `<div class="ls-stats"><button type="button" data-liangshi-open="${Q(r.id)}" data-liangshi-section="reposts" aria-label="查看转发">${Z("repost")}${yd(o.repostCount)}</button><button type="button" data-liangshi-open="${Q(r.id)}" data-liangshi-section="comments" aria-label="查看评论">${Z("comment")}${yd(o.commentCount)}</button>${v(r)}${su(e, {
+      <div class="ls-post-footer">${i ? "" : `<div class="ls-stats"><button type="button" data-liangshi-open="${Q(r.id)}" data-liangshi-section="reposts" aria-label="查看转发">${Z("repost")}${Sd(o.repostCount)}</button><button type="button" data-liangshi-open="${Q(r.id)}" data-liangshi-section="comments" aria-label="查看评论">${Z("comment")}${Sd(o.commentCount)}</button>${v(r)}${uu(e, {
 			app: "liangshi",
 			kind: "post",
 			postId: r.id
@@ -13642,7 +13750,7 @@ function Sd(e, { ui: t, busy: n }) {
 		let i = g.get(e.authorId);
 		if (!i) return "";
 		let a = r.userAuthored && g.get(r.authorId)?.ownerId === "@user", o = g.get(e.replyToAuthorId), s = t.liangshiReplyDrafts?.get(r.id), c = n.has(`liangshi-reply:${r.id}`), l = a && s?.replyToId === e.id;
-		return `<div class="ls-comment" data-liangshi-comment="${Q(e.id)}">${Zl(i)}<div class="ls-comment-body"><b>${Q(i.name)}</b>${e.replyToId ? `<small class="ls-reply-target">回复 @${Q(o?.name || "原评论作者")}</small>` : ""}${e.text ? `<p>${y(e.text, e.translation)}</p>` : ""}${nu(e.image, {
+		return `<div class="ls-comment" data-liangshi-comment="${Q(e.id)}">${eu(i)}<div class="ls-comment-body"><b>${Q(i.name)}</b>${e.replyToId ? `<small class="ls-reply-target">回复 @${Q(o?.name || "原评论作者")}</small>` : ""}${e.text ? `<p>${y(e.text, e.translation)}</p>` : ""}${au(e.image, {
 			action: "liangshi-image",
 			data: {
 				"liangshi-image": r.id,
@@ -13656,7 +13764,7 @@ function Sd(e, { ui: t, busy: n }) {
       ${l ? `<form class="ls-reply-form" data-liangshi-reply-form="${Q(r.id)}" data-reply-to="${Q(s.replyToId)}"><label class="field-label" for="ls-reply-text">回复 @${Q(i.name)}</label><textarea id="ls-reply-text" name="reply" rows="3" placeholder="写下回复…" required>${Q(s.text)}</textarea><div class="ls-reply-actions"><button type="button" class="quiet-button" data-action="liangshi-reply-cancel" data-liangshi-id="${Q(r.id)}">取消</button><button type="submit" class="save-button" ${c ? "disabled" : ""}>${c ? "发布中…" : "发布回复"}</button></div></form>` : ""}</div></div>`;
 	}, w = (r, i, a) => {
 		let o = g.get(r.authorId);
-		return o ? `<article class="ls-repost" data-liangshi-repost="${Q(r.id)}">${b(o, "转发了这条微博")}${r.text ? `<p class="ls-copy">${y(r.text, r.translation)}</p>` : ""}${nu(r.image, {
+		return o ? `<article class="ls-repost" data-liangshi-repost="${Q(r.id)}">${b(o, "转发了这条微博")}${r.text ? `<p class="ls-copy">${y(r.text, r.translation)}</p>` : ""}${au(r.image, {
 			action: "liangshi-image",
 			data: {
 				"liangshi-image": i.id,
@@ -13665,7 +13773,7 @@ function Sd(e, { ui: t, busy: n }) {
 			},
 			busy: n.has(`liangshi-image:${i.id}:${r.id}`),
 			label: "微博转发图片"
-		})}${x(_.get(r.quoteId))}<div class="ls-repost-actions">${su(e, {
+		})}${x(_.get(r.quoteId))}<div class="ls-repost-actions">${uu(e, {
 			app: "liangshi",
 			kind: "repost",
 			postId: i.id,
@@ -13683,13 +13791,13 @@ function Sd(e, { ui: t, busy: n }) {
 		return D + `<form class="ls-compose-form">
       <label class="field-label" for="ls-draft-text">微博正文</label><textarea id="ls-draft-text" name="text" rows="7" placeholder="写下想分享的事…">${Q(e.text)}</textarea>
       <label class="field-label" for="ls-draft-image">配图描述（可选）</label><textarea id="ls-draft-image" name="imageDescription" rows="3" placeholder="描述想分享的照片，发布后点图片生成">${Q(e.imageDescription)}</textarea>
-      ${e.translation ? `<p class="ls-copy ls-draft-translation">${Jl(e.translation)}</p>` : ""}
+      ${e.translation ? `<p class="ls-copy ls-draft-translation">${Zl(e.translation)}</p>` : ""}
       <div class="ls-compose-actions">${$("liangshi-draft", r ? "帮写中…" : "帮我写", "refresh", "quiet-button", r || i)}<button type="submit" class="save-button" ${r || i ? "disabled" : ""}>${i ? "保存中…" : e.postId ? "保存修改" : "发布"}</button></div>
     </form>`;
 	}
 	if (i.kind === "post") {
 		let r = _.get(i.id);
-		if (!r) return D + tu("这批微博已经更新", "返回上页查看新内容。", "liangshi");
+		if (!r) return D + iu("这批微博已经更新", "返回上页查看新内容。", "liangshi");
 		let a = n.has(`liangshi-more:${r.id}`), o = n.has(`liangshi-replies:${r.id}`), s = i.tab || "comments", c = Ls(r), l = `<div class="ls-detail-stats"><div role="tablist" aria-label="微博互动">${[[
 			"reposts",
 			"转发",
@@ -13698,7 +13806,7 @@ function Sd(e, { ui: t, busy: n }) {
 			"comments",
 			"评论",
 			c.commentCount
-		]].map(([e, t, n]) => `<button type="button" role="tab" data-liangshi-detail-tab="${e}" aria-label="${t}" aria-selected="${s === e}"><span>${t}</span><strong>${yd(n)}</strong></button>`).join("")}</div>${v(r, !0)}${su(e, {
+		]].map(([e, t, n]) => `<button type="button" role="tab" data-liangshi-detail-tab="${e}" aria-label="${t}" aria-selected="${s === e}"><span>${t}</span><strong>${Sd(n)}</strong></button>`).join("")}</div>${v(r, !0)}${uu(e, {
 			app: "liangshi",
 			kind: "post",
 			postId: r.id
@@ -13706,23 +13814,23 @@ function Sd(e, { ui: t, busy: n }) {
 		return `${D}${S(r, !0)}${l}${o ? "<p class=\"ls-response-status\" role=\"status\">正在生成回应…</p>" : ""}<section class="ls-detail-list" role="tabpanel" aria-label="${s === "reposts" ? "转发" : "评论"}">${u || `<p class="ls-no-comments">暂无${s === "reposts" ? "转发" : "评论"}</p>`}</section><div class="ls-more-area">${$("liangshi-more", a ? "加载中" : "加载更多", "", "ls-more-button", a || o)}</div>`;
 	}
 	if (i.kind === "hot-topic") {
-		if (!T) return D + tu("这条话题已经更新", "返回热榜，看看新的话题。", "liangshi");
+		if (!T) return D + iu("这条话题已经更新", "返回热榜，看看新的话题。", "liangshi");
 		let e = T.postIds.flatMap((e) => _.has(e) ? [_.get(e)] : []), t = n.has(`liangshi-topic:${i.id}`);
-		return D + `<section class="ls-topic-summary"><h1>${Jl(T.name, T.nameTranslation)}</h1><p class="ls-copy">${Jl(T.description, T.descriptionTranslation)}</p>${T.heat === void 0 ? "" : `<small>${Q(T.heat)}</small>`}</section>` + e.map((e) => S(e)).join("") + (e.length ? t ? "<p class=\"ls-list-end\" role=\"status\">正在加载话题微博…</p>" : "" : `<div class="ls-more-area">${$("liangshi-topic-load", t ? "加载中" : "加载话题微博", "", "ls-more-button", t)}</div>`);
+		return D + `<section class="ls-topic-summary"><h1>${Zl(T.name, T.nameTranslation)}</h1><p class="ls-copy">${Zl(T.description, T.descriptionTranslation)}</p>${T.heat === void 0 ? "" : `<small>${Q(T.heat)}</small>`}</section>` + e.map((e) => S(e)).join("") + (e.length ? t ? "<p class=\"ls-list-end\" role=\"status\">正在加载话题微博…</p>" : "" : `<div class="ls-more-area">${$("liangshi-topic-load", t ? "加载中" : "加载话题微博", "", "ls-more-button", t)}</div>`);
 	}
-	return i.kind === "topic" ? D + m.filter((e) => e.topic === i.topic).map((e) => S(e)).join("") : i.tab === "mine" ? D + `<section class="ls-mine-profile" aria-label="我的主页"><div class="ls-mine-identity">${Zl(a)}<h1>${Q(o)}</h1></div><div class="ls-mine-stats" aria-label="模拟账号数据"><span><strong>128</strong>关注</span><span><strong>360</strong>粉丝</span><span><strong>1.2万</strong>转评赞</span></div></section>` + (l.length ? l.map((e) => S(e)).join("") : "<div class=\"ls-empty\">还没有发布微博</div>") : i.tab === "following" ? D + (c.length ? c.map((e) => S(e)).join("") : "<div class=\"ls-empty\">暂无关注微博</div>") : i.tab === "hot" ? D + `<h1 class="ls-hot-heading">此刻热议</h1>${u.map((e, t) => `<button type="button" class="ls-hot-row" data-liangshi-hot="${Q(e.id)}"><span class="ls-rank">${t + 1}</span><span class="ls-hot-copy"><strong>${Jl(e.name, e.nameTranslation)}</strong><small>${Jl(vd(e.description, 64), vd(e.descriptionTranslation, 64))}</small>${e.heat === void 0 ? "" : `<span class="ls-hot-heat">${Q(e.heat)}</span>`}</span>${Z("next")}</button>`).join("")}${u.length ? "" : "<div class=\"ls-empty\">暂无热榜话题</div>"}` : D + (s.length ? s.map((e) => S(e)).join("") : tu("还没有微博", "", "liangshi"));
+	return i.kind === "topic" ? D + m.filter((e) => e.topic === i.topic).map((e) => S(e)).join("") : i.tab === "mine" ? D + `<section class="ls-mine-profile" aria-label="我的主页"><div class="ls-mine-identity">${eu(a)}<h1>${Q(o)}</h1></div><div class="ls-mine-stats" aria-label="模拟账号数据"><span><strong>128</strong>关注</span><span><strong>360</strong>粉丝</span><span><strong>1.2万</strong>转评赞</span></div></section>` + (l.length ? l.map((e) => S(e)).join("") : "<div class=\"ls-empty\">还没有发布微博</div>") : i.tab === "following" ? D + (c.length ? c.map((e) => S(e)).join("") : "<div class=\"ls-empty\">暂无关注微博</div>") : i.tab === "hot" ? D + `<h1 class="ls-hot-heading">此刻热议</h1>${u.map((e, t) => `<button type="button" class="ls-hot-row" data-liangshi-hot="${Q(e.id)}"><span class="ls-rank">${t + 1}</span><span class="ls-hot-copy"><strong>${Zl(e.name, e.nameTranslation)}</strong><small>${Zl(xd(e.description, 64), xd(e.descriptionTranslation, 64))}</small>${e.heat === void 0 ? "" : `<span class="ls-hot-heat">${Q(e.heat)}</span>`}</span>${Z("next")}</button>`).join("")}${u.length ? "" : "<div class=\"ls-empty\">暂无热榜话题</div>"}` : D + (s.length ? s.map((e) => S(e)).join("") : iu("还没有微博", "", "liangshi"));
 }
 //#endregion
 //#region src/contact-avatars.js
-function Cd(e, t, n) {
+function Ed(e, t, n) {
 	if (e.automaticAvatar === !1 || e.automaticAvatar !== !0 && e.avatar !== (t?.avatar || "")) return e;
 	let r = {
 		...t,
 		...e
 	};
-	return e.automaticAvatar === !0 && (r.manualFields = (t?.manualFields || []).filter((e) => e !== "avatar")), wd([r], n)[0];
+	return e.automaticAvatar === !0 && (r.manualFields = (t?.manualFields || []).filter((e) => e !== "avatar")), Dd([r], n)[0];
 }
-function wd(e, t) {
+function Dd(e, t) {
 	if (!t?.getPeopleAvatars) return e;
 	let n = e.filter((e) => (!e.avatar || qa(e.avatar)) && !e.manualFields?.includes("avatar") && !(e.edited && !e.manualFields));
 	if (!n.length) return e;
@@ -13752,79 +13860,79 @@ function wd(e, t) {
 }
 //#endregion
 //#region src/ui/notifications.js
-var Td = "点击查看";
-function Ed(e) {
-	return (typeof e == "string" ? e.trim() : "") || Td;
+var Od = "点击查看";
+function kd(e) {
+	return (typeof e == "string" ? e.trim() : "") || Od;
 }
-function Dd(e, t, n, r, i, a) {
+function Ad(e, t, n, r, i, a) {
 	let o = t ? ` data-notice-id="${Q(t)}"` : "";
 	return `<div class="phone-top-notice" role="status">
     <button type="button" class="phone-top-notice-open" data-action="open-phone-notice" data-notice-kind="${Q(e)}"${o}${a ? ` data-notification-key="${Q(a)}"` : ""} aria-label="${Q(`${n}：${r}`)}">
       <span class="phone-top-notice-visual">${Z(e === "message" ? "messages" : e.startsWith("social") ? "social" : e.startsWith("forum") ? "forum" : "liangshi")}</span>
-      <span class="phone-top-notice-copy"><strong>${Q(n)}</strong><span>${Kl(r)}</span></span>
+      <span class="phone-top-notice-copy"><strong>${Q(n)}</strong><span>${Yl(r)}</span></span>
     </button>
     <button type="button" class="phone-top-notice-dismiss" data-action="dismiss-phone-notice" aria-label="关闭${Q(n)}通知">${Z("close")}</button>
   </div>`;
 }
-function Od(e, t) {
+function jd(e, t) {
 	let n = [...e.contacts || [], ...e.groups || []].find((e) => e.id === t), r = (e.conversations?.[t] || []).findLast((e) => e.role === "assistant");
-	return !n || !r ? "" : Dd("message", t, R(n), Ed(vt(r)), Zl(n, !0));
+	return !n || !r ? "" : Ad("message", t, R(n), kd(vt(r)), eu(n, !0));
 }
-function kd(e, t) {
+function Md(e, t) {
 	let n = (e.social?.posts || []).find((e) => e.id === t), r = n?.comments?.findLast((e) => e.replyToId && e.read === !1);
 	if (!n || !r) return "";
 	let i = (r.authorId ? Wo(e, r.authorId) : null) || { name: r.name || "有人" };
-	return Dd("social-reply", t, `${R(i)} 回复了你`, Ed(r.text), Zl(i, !0));
+	return Ad("social-reply", t, `${R(i)} 回复了你`, kd(r.text), eu(i, !0));
 }
-function Ad(e) {
+function Nd(e) {
 	let t = Go(e)[0];
 	if (!t) return "";
 	let n = Wo(e, t.authorId);
-	return Dd("social-feed", void 0, "ainstgram已更新", Ed(t.text || t.image?.description), n ? Zl(n, !0) : Z("social"));
+	return Ad("social-feed", void 0, "ainstgram已更新", kd(t.text || t.image?.description), n ? eu(n, !0) : Z("social"));
 }
-function jd(e, t) {
+function Pd(e, t) {
 	let n = Wo(e, t);
 	if (!n) return "";
 	let r = Go(e, { authorId: t })[0];
-	return Dd("social-author", t, `${R(n)}的动态已更新`, Ed(r?.text || r?.image?.description), Zl(n, !0));
+	return Ad("social-author", t, `${R(n)}的动态已更新`, kd(r?.text || r?.image?.description), eu(n, !0));
 }
-function Md(e, t, n = "public") {
+function Fd(e, t, n = "public") {
 	let r = L(e, n), i = t ? r.posts.find((e) => e.id === t) : r.posts[0];
-	return i ? Dd(n === "circle" ? t ? "forum-circle-post" : "forum-circle" : t ? "forum-post" : "forum", t, n === "circle" ? `${r.profile?.name || "圈内论坛"}${t ? "有新回帖" : "有新内容"}` : t ? "论坛有新回帖" : "论坛有新内容", Ed(i.title || i.content), Z("forum")) : "";
+	return i ? Ad(n === "circle" ? t ? "forum-circle-post" : "forum-circle" : t ? "forum-post" : "forum", t, n === "circle" ? `${r.profile?.name || "圈内论坛"}${t ? "有新回帖" : "有新内容"}` : t ? "论坛有新回帖" : "论坛有新内容", kd(i.title || i.content), Z("forum")) : "";
 }
-function Nd(e, t, n = !1) {
+function Id(e, t, n = !1) {
 	let r = t ? e.liangshi?.posts?.find((e) => e.id === t) : (n ? zs(e.liangshi) : Rs(e.liangshi))[0];
 	if (!r) return "";
 	let i = e.liangshi.accounts.find((e) => e.id === r.authorId);
-	return Dd(t ? "liangshi-post" : n ? "liangshi-following" : "liangshi-feed", t, t ? "微博有新讨论" : n ? "关注微博已更新" : "两事广场已更新", Ed(r.text), i ? Zl(i, !0) : Z("liangshi"));
+	return Ad(t ? "liangshi-post" : n ? "liangshi-following" : "liangshi-feed", t, t ? "微博有新讨论" : n ? "关注微博已更新" : "两事广场已更新", kd(r.text), i ? eu(i, !0) : Z("liangshi"));
 }
-function Pd(e, t) {
+function Ld(e, t) {
 	let n = t ? Us(e.liangshi, t) : e.liangshi?.topics?.[0];
-	return n ? Dd(t ? "liangshi-topic" : "liangshi-hot", t, t ? "话题微博已更新" : "两事热榜已更新", Ed(n.name), Z("liangshi")) : "";
+	return n ? Ad(t ? "liangshi-topic" : "liangshi-hot", t, t ? "话题微博已更新" : "两事热榜已更新", kd(n.name), Z("liangshi")) : "";
 }
-function Fd(e, t) {
+function Rd(e, t) {
 	if (!t || !e) return "";
-	if (t.key) return Dd(t.kind, t.id, t.title, t.text, "", t.key);
+	if (t.key) return Ad(t.kind, t.id, t.title, t.text, "", t.key);
 	switch (t.kind) {
-		case "message": return t.id ? Od(e, t.id) : "";
-		case "social-reply": return t.id ? kd(e, t.id) : "";
-		case "social-feed": return Ad(e);
-		case "social-author": return t.id ? jd(e, t.id) : "";
-		case "forum": return Md(e);
-		case "forum-post": return Md(e, t.id);
-		case "forum-circle": return Md(e, void 0, "circle");
-		case "forum-circle-post": return Md(e, t.id, "circle");
-		case "liangshi-feed": return Nd(e);
-		case "liangshi-following": return Nd(e, void 0, !0);
-		case "liangshi-hot": return Pd(e);
-		case "liangshi-topic": return t.id ? Pd(e, t.id) : "";
-		case "liangshi-post": return t.id ? Nd(e, t.id) : "";
+		case "message": return t.id ? jd(e, t.id) : "";
+		case "social-reply": return t.id ? Md(e, t.id) : "";
+		case "social-feed": return Nd(e);
+		case "social-author": return t.id ? Pd(e, t.id) : "";
+		case "forum": return Fd(e);
+		case "forum-post": return Fd(e, t.id);
+		case "forum-circle": return Fd(e, void 0, "circle");
+		case "forum-circle-post": return Fd(e, t.id, "circle");
+		case "liangshi-feed": return Id(e);
+		case "liangshi-following": return Id(e, void 0, !0);
+		case "liangshi-hot": return Ld(e);
+		case "liangshi-topic": return t.id ? Ld(e, t.id) : "";
+		case "liangshi-post": return t.id ? Id(e, t.id) : "";
 		default: return "";
 	}
 }
 //#endregion
 //#region src/ui/plugin-updates-view.js
-function Id({ updates: e, dialog: t, documentRef: n = globalThis.document, renderMarkdown: r, successText: i = "两三事已更新，请刷新酒馆后使用", notifyUser: a = () => {} } = {}) {
+function zd({ updates: e, dialog: t, documentRef: n = globalThis.document, renderMarkdown: r, successText: i = "两三事已更新，请刷新酒馆后使用", notifyUser: a = () => {} } = {}) {
 	let o = (e, t = "", r = "") => {
 		let i = n.createElement(e);
 		return i.className = t, i.textContent = r, i;
@@ -13883,7 +13991,7 @@ function Id({ updates: e, dialog: t, documentRef: n = globalThis.document, rende
 }
 //#endregion
 //#region src/ui/editing.js
-function Ld(e, t, n = !1) {
+function Bd(e, t, n = !1) {
 	return e.key !== "Enter" || ![
 		"textarea",
 		"text",
@@ -13894,7 +14002,7 @@ function Ld(e, t, n = !1) {
 		"number"
 	].includes(e.target.type) || e.ctrlKey || e.altKey || e.metaKey || e.isComposing || e.keyCode === 229 || n || e.target.type === "textarea" && !e.target.ownerDocument.defaultView.matchMedia("(hover: hover) and (pointer: fine)").matches || e.shiftKey && e.target.type === "textarea" ? !1 : (e.preventDefault(), !e.shiftKey && !e.repeat && t(), !0);
 }
-function Rd(e) {
+function Vd(e) {
 	let t = e.getRootNode(), n = /* @__PURE__ */ new WeakSet(), r, i = (e) => n.add(e.target), a = (e) => n.delete(e.target);
 	t.addEventListener("compositionstart", i), t.addEventListener("compositionend", a);
 	let o = ".composer, .social-comment-form, .forum-comment-form, .ls-reply-form, .ls-compose-form, .profile-form, .group-form, .api-form, .attachment-form, .story-reference-row", s = [
@@ -13966,7 +14074,7 @@ function Rd(e) {
 }
 //#endregion
 //#region src/ui/dialog.js
-function zd({ mount: e, documentRef: t, isComposing: n = () => !1 }) {
+function Hd({ mount: e, documentRef: t, isComposing: n = () => !1 }) {
 	let r, i = () => {
 		if (r) {
 			r.overlay.parentNode !== e && e.append(r.overlay);
@@ -14017,7 +14125,7 @@ function zd({ mount: e, documentRef: t, isComposing: n = () => !1 }) {
 				}), g.addEventListener("keydown", (t) => {
 					t.stopPropagation();
 					let r = n(t.target);
-					if (!Ld(t, () => D.click(), r) && !(t.isComposing || t.keyCode === 229 || r) && (t.key === "Escape" && (t.preventDefault(), x(!1)), t.key === "Tab")) {
+					if (!Bd(t, () => D.click(), r) && !(t.isComposing || t.keyCode === 229 || r) && (t.key === "Escape" && (t.preventDefault(), x(!1)), t.key === "Tab")) {
 						let n = [..._.querySelectorAll("button, a[href], input, textarea, select")].filter((e) => !e.disabled && e.getClientRects().length), r = n.indexOf(e.getRootNode().activeElement);
 						t.preventDefault(), n[(r + (t.shiftKey ? -1 : 1) + n.length) % n.length]?.focus();
 					}
@@ -14034,7 +14142,7 @@ function zd({ mount: e, documentRef: t, isComposing: n = () => !1 }) {
 }
 //#endregion
 //#region src/ui/api-editor.js
-function Bd({ documentRef: e, dialog: t, apiSettings: n, isNew: r = !1, onSaved: i = () => {}, isComposing: a = () => !1 }) {
+function Ud({ documentRef: e, dialog: t, apiSettings: n, isNew: r = !1, onSaved: i = () => {}, isComposing: a = () => !1 }) {
 	let o = r ? null : n.getSelected(), s = o ? { ...o } : null, c = n.listSources().find((e) => e.ref.kind === s?.kind && e.ref.presetId === s?.presetId);
 	if (!r && !c) throw Error("这条连接已不存在，请重新选择。");
 	let l = r ? {
@@ -14102,7 +14210,7 @@ function Bd({ documentRef: e, dialog: t, apiSettings: n, isNew: r = !1, onSaved:
 			await n.saveAs(S(), r.value, d ? null : s, { select: !1 }), t.hidden = !0, u && i(), x("共享连接已另存，当前用途保持不变。");
 		});
 		r.addEventListener("keydown", (e) => {
-			Ld(e, () => o.click(), a(r)) && e.stopPropagation();
+			Bd(e, () => o.click(), a(r)) && e.stopPropagation();
 		}), t.append(h("副本名称", r), o, C("取消另存", async () => {
 			t.hidden = !0;
 		})), e.append(C("另存为", async () => {
@@ -14135,7 +14243,7 @@ function Bd({ documentRef: e, dialog: t, apiSettings: n, isNew: r = !1, onSaved:
 }
 //#endregion
 //#region src/ui/selects.js
-function Vd(e, t, n = 0) {
+function Wd(e, t, n = 0) {
 	let r = t.closest(".phone-shell"), i = r.getRootNode(), a = r.ownerDocument.defaultView, o = r.getBoundingClientRect(), s = i.querySelector(".phone-main").getBoundingClientRect(), c = t.getBoundingClientRect(), l = o.left + r.clientLeft, u = o.top + r.clientTop, d = Math.min(Math.max(c.width, n), r.clientWidth - 16), f = Math.max(4, s.top - u + 4), p = Math.min(r.clientHeight - 4, s.bottom - u - 4);
 	Object.assign(e.style, {
 		right: "auto",
@@ -14150,13 +14258,13 @@ function Vd(e, t, n = 0) {
 	let b = v ? c.top - u - e.offsetHeight - 4 : c.bottom - u + 4;
 	e.style.top = `${Math.max(f, Math.min(b, p - e.offsetHeight))}px`;
 }
-function Hd(e) {
+function Gd(e) {
 	if (!e) return;
 	e.focus({ preventScroll: !0 });
 	let t = e.closest(".model-options"), n = e.getBoundingClientRect(), r = t.getBoundingClientRect();
 	n.bottom > r.bottom ? t.scrollTop += n.bottom - r.bottom : n.top < r.top && (t.scrollTop += n.top - r.top);
 }
-function Ud({ root: e, beforeOpen: t = () => {} }) {
+function Kd({ root: e, beforeOpen: t = () => {} }) {
 	let n = e.querySelector(".phone-shell"), r = e.ownerDocument.defaultView, i = "", a = null, o = null, s = /* @__PURE__ */ new Set(), c = {
 		"phone-theme": "theme",
 		"phone-lock-style": "lock-style",
@@ -14199,7 +14307,7 @@ function Ud({ root: e, beforeOpen: t = () => {} }) {
 			p();
 			return;
 		}
-		Vd(a.popup, e), a.scrollPositions = h(e);
+		Wd(a.popup, e), a.scrollPositions = h(e);
 	}
 	function _(o, s = 1) {
 		if (!o || o.disabled) return;
@@ -14209,14 +14317,14 @@ function Ud({ root: e, beforeOpen: t = () => {} }) {
 		}
 		p(), t();
 		let c = u(o.id), l = o.ownerDocument.createElement("div");
-		l.className = "model-popup source-popup phone-select-popup", l.innerHTML = `<div class="model-options source-options phone-select-options" id="phone-select-options" role="listbox" aria-label="${Q(d(o))}">${[...o.options].map((e) => `<button type="button" role="option" data-phone-select-option="${Q(e.value)}" aria-selected="${e.selected}" ${e.disabled || e.parentElement.disabled ? "disabled" : ""}>${Q(e.label)}</button>`).join("")}</div>`, n.append(l), Vd(l, c), a = {
+		l.className = "model-popup source-popup phone-select-popup", l.innerHTML = `<div class="model-options source-options phone-select-options" id="phone-select-options" role="listbox" aria-label="${Q(d(o))}">${[...o.options].map((e) => `<button type="button" role="option" data-phone-select-option="${Q(e.value)}" aria-selected="${e.selected}" ${e.disabled || e.parentElement.disabled ? "disabled" : ""}>${Q(e.label)}</button>`).join("")}</div>`, n.append(l), Wd(l, c), a = {
 			id: o.id,
 			route: i,
 			popup: l,
 			scrollPositions: h(c)
 		}, c.setAttribute("aria-expanded", "true"), e.addEventListener("scroll", m, !0), r.addEventListener("resize", g), r.visualViewport?.addEventListener("resize", g);
 		let f = [...l.querySelectorAll("button:not(:disabled)")];
-		Hd(f.find((e) => e.getAttribute("aria-selected") === "true") || (s > 0 ? f[0] : f.at(-1)));
+		Gd(f.find((e) => e.getAttribute("aria-selected") === "true") || (s > 0 ? f[0] : f.at(-1)));
 	}
 	return {
 		mount(t, n = s) {
@@ -14265,7 +14373,7 @@ function Ud({ root: e, beforeOpen: t = () => {} }) {
 			if (t) _(l(t.dataset.phoneSelect), r);
 			else if (a) {
 				let e = [...a.popup.querySelectorAll("button:not(:disabled)")];
-				Hd(e[(e.indexOf(n) + r + e.length) % e.length]);
+				Gd(e[(e.indexOf(n) + r + e.length) % e.length]);
 			}
 			return !0;
 		},
@@ -14279,7 +14387,7 @@ function Ud({ root: e, beforeOpen: t = () => {} }) {
 }
 //#endregion
 //#region src/ui/action-menu.js
-function Wd({ root: e, onClose: t }) {
+function qd({ root: e, onClose: t }) {
 	let n = e.querySelector(".phone-shell"), r = e.ownerDocument.defaultView, i, a = () => i && e.querySelector(i.triggerSelector);
 	function o(e) {
 		let t = /* @__PURE__ */ new Map();
@@ -14302,7 +14410,7 @@ function Wd({ root: e, onClose: t }) {
 			s();
 			return;
 		}
-		Vd(i.popup, e, 180), i.positions = o(e);
+		Wd(i.popup, e, 180), i.positions = o(e);
 	}
 	function u(t) {
 		if (!i) return;
@@ -14317,7 +14425,7 @@ function Wd({ root: e, onClose: t }) {
 			for (let e of i.list.querySelectorAll("button")) e.hasAttribute("role") || e.setAttribute("role", "menuitem");
 			if (c) {
 				let e = i.list.querySelector(`[data-action="${CSS.escape(c)}"]:not(:disabled)`) || i.list.querySelector("button:not(:disabled)");
-				e ? Hd(e) : n.focus({ preventScroll: !0 });
+				e ? Gd(e) : n.focus({ preventScroll: !0 });
 			}
 		}
 		n.setAttribute("aria-expanded", "true"), l();
@@ -14342,7 +14450,7 @@ function Wd({ root: e, onClose: t }) {
 			}, u(d), !i) return;
 			e.addEventListener("scroll", c, !0), r.addEventListener("resize", l), r.visualViewport?.addEventListener("resize", l);
 			let h = m.querySelector("button:not(:disabled)");
-			h ? Hd(h) : f.focus({ preventScroll: !0 });
+			h ? Gd(h) : f.focus({ preventScroll: !0 });
 		},
 		update: u,
 		close: s,
@@ -14362,7 +14470,7 @@ function Wd({ root: e, onClose: t }) {
 				].includes(e.key)) {
 					e.preventDefault();
 					let t = [...i.list.querySelectorAll("button:not(:disabled)")], n = t.indexOf(e.target), r = e.key === "ArrowDown" ? 1 : -1;
-					Hd(t[e.key === "Home" ? 0 : e.key === "End" ? t.length - 1 : (n + r + t.length) % t.length]);
+					Gd(t[e.key === "Home" ? 0 : e.key === "End" ? t.length - 1 : (n + r + t.length) % t.length]);
 				}
 				return !0;
 			}
@@ -14372,19 +14480,19 @@ function Wd({ root: e, onClose: t }) {
 }
 //#endregion
 //#region src/ui/album.js
-var Gd = (e, t = "", n = !1) => `<header class="album-heading">${n ? $("album-back", "返回上页", "arrow", "icon-button") : ""}<h1>${e}</h1>${t}</header>`;
-function Kd(e = {}) {
+var Jd = (e, t = "", n = !1) => `<header class="album-heading">${n ? $("album-back", "返回上页", "arrow", "icon-button") : ""}<h1>${e}</h1>${t}</header>`;
+function Yd(e = {}) {
 	let t = e.tab !== "result", n = e.loading || e.error || e.exporting;
-	return `${Gd("打孔拼贴", "<button type=\"button\" class=\"quiet-button\" data-action=\"album-reset\">重置</button>", !0)}
+	return `${Jd("打孔拼贴", "<button type=\"button\" class=\"quiet-button\" data-action=\"album-reset\">重置</button>", !0)}
     <div class="album-template-row" aria-label="拼贴模板">${[["circle", "圆孔"], ["swallow", "燕子"]].map(([t, n]) => `<button type="button" data-album-template="${t}" aria-pressed="${e.template === t}" ${e.loading ? "disabled" : ""}>${n}</button>`).join("")}</div>
     <div class="album-edit-stage">${e.loading ? "<p role=\"status\">正在读取照片…</p>" : e.error ? `<p role="alert">${Q(e.error)}</p>` : t ? "<div class=\"album-source-surface\"><canvas data-album-hole-canvas aria-label=\"照片孔位，拖动调整\"></canvas></div>" : "<button type=\"button\" class=\"album-result-surface\" data-action=\"album-zoom\" aria-label=\"放大拼贴作品\"><canvas data-album-result-canvas aria-label=\"拼贴成品\"></canvas></button>"}</div>
     ${t ? `<div class="album-size-row"><label for="album-hole-size">孔位大小</label><input id="album-hole-size" type="range" min="0.65" max="1.25" step="0.05" value="${e.size || 1}" aria-label="孔位大小" ${n ? "disabled" : ""}></div><p class="album-editor-hint">拖动孔位，选择取下的画面</p>` : `<p class="album-editor-hint">轻点作品放大查看</p><div class="album-actionbar album-result-actions"><button type="button" class="save-button" data-action="album-export" ${n ? "disabled" : ""}>导出作品</button><button type="button" class="quiet-button" data-action="album-export-pieces" ${n ? "disabled" : ""}>导出碎片</button></div>`}
     <div class="album-editor-tabs" role="tablist" aria-label="打孔页面"><button type="button" role="tab" data-album-tab="positions" aria-selected="${t}">选孔位</button><button type="button" role="tab" data-album-tab="result" aria-selected="${!t}">看成品</button></div>`;
 }
-function qd(e, { ui: t, albumEditor: n }) {
+function Xd(e, { ui: t, albumEditor: n }) {
 	let r = { defaultUser: t.defaultUser }, i = cc(e, r), a = t.albumPath && dc(e, t.albumPath, r);
-	if (t.albumPage === "editor" && a) return Kd(n);
-	if (t.albumPage !== "gallery" && a) return `${Gd("照片", "", !0)}<div class="album-scroll album-detail-scroll">
+	if (t.albumPage === "editor" && a) return Yd(n);
+	if (t.albumPage !== "gallery" && a) return `${Jd("照片", "", !0)}<div class="album-scroll album-detail-scroll">
       <button type="button" class="album-detail-photo" data-action="album-view" aria-label="放大照片"><img data-phone-image="${Q(a.path)}" src="${Q(es(a.path))}" alt="${Q(a.description)}"></button>
       <div class="album-detail-meta">${a.description ? `<p>${Q(a.description)}</p>` : ""}${a.sources.map((e) => `<div><span>${Q(e.label)}</span><small>${Q(e.publishedAt || "未标日期")}</small></div>`).join("")}</div>
     </div><div class="album-actionbar"><button type="button" class="save-button" data-action="album-edit">打孔拼贴</button></div>`;
@@ -14393,12 +14501,12 @@ function qd(e, { ui: t, albumEditor: n }) {
 		let t = e.dateLabel || "未标日期";
 		o.has(t) || o.set(t, []), o.get(t).push(e);
 	}
-	return `${Gd("相册", `<small>${i.length} 张</small>`)}<div class="album-scroll album-gallery">${i.length ? [...o].map(([e, t]) => `<section><div class="album-day"><strong>${Q(e)}</strong></div><div class="album-grid">${t.map((e) => `<button type="button" class="album-photo" data-album-photo="${Q(e.path)}" aria-label="${Q(e.description || "查看照片")}"><img data-phone-image="${Q(e.path)}" src="${Q(es(e.path))}" alt="${Q(e.description)}" loading="lazy" decoding="async" draggable="false"><span>${Q(e.sources[0].label.split(" · ")[0])}</span></button>`).join("")}</div></section>`).join("") : tu("还没有照片", "短信、动态和帖子里的图片会显示在这里。", "image")}</div>`;
+	return `${Jd("相册", `<small>${i.length} 张</small>`)}<div class="album-scroll album-gallery">${i.length ? [...o].map(([e, t]) => `<section><div class="album-day"><strong>${Q(e)}</strong></div><div class="album-grid">${t.map((e) => `<button type="button" class="album-photo" data-album-photo="${Q(e.path)}" aria-label="${Q(e.description || "查看照片")}"><img data-phone-image="${Q(e.path)}" src="${Q(es(e.path))}" alt="${Q(e.description)}" loading="lazy" decoding="async" draggable="false"><span>${Q(e.sources[0].label.split(" · ")[0])}</span></button>`).join("")}</div></section>`).join("") : iu("还没有照片", "短信、动态和帖子里的图片会显示在这里。", "image")}</div>`;
 }
 //#endregion
 //#region src/punch-collage.js
-var Jd = 1e3, Yd = 1400, Xd = "M0 -52 C7 -48 11 -42 10 -34 C29 -38 65 -77 111 -100 C96 -66 79 -38 47 -17 C30 -10 18 -7 10 7 C8 25 16 53 23 76 C12 67 6 57 0 44 C-6 57 -12 67 -23 76 C-16 53 -8 25 -10 7 C-18 -7 -30 -10 -47 -17 C-79 -38 -96 -66 -111 -100 C-65 -77 -29 -38 -10 -34 C-11 -42 -7 -48 0 -52 Z", Zd = (e, t, n) => Math.min(n, Math.max(t, e));
-function Qd(e, t) {
+var Zd = 1e3, Qd = 1400, $d = "M0 -52 C7 -48 11 -42 10 -34 C29 -38 65 -77 111 -100 C96 -66 79 -38 47 -17 C30 -10 18 -7 10 7 C8 25 16 53 23 76 C12 67 6 57 0 44 C-6 57 -12 67 -23 76 C-16 53 -8 25 -10 7 C-18 -7 -30 -10 -47 -17 C-79 -38 -96 -66 -111 -100 C-65 -77 -29 -38 -10 -34 C-11 -42 -7 -48 0 -52 Z", ef = (e, t, n) => Math.min(n, Math.max(t, e));
+function tf(e, t) {
 	if (!(e > 0 && t > 0 && Number.isFinite(e) && Number.isFinite(t))) throw Error("图片尺寸无效。");
 	let n = Math.min(856 / e, 570 / t);
 	return {
@@ -14406,7 +14514,7 @@ function Qd(e, t) {
 		height: Math.max(1, Math.round(t * n))
 	};
 }
-function $d(e, t) {
+function nf(e, t) {
 	let n = 1 - t, r = [0, 1].map((r) => n ** 3 * e[0][r] + 3 * n * n * t * e[1][r] + 3 * n * t * t * e[2][r] + t ** 3 * e[3][r]), i = [0, 1].map((r) => 3 * n * n * (e[1][r] - e[0][r]) + 6 * n * t * (e[2][r] - e[1][r]) + 3 * t * t * (e[3][r] - e[2][r]));
 	return {
 		x: r[0],
@@ -14414,7 +14522,7 @@ function $d(e, t) {
 		angle: Math.atan2(i[1], i[0]) + Math.PI / 2
 	};
 }
-function ef(e) {
+function rf(e) {
 	if (e.type === "circle") return {
 		left: -e.sourceScale,
 		right: e.sourceScale,
@@ -14434,19 +14542,19 @@ function ef(e) {
 		bottom: Math.max(...r.map((e) => e[1]))
 	};
 }
-function tf(e, t, n = {}) {
+function af(e, t, n = {}) {
 	let r = {
 		...e,
 		sx: n.sx ?? e.sx,
 		sy: n.sy ?? e.sy,
 		sourceScale: n.sourceScale ?? e.sourceScale
-	}, i = ef(r), a = Math.min(1, t.width / (i.right - i.left), t.height / (i.bottom - i.top));
-	return r.sourceScale *= a, i = ef(r), r.sx = Zd(r.sx, -i.left, t.width - i.right), r.sy = Zd(r.sy, -i.top, t.height - i.bottom), r;
+	}, i = rf(r), a = Math.min(1, t.width / (i.right - i.left), t.height / (i.bottom - i.top));
+	return r.sourceScale *= a, i = rf(r), r.sx = ef(r.sx, -i.left, t.width - i.right), r.sy = ef(r.sy, -i.top, t.height - i.bottom), r;
 }
-function nf(e, t, n) {
+function of(e, t, n) {
 	if (!["circle", "swallow"].includes(e)) throw Error("未知拼贴模板。");
-	let r = Qd(t, n), i = Math.min(r.width / 856, r.height / 570), a = {
-		x: (Jd - r.width) / 2,
+	let r = tf(t, n), i = Math.min(r.width / 856, r.height / 570), a = {
+		x: (Zd - r.width) / 2,
 		y: (e === "circle" ? 78 : 748) + (570 - r.height) / 2,
 		...r
 	}, o = [
@@ -14465,8 +14573,8 @@ function nf(e, t, n) {
 	];
 	return {
 		template: e,
-		width: Jd,
-		height: Yd,
+		width: Zd,
+		height: Qd,
 		photoRect: a,
 		pieces: Array.from({ length: e === "circle" ? 12 : 11 }, (t, n) => {
 			let s;
@@ -14498,12 +14606,12 @@ function nf(e, t, n) {
 					destAngle: 0
 				};
 			} else {
-				let t = $d([
+				let t = nf([
 					[124, 626],
 					[100, 302],
 					[510, 92],
 					[875, 178]
-				], n / 10), a = n % 2 ? 28 : -16, o = $d([
+				], n / 10), a = n % 2 ? 28 : -16, o = nf([
 					[.12, .76],
 					[.17, .38],
 					[.56, .15],
@@ -14570,19 +14678,19 @@ function nf(e, t, n) {
 					destAngle: t.angle
 				};
 			}
-			return tf(s, a);
+			return af(s, a);
 		})
 	};
 }
-function rf(e, t = globalThis) {
-	let n = new t.Path2D(e === "swallow" ? Xd : void 0);
+function sf(e, t = globalThis) {
+	let n = new t.Path2D(e === "swallow" ? $d : void 0);
 	return e === "circle" && n.arc(0, 0, 1, 0, Math.PI * 2), n;
 }
-function af(e, { template: t = "swallow", sourceEdits: n = {} } = {}, { documentRef: r = document } = {}) {
+function cf(e, { template: t = "swallow", sourceEdits: n = {} } = {}, { documentRef: r = document } = {}) {
 	let i = (e, t) => Object.assign(r.createElement("canvas"), {
 		width: e,
 		height: t
-	}), a = nf(t, e.naturalWidth || e.width, e.naturalHeight || e.height), o = a.photoRect, s = a.pieces.map((e) => tf(e, o, n[e.id])), c = rf(t, r.defaultView), l = i(o.width, o.height);
+	}), a = of(t, e.naturalWidth || e.width, e.naturalHeight || e.height), o = a.photoRect, s = a.pieces.map((e) => af(e, o, n[e.id])), c = sf(t, r.defaultView), l = i(o.width, o.height);
 	l.getContext("2d").drawImage(e, 0, 0, l.width, l.height);
 	let u = i(24, 16).getContext("2d");
 	u.drawImage(e, 0, 0, 24, 16);
@@ -14596,9 +14704,9 @@ function af(e, { template: t = "swallow", sourceEdits: n = {} } = {}, { document
 		247,
 		244,
 		235
-	][t] * .94 + e / 384 * .06)), m = i(Jd, Yd), h = i(Jd, Yd), g = m.getContext("2d");
-	g.fillStyle = `rgb(${p.join(",")})`, g.fillRect(0, 0, Jd, Yd);
-	let _ = g.getImageData(0, 0, Jd, Yd), v = 894;
+	][t] * .94 + e / 384 * .06)), m = i(Zd, Qd), h = i(Zd, Qd), g = m.getContext("2d");
+	g.fillStyle = `rgb(${p.join(",")})`, g.fillRect(0, 0, Zd, Qd);
+	let _ = g.getImageData(0, 0, Zd, Qd), v = 894;
 	for (let e = 0; e < _.data.length; e += 4) {
 		v |= 0, v = v + 1831565813 | 0;
 		let t = Math.imul(v ^ v >>> 15, 1 | v);
@@ -14624,13 +14732,13 @@ function af(e, { template: t = "swallow", sourceEdits: n = {} } = {}, { document
 }
 //#endregion
 //#region src/ui/album-editor.js
-function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, onView: a, onFeedback: o, onMissing: s }) {
+function lf({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, onView: a, onFeedback: o, onMissing: s }) {
 	let c = /* @__PURE__ */ new Map(), l = /* @__PURE__ */ new Map(), u = "", d = null, f = 0, p = 0, m = 0, h = !1, g = "", _ = "swallow", v = "positions", y = 1, b = null, x = !1, S = "", C = (e, t = u) => e === f && t === u && r() && !!n(t), w = () => {
 		let e = `${u}\n${_}`;
 		return c.has(e) || c.set(e, {}), c.get(e);
-	}, T = () => d && nf(_, d.naturalWidth, d.naturalHeight), E = () => {
+	}, T = () => d && of(_, d.naturalWidth, d.naturalHeight), E = () => {
 		let e = T();
-		return e?.pieces.map((t) => tf(t, e.photoRect, w()[t.id])) || [];
+		return e?.pieces.map((t) => af(t, e.photoRect, w()[t.id])) || [];
 	};
 	function D(e) {
 		e && (t.defaultView.clearTimeout(l.get(e)), l.delete(e), t.defaultView.URL.revokeObjectURL(e));
@@ -14643,7 +14751,7 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 	}
 	function A() {
 		if (!d || !n(u)) throw Error("这张照片已不在相册中。");
-		return b ||= af(d, {
+		return b ||= cf(d, {
 			template: _,
 			sourceEdits: w()
 		}, { documentRef: t }), b;
@@ -14683,7 +14791,7 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 		let n = T();
 		if (!n) return;
 		(e.width !== n.photoRect.width || e.height !== n.photoRect.height) && (e.width = n.photoRect.width, e.height = n.photoRect.height);
-		let r = e.getContext("2d"), i = e.getBoundingClientRect().width / e.width || 1, a = rf(_, t.defaultView);
+		let r = e.getContext("2d"), i = e.getBoundingClientRect().width / e.width || 1, a = sf(_, t.defaultView);
 		r.clearRect(0, 0, e.width, e.height), r.drawImage(d, 0, 0, e.width, e.height);
 		let o = t.defaultView.getComputedStyle(e).getPropertyValue("--pp-active").trim();
 		for (let e of E()) r.save(), r.translate(e.sx, e.sy), r.rotate(e.sourceAngle), r.scale(e.sourceScale, e.sourceScale), r.fillStyle = e.id === y ? `${o}35` : "rgba(250,248,238,.15)", r.fill(a), r.strokeStyle = e.id === y ? o : "#fffdf2", r.lineWidth = (e.id === y ? 2 : 1) / (e.sourceScale * i), r.stroke(a), r.restore();
@@ -14702,7 +14810,7 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 			};
 			n.addEventListener("pointerdown", (r) => {
 				if (r.button !== 0) return;
-				let o = a(r), s = n.getContext("2d"), c = rf(_, t.defaultView), l = n.getBoundingClientRect().width / n.width, u = [...E()].reverse().find((e) => {
+				let o = a(r), s = n.getContext("2d"), c = sf(_, t.defaultView), l = n.getBoundingClientRect().width / n.width, u = [...E()].reverse().find((e) => {
 					let t = o.x - e.sx, n = o.y - e.sy, r = Math.cos(e.sourceAngle), i = Math.sin(e.sourceAngle);
 					return s.isPointInPath(c, (t * r + n * i) / e.sourceScale, (-t * i + n * r) / e.sourceScale);
 				}) || E().filter((e) => Math.hypot(o.x - e.sx, o.y - e.sy) * l < 22).sort((e, t) => Math.hypot(o.x - e.sx, o.y - e.sy) - Math.hypot(o.x - t.sx, o.y - t.sy))[0];
@@ -14716,7 +14824,7 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 				d && (d.value = te().size);
 			}), n.addEventListener("pointermove", (e) => {
 				if (!i || i.id !== e.pointerId || !r()) return;
-				let t = a(e), o = T(), s = tf(E().find((e) => e.id === y), o.photoRect, {
+				let t = a(e), o = T(), s = af(E().find((e) => e.id === y), o.photoRect, {
 					sx: t.x - i.dx,
 					sy: t.y - i.dy
 				});
@@ -14748,7 +14856,7 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 	function re(t) {
 		let n = T();
 		if (!n) return;
-		let r = n.pieces.find((e) => e.id === y), i = tf(E().find((e) => e.id === y), n.photoRect, { sourceScale: r.sourceScale * Number(t) });
+		let r = n.pieces.find((e) => e.id === y), i = af(E().find((e) => e.id === y), n.photoRect, { sourceScale: r.sourceScale * Number(t) });
 		w()[y] = {
 			sx: i.sx,
 			sy: i.sy,
@@ -14760,18 +14868,18 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 	function ie() {
 		c.delete(`${u}\n${_}`), y = 1, k(), g = "", i();
 	}
-	async function ae(e) {
+	async function F(e) {
 		let t = f, n = u, r = p, i = e === "pieces" ? A().piecesCanvas : A().canvas, a = await new Promise((e) => i.toBlob(e, "image/png"));
 		if (!C(t, n) || r !== p) return null;
 		if (!a) throw Error("图片导出失败，请重试。");
 		return a;
 	}
-	async function oe(e) {
+	async function ae(e) {
 		if (x || h || g || !r()) return;
 		let n = ++m;
 		x = !0, i();
 		try {
-			let n = await ae(e);
+			let n = await F(e);
 			if (!n) return;
 			let r = t.defaultView.URL.createObjectURL(n), i = t.createElement("a");
 			l.set(r, null), i.href = r, i.download = `两三事-${_ === "circle" ? "圆孔" : "燕子"}-${e === "pieces" ? "透明碎片" : "拼贴"}.png`, t.body.append(i), i.click(), i.remove(), l.set(r, t.defaultView.setTimeout(() => D(r), 1e3));
@@ -14781,9 +14889,9 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 			n === m && (x = !1, r() && i());
 		}
 	}
-	async function se(e) {
+	async function oe(e) {
 		try {
-			let n = await ae("art");
+			let n = await F("art");
 			if (!n) return;
 			O(), S = t.defaultView.URL.createObjectURL(n), l.set(S, null), a({
 				path: S,
@@ -14794,19 +14902,19 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 			r() && o(j(e));
 		}
 	}
-	function ce() {
+	function se() {
 		f++, m++, h = !1, x = !1, O();
 	}
-	function le(e = u) {
+	function ce(e = u) {
 		for (let t of c.keys()) t.startsWith(`${e}\n`) && c.delete(t);
 		if (e === u) {
-			ce();
+			se();
 			for (let e of l.keys()) D(e);
 			d = null, u = "", b = null, g = "", y = 1;
 		}
 	}
-	function ue() {
-		le(), c.clear(), _ = "swallow", v = "positions";
+	function le() {
+		ce(), c.clear(), _ = "swallow", v = "positions";
 	}
 	return {
 		model: te,
@@ -14816,18 +14924,18 @@ function of({ root: e, documentRef: t, readPhoto: n, isActive: r, onChange: i, o
 		setTab: P,
 		setSize: re,
 		reset: ie,
-		download: oe,
-		zoom: se,
+		download: ae,
+		zoom: oe,
 		releaseViewer: O,
-		leave: ce,
-		forgetCurrent: le,
-		invalidate: ue,
-		dispose: ue
+		leave: se,
+		forgetCurrent: ce,
+		invalidate: le,
+		dispose: le
 	};
 }
 //#endregion
 //#region src/ui/notification-shade.js
-var sf = () => `<button type="button" class="notification-shade-backdrop" data-action="notification-shade-home" aria-label="收起通知并回桌面"></button>
+var uf = () => `<button type="button" class="notification-shade-backdrop" data-action="notification-shade-home" aria-label="收起通知并回桌面"></button>
   <section class="phone-notification-shade" aria-label="通知与快捷设置" data-open="false">
     <header class="notification-shade-clock"><span data-notification-date></span><strong data-notification-time></strong></header>
     <div class="notification-quick-grid" aria-label="快捷设置">
@@ -14836,17 +14944,17 @@ var sf = () => `<button type="button" class="notification-shade-backdrop" data-a
       ${Array.from({ length: 4 }, () => "<button type=\"button\" class=\"notification-quick-small notification-placeholder\" disabled aria-label=\"预留快捷位\"><span></span></button>").join("")}
     </div><h3 class="notification-history-title">通知</h3><div class="phone-notification-list" aria-label="通知历史" aria-live="polite"></div>
   </section><section class="phone-notification-footer" aria-label="通知底部区域"><button type="button" class="notification-footer-background" data-action="notification-shade-home" aria-label="收起通知并回桌面"></button><button type="button" class="notification-clear" data-action="clear-notifications">${Z("message-delete")}<span>清除通知</span></button></section>`;
-function cf(e) {
+function df(e) {
 	return `<button type="button" class="phone-history-notice" data-action="open-history-notice" data-notification-key="${Q(e.key)}"><span class="notification-app-icon">${Z([
 		"messages",
 		"social",
 		"forum",
 		"liangshi"
-	].includes(e.app) ? e.app : "messages")}</span><span class="notification-history-copy"><span class="notification-history-meta"><strong title="${Q(e.title)}">${Q(e.title)}</strong><small title="${Q(e.timeLabel)}">${Q(To(e.timeLabel))}</small></span><p>${Kl(e.text)}</p></span></button>`;
+	].includes(e.app) ? e.app : "messages")}</span><span class="notification-history-copy"><span class="notification-history-meta"><strong title="${Q(e.title)}">${Q(e.title)}</strong><small title="${Q(e.timeLabel)}">${Q(To(e.timeLabel))}</small></span><p>${Yl(e.text)}</p></span></button>`;
 }
-function lf({ root: e, surface: t, readState: n, initialize: r, onClear: i, onTheme: a, onNotice: o, onHome: s, onBeforeOpen: c = () => {}, onClose: l = () => {}, onError: u, canOpen: d = () => !0 }) {
+function ff({ root: e, surface: t, readState: n, initialize: r, onClear: i, onTheme: a, onNotice: o, onHome: s, onBeforeOpen: c = () => {}, onClose: l = () => {}, onError: u, canOpen: d = () => !0 }) {
 	let f = t.ownerDocument, p = f.defaultView, m = f.createElement("div");
-	m.className = "phone-notification-layer", m.hidden = !0, m.inert = !0, m.innerHTML = sf();
+	m.className = "phone-notification-layer", m.hidden = !0, m.inert = !0, m.innerHTML = uf();
 	let h = m.querySelector(".phone-notification-shade"), g = m.querySelector(".phone-notification-list"), _ = "closed", v = 0, y, b = !1, x = !1, S = !1, C = "", w, T, E, D = () => e.querySelector("[data-action=\"toggle-notification-shade\"]"), O = () => _ !== "closed", k = () => p.matchMedia("(prefers-reduced-motion: reduce)").matches;
 	function A() {
 		let e = D();
@@ -14866,7 +14974,7 @@ function lf({ root: e, surface: t, readState: n, initialize: r, onClear: i, onTh
 		}
 		let t = n(), r = t.theme === "night", i = m.querySelector("[data-action=\"toggle-notification-theme\"]");
 		i.setAttribute("aria-pressed", String(r)), i.disabled = S, m.querySelector("[data-notification-theme-label]").textContent = r ? "夜间模式" : "日间模式", m.querySelector("[data-notification-theme-hint]").textContent = r ? "切换为日间" : "切换为夜间", m.querySelector("[data-notification-theme-icon]").innerHTML = r ? "<span class=\"notification-moon\" aria-hidden=\"true\"></span>" : Z("sun"), m.querySelector("[data-action=\"clear-notifications\"]").disabled = x;
-		let a = (t.notifications?.items || []).map(cf).join("") || "<p class=\"notification-history-empty\">暂无通知</p>";
+		let a = (t.notifications?.items || []).map(df).join("") || "<p class=\"notification-history-empty\">暂无通知</p>";
 		if (a !== C) {
 			let t = g.scrollTop, n = g.contains(e.activeElement) && e.activeElement.closest("[data-notification-key]")?.dataset.notificationKey;
 			C = a, g.innerHTML = a, g.scrollTop = t, n && [...g.querySelectorAll("[data-notification-key]")].find((e) => e.dataset.notificationKey === n)?.focus({ preventScroll: !0 });
@@ -14929,22 +15037,22 @@ function lf({ root: e, surface: t, readState: n, initialize: r, onClear: i, onTh
 			interactive: !!re(e.target)
 		} : null;
 	}
-	function ae(e) {
+	function F(e) {
 		E?.id === e.pointerId && (Math.hypot(e.clientX - E.x, e.clientY - E.y) > 6 || t.classList.contains("is-dragging")) && (E.moved = !0);
 	}
-	function oe(e) {
+	function ae(e) {
 		E?.id === e.pointerId && (E.moved = !0);
 	}
-	function se(e) {
+	function oe(e) {
 		let t = e.detail !== 0 && E && (E.moved || g.scrollTop !== E.scroll);
 		return E = null, t;
 	}
-	function ce(e) {
+	function se(e) {
 		let n = e.target.closest(".phone-status") || e.target === t && E?.status;
-		!O() || !n || re(e.target) || E?.interactive || (e.stopPropagation(), se(e) || N({ home: !0 }));
+		!O() || !n || re(e.target) || E?.interactive || (e.stopPropagation(), oe(e) || N({ home: !0 }));
 	}
-	async function le(e) {
-		if (e.stopPropagation(), se(e)) return;
+	async function ce(e) {
+		if (e.stopPropagation(), oe(e)) return;
 		if (!re(e.target)) {
 			N({ home: !0 });
 			return;
@@ -14985,11 +15093,11 @@ function lf({ root: e, surface: t, readState: n, initialize: r, onClear: i, onTh
 			}
 		}
 	}
-	m.addEventListener("click", le), t.addEventListener("pointerdown", ie), t.addEventListener("pointermove", ae), t.addEventListener("pointercancel", oe), t.addEventListener("click", ce);
-	let ue = () => {
+	m.addEventListener("click", ce), t.addEventListener("pointerdown", ie), t.addEventListener("pointermove", F), t.addEventListener("pointercancel", ae), t.addEventListener("click", se);
+	let le = () => {
 		O() && j();
 	};
-	return p.addEventListener("resize", ue), {
+	return p.addEventListener("resize", le), {
 		get isOpen() {
 			return O();
 		},
@@ -15021,13 +15129,13 @@ function lf({ root: e, surface: t, readState: n, initialize: r, onClear: i, onTh
 			N({
 				immediate: !0,
 				restoreFocus: !1
-			}), m.removeEventListener("click", le), t.removeEventListener("pointerdown", ie), t.removeEventListener("pointermove", ae), t.removeEventListener("pointercancel", oe), t.removeEventListener("click", ce), p.removeEventListener("resize", ue), m.remove();
+			}), m.removeEventListener("click", ce), t.removeEventListener("pointerdown", ie), t.removeEventListener("pointermove", F), t.removeEventListener("pointercancel", ae), t.removeEventListener("click", se), p.removeEventListener("resize", le), m.remove();
 		}
 	};
 }
 //#endregion
 //#region src/ui.js
-var uf = [
+var pf = [
 	{
 		id: "liangshi",
 		label: "两事",
@@ -15068,61 +15176,66 @@ var uf = [
 		label: "收藏夹",
 		view: "favorites"
 	}
-], df = {
-	home: Cu,
-	desktop: Au,
-	inbox: Mu,
-	chat: Iu,
-	"group-chat": Iu,
-	"group-profile": Zu,
-	forum: Ru,
-	post: Bu,
-	settings: qu,
-	"contact-profile": Yu,
-	"user-profile": Yu,
-	authoring: ed,
-	calendar: td,
-	social: gd,
-	"social-profile": _d,
-	liangshi: Sd,
-	album: qd,
-	favorites: pu,
-	"favorite-detail": vu
+], mf = {
+	home: Eu,
+	desktop: Nu,
+	inbox: Fu,
+	chat: zu,
+	"group-chat": zu,
+	"group-profile": ed,
+	forum: Vu,
+	post: Uu,
+	settings: Xu,
+	"contact-profile": Qu,
+	"user-profile": Qu,
+	authoring: rd,
+	calendar: id,
+	social: yd,
+	"social-profile": bd,
+	liangshi: Td,
+	album: Xd,
+	favorites: gu,
+	"favorite-detail": xu
 };
-function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a, social: o, liangshi: s, sourcePermissions: c, apiSettings: l, imageProviders: u, wallpaper: d, entries: f, appearance: p, images: m, authoring: h, mode: g, updates: _, renderUpdateMarkdown: v, notifyUpdate: y, storySmsInstaller: b, qqjBridgeProvider: x = () => globalThis.qqj_v3_public_bridge_v1, calendar: S = hl(), control: C = { isEnabled: () => !0 }, isCurrentChat: w = () => !0, readWeather: T = $u, readTime: E, readTimeline: D, defaultUser: O = "我", onClose: k, onEnable: A = () => {}, onContextChange: j = () => {}, onThemeChange: ee = () => {}, onOpenAlbum: te, onOpenNotifications: ne }) {
+function hf({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a, social: o, liangshi: s, sourcePermissions: c, apiSettings: l, imageProviders: u, wallpaper: d, entries: f, appearance: p, images: m, authoring: h, mode: g, updates: _, renderUpdateMarkdown: v, notifyUpdate: y, storySmsInstaller: b, qqjBridgeProvider: x = () => globalThis.qqj_v3_public_bridge_v1, calendar: S = hl(), control: C = { isEnabled: () => !0 }, isCurrentChat: w = () => !0, readWeather: T = nd, readTime: E, readTimeline: D, defaultUser: O = "我", onClose: k, onEnable: A = () => {}, onContextChange: j = () => {}, onThemeChange: ee = () => {}, onOpenAlbum: te, onOpenNotifications: ne }) {
 	let M = e.ownerDocument, N = M.createElement("div");
 	N.id = g === "embedded" ? "pocket-phone-card-host" : "pocket-phone-host", N.dataset.mode = g || "standalone", N.className = "pocket-phone";
 	let P = N.attachShadow({ mode: "open" }), re = M.createElement("style");
-	re.dataset.pocketPhoneFont = "", re.textContent = `@font-face { font-family: PocketPhoneClock; src: url("${ye("assets/clock-dorsa.ttf")}") format("truetype"); font-display: block; }
-    @font-face { font-family: PocketPhoneRoundClock; src: url("${ye("assets/clock-fredoka.woff2")}") format("woff2"); font-weight: 500; font-display: block; }
-    @font-face { font-family: PocketPhoneKorean; src: url("${ye("assets/gaegu-korean-400-normal.woff2")}") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7FF; }
-    @font-face { font-family: PocketPhoneJapanese; src: url("${ye("assets/yomogi-japanese-400-normal.woff2")}") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; }`, M.head.append(re);
+	re.dataset.pocketPhoneFont = "", re.textContent = `@font-face { font-family: PocketPhoneClock; src: url("${ve("assets/clock-dorsa.ttf")}") format("truetype"); font-display: block; }
+    @font-face { font-family: PocketPhoneRoundClock; src: url("${ve("assets/clock-fredoka.woff2")}") format("woff2"); font-weight: 500; font-display: block; }
+    @font-face { font-family: PocketPhoneKorean; src: url("${ve("assets/gaegu-korean-400-normal.woff2")}") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7FF; }
+    @font-face { font-family: PocketPhoneJapanese; src: url("${ve("assets/yomogi-japanese-400-normal.woff2")}") format("woff2"); font-style: normal; font-weight: 400; font-display: swap; }`, M.head.append(re);
 	let ie = M.createElement("link");
-	ie.rel = "stylesheet", ie.href = ye("style.css");
-	let ae = M.createElement("div");
-	ae.className = "phone-shell", ae.setAttribute("role", "region"), ae.setAttribute("aria-label", "两三事"), P.append(ie, ae), e.append(N);
-	let oe = ld({
+	ie.rel = "stylesheet", ie.href = ve("style.css");
+	let F = M.createElement("div");
+	F.className = "phone-shell", F.setAttribute("role", "region"), F.setAttribute("aria-label", "两三事"), P.append(ie, F), e.append(N);
+	let ae = fd({
 		appearance: p,
 		root: P,
 		element: N,
 		documentRef: M
-	}), se = pd(ae), ce = md(P, {
-		onEarlier: jt,
-		onPullStart: Ge,
-		canPull: () => !N.hidden && wt() && w() && !F.photo && !F.conflict && !I?.isOpen && !P.querySelector("[data-phone-overlay], .phone-action-popup")
-	}), le = Rd(ae), ue = zd({
-		mount: ae,
+	}), oe = gd(F), se = Vl({
+		target: N,
+		panel: F,
+		close: wt,
+		canClose: () => Tt() && !P.querySelector(".phone-dialog-backdrop, .photo-viewer, [data-phone-overlay]")
+	}), ce = _d(P, {
+		onEarlier: Mt,
+		onPullStart: Ke,
+		canPull: () => !N.hidden && Tt() && w() && !I.photo && !I.conflict && !we?.isOpen && !P.querySelector("[data-phone-overlay], .phone-action-popup")
+	}), le = Vd(F), ue = Hd({
+		mount: F,
 		documentRef: M,
 		isComposing: le.isComposing
-	}), de = c ? Hl({
+	}), de = c ? Gl({
 		permissions: c,
 		documentRef: M
-	}) : null, fe, pe = Ud({
+	}) : null, fe, pe = Kd({
 		root: P,
 		beforeOpen: () => {
-			Kt(), Gt();
+			qt(), Kt();
 		}
-	}), F = {
+	}), I = {
 		view: "home",
 		feedback: null,
 		defaultUser: O,
@@ -15200,123 +15313,123 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 		favoriteId: "",
 		favoriteFilter: "",
 		favoriteScroll: 0
-	}, me = Wd({
+	}, he = qd({
 		root: P,
 		onClose: () => {
-			F.chatMenu = !1, F.liangshiMenu = "", F.inboxMenu = !1, F.avatarMenuOpen = !1, F.selectedMessage = "", P.querySelectorAll(".is-selected").forEach((e) => e.classList.remove("is-selected")), P.querySelectorAll("[data-message][aria-expanded=\"true\"]").forEach((e) => e.setAttribute("aria-expanded", "false"));
+			I.chatMenu = !1, I.liangshiMenu = "", I.inboxMenu = !1, I.avatarMenuOpen = !1, I.selectedMessage = "", P.querySelectorAll(".is-selected").forEach((e) => e.classList.remove("is-selected")), P.querySelectorAll("[data-message][aria-expanded=\"true\"]").forEach((e) => e.setAttribute("aria-expanded", "false"));
 		}
-	}), ge = /* @__PURE__ */ new Set(), _e, ve, be = "", xe = 0, Se = 0, Ce = null;
-	C.isEnabled() || (F.view = "settings");
-	let I, we = !1, Te = 0, Ee = xu({
+	}), ge = /* @__PURE__ */ new Set(), _e, ye, be = "", xe = 0, Se = 0, Ce = null;
+	C.isEnabled() || (I.view = "settings");
+	let we, Te = !1, Ee = 0, De = wu({
 		root: P,
 		element: N,
 		readTime: E,
-		onRefresh: (e) => I?.updateClock(e)
-	}), De = () => ["chat", "group-chat"].includes(F.view), Oe = () => F.view === "group-chat" ? F.groupId : F.contactId, ke = null, Ne = null, Pe = null, Le = "", Re, ze, Be, Ve, He = [], Ue = !1;
-	function We() {
-		M.defaultView.clearTimeout(Be), Be = void 0, Ve = void 0;
-	}
+		onRefresh: (e) => we?.updateClock(e)
+	}), Oe = () => ["chat", "group-chat"].includes(I.view), ke = () => I.view === "group-chat" ? I.groupId : I.contactId, Ne = null, Pe = null, Le = null, Re = "", ze, Be, Ve, He, Ue = [], We = !1;
 	function Ge() {
-		We(), He = [];
+		M.defaultView.clearTimeout(Ve), Ve = void 0, He = void 0;
 	}
 	function Ke() {
-		if (Ue) return;
-		let e = He;
-		He = [];
+		Ge(), Ue = [];
+	}
+	function qe() {
+		if (We) return;
+		let e = Ue;
+		Ue = [];
 		for (let n of e) {
-			if (N.hidden || !N.isConnected || !w() || be !== n.route || F.view !== "group-chat" || Oe() !== n.id) continue;
+			if (N.hidden || !N.isConnected || !w() || be !== n.route || I.view !== "group-chat" || ke() !== n.id) continue;
 			let e = t.read(), r = e.groups?.find((e) => e.id === n.id), i = e.contacts.find((e) => e.id === n.mentionId && r?.memberIds.includes(e.id)), a = P.querySelector("#sms-draft");
 			if (i && a && !a.disabled) {
 				let e = a.selectionStart ?? a.value.length, t = a.selectionEnd ?? e;
-				a.setRangeText(`@${R(i)} `, e, t, "end"), a.focus({ preventScroll: !0 }), tn({ target: a });
+				a.setRangeText(`@${R(i)} `, e, t, "end"), a.focus({ preventScroll: !0 }), nn({ target: a });
 			}
 		}
 	}
-	function qe() {
-		Ve?.mentionId && He.push(Ve), We(), Ke();
+	function Je() {
+		He?.mentionId && Ue.push(He), Ge(), qe();
 	}
-	function Je(e, t) {
+	function Ye(e, t) {
 		if (!w()) {
-			Ge(), z({
+			Ke(), z({
 				error: !0,
 				text: "聊天已切换，请重新打开手机。"
 			});
 			return;
 		}
-		let i = Oe(), a = e.dataset.patTarget, o = e.dataset.mentionId;
+		let i = ke(), a = e.dataset.patTarget, o = e.dataset.mentionId;
 		if (t.detail === 0 || !a) {
-			qe(), o && (He.push({
+			Je(), o && (Ue.push({
 				id: i,
 				route: be,
 				mentionId: o
-			}), Ke());
+			}), qe());
 			return;
 		}
-		if (Ve?.id === i && Ve.targetId === a && Ve.route === be && Be !== void 0) {
-			We();
-			let e = F.view === "group-chat" ? r : n;
-			H(`pat:${i}:${he()}`, () => e.pat(i, a), j);
+		if (He?.id === i && He.targetId === a && He.route === be && Ve !== void 0) {
+			Ge();
+			let e = I.view === "group-chat" ? r : n;
+			H(`pat:${i}:${me()}`, () => e.pat(i, a), j);
 			return;
 		}
-		qe(), Ve = {
+		Je(), He = {
 			id: i,
 			route: be,
 			targetId: a,
 			mentionId: o
-		}, Be = M.defaultView.setTimeout(qe, 300);
+		}, Ve = M.defaultView.setTimeout(Je, 300);
 	}
-	let Ye = (e) => {
+	let Xe = (e) => {
 		let t = e.target.closest("[data-action=\"earlier\"], [data-action=\"history\"], [data-action=\"earlier-history\"]");
 		(e.target.closest(".message-avatar") || t && P.activeElement?.id === "sms-draft") && e.preventDefault();
-	}, Xe = (e) => {
-		e.target.id === "sms-draft" && (Ue = !0);
 	}, Ze = (e) => {
-		e.target.id === "sms-draft" && (Ue = !1, queueMicrotask(Ke));
-	}, Qe = of({
+		e.target.id === "sms-draft" && (We = !0);
+	}, Qe = (e) => {
+		e.target.id === "sms-draft" && (We = !1, queueMicrotask(qe));
+	}, $e = lf({
 		root: P,
 		documentRef: M,
 		readPhoto: (e) => dc(t.read(), e, { defaultUser: O }),
-		isActive: () => N.isConnected && !N.hidden && F.view === "album" && F.albumPage === "editor",
+		isActive: () => N.isConnected && !N.hidden && I.view === "album" && I.albumPage === "editor",
 		onChange: () => V(),
 		onFeedback: (e) => z({
 			error: !0,
 			text: e
 		}),
-		onMissing: (e) => void mt([e]),
+		onMissing: (e) => void ht([e]),
 		onView: (e, t) => {
 			Ce = {
 				route: be,
-				position: Dt(t),
+				position: Ot(t),
 				selector: "[data-action=\"album-zoom\"]"
-			}, F.photo = e, V();
+			}, I.photo = e, V();
 		}
 	});
-	I = lf({
+	we = ff({
 		root: P,
-		surface: ae,
+		surface: F,
 		readState: t.read,
 		initialize: () => t.initializeNotifications(),
-		canOpen: () => N.isConnected && !N.hidden && C.isEnabled() && !F.conflict && !F.photo && !P.querySelector(".phone-dialog-backdrop"),
+		canOpen: () => N.isConnected && !N.hidden && C.isEnabled() && !I.conflict && !I.photo && !P.querySelector(".phone-dialog-backdrop"),
 		onBeforeOpen: () => {
-			le.hold(), Jt(), Ee.refresh();
+			le.hold(), Yt(), De.refresh();
 		},
 		onClose: ({ restoreFocus: e }) => le.release(e),
 		onClear: async () => {
-			we = !0, tt();
+			Te = !0, nt();
 			try {
 				await t.clearNotifications(), P.querySelector(".lock-notifications")?.replaceChildren();
 			} finally {
-				we = !1;
+				Te = !1;
 			}
 		},
 		onTheme: async () => {
 			await t.setTheme(t.read().theme === "night" ? "day" : "night");
 			let e = t.read();
-			if (N.dataset.theme = e.theme, ee(N.dataset.theme), F.view === "home") {
+			if (N.dataset.theme = e.theme, ee(N.dataset.theme), I.view === "home") {
 				let t = P.querySelector(".view-home"), n = t.querySelector(".home-footer"), r = M.createElement("template");
-				r.innerHTML = Cu(e, { weather: T() });
+				r.innerHTML = Eu(e, { weather: T() });
 				for (let e of [...t.children]) e !== n && e.remove();
-				t.insertBefore(r.content, n), Ee.refresh(), st();
+				t.insertBefore(r.content, n), De.refresh(), ct();
 			}
 			let n = P.querySelector("#phone-theme");
 			if (n) {
@@ -15325,26 +15438,26 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				t && (t.textContent = n.selectedOptions[0]?.label || "");
 			}
 		},
-		onNotice: Nt,
-		onHome: () => kt("desktop"),
+		onNotice: Pt,
+		onHome: () => At("desktop"),
 		onError: (e) => z({
 			error: !0,
 			text: e.message || "通知操作未能保存。"
 		})
 	});
 	function z(e) {
-		M.defaultView.clearTimeout(ze), (!N.isConnected || N.hidden && !e?.error) && (e = null), F.feedback = e;
-		let t = ae.querySelector(".feedback"), n = Eu(e);
+		M.defaultView.clearTimeout(Be), (!N.isConnected || N.hidden && !e?.error) && (e = null), I.feedback = e;
+		let t = F.querySelector(".feedback"), n = ku(e);
 		if (t) t.outerHTML = n;
 		else if (n) {
-			let e = F.conflict && ae.querySelector(":scope > .phone-dialog-backdrop");
-			e ? e.insertAdjacentHTML("beforeend", n) : ae.querySelector(":scope > .phone-main")?.insertAdjacentHTML("afterend", n);
+			let e = I.conflict && F.querySelector(":scope > .phone-dialog-backdrop");
+			e ? e.insertAdjacentHTML("beforeend", n) : F.querySelector(":scope > .phone-main")?.insertAdjacentHTML("afterend", n);
 		}
-		e && (ze = M.defaultView.setTimeout(() => {
-			F.feedback === e && (F.feedback = null, ae.querySelector(".feedback")?.remove());
+		e && (Be = M.defaultView.setTimeout(() => {
+			I.feedback === e && (I.feedback = null, F.querySelector(".feedback")?.remove());
 		}, e.error ? 5e3 : 2500));
 	}
-	let $e = _ && Id({
+	let tt = _ && zd({
 		updates: _,
 		dialog: ue,
 		documentRef: M,
@@ -15361,28 +15474,28 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 		},
 		...g === "embedded" ? { successText: "两三事已更新，可继续使用。" } : {}
 	});
-	function tt() {
-		M.defaultView.clearTimeout(Re), F.notice = null, P.querySelector(".phone-top-notice")?.remove();
+	function nt() {
+		M.defaultView.clearTimeout(ze), I.notice = null, P.querySelector(".phone-top-notice")?.remove();
 	}
-	function nt(e) {
-		N.hidden || !N.isConnected || !C.isEnabled() || we || !e?.key || !t.read().notifications?.items.some((t) => t.key === e.key) || (tt(), F.notice = e, ae.insertAdjacentHTML("beforeend", Fd(t.read(), e)), Re = M.defaultView.setTimeout(tt, 6e3));
+	function rt(e) {
+		N.hidden || !N.isConnected || !C.isEnabled() || Te || !e?.key || !t.read().notifications?.items.some((t) => t.key === e.key) || (nt(), I.notice = e, F.insertAdjacentHTML("beforeend", Rd(t.read(), e)), ze = M.defaultView.setTimeout(nt, 6e3));
 	}
-	function rt(e, t) {
+	function it(e, t) {
 		if (!e || !t) return !1;
 		let n = e.getBoundingClientRect(), r = t.getBoundingClientRect();
 		return n.bottom > r.top && n.top < r.bottom;
 	}
-	function it(e) {
-		if (N.hidden || I.isOpen || !N.isConnected || !["social", "social-profile"].includes(F.view)) return !1;
-		let t = P.querySelector(`.social-post[data-social-post="${CSS.escape(e)}"]`);
-		return rt(t?.querySelector(".social-comment:last-child") || t?.querySelector(".social-stats"), P.querySelector(".phone-main"));
-	}
 	function at(e) {
-		if (e && !e.target.matches?.(".view-social, .view-social-profile") || N.hidden || I.isOpen || !["social", "social-profile"].includes(F.view)) return;
-		let t = P.querySelector(".phone-main"), n = [...new Set([...P.querySelectorAll(".social-comment[data-unread-reply]")].filter((e) => rt(e, t)).map((e) => e.closest(".social-post").dataset.socialPost))];
+		if (N.hidden || we.isOpen || !N.isConnected || !["social", "social-profile"].includes(I.view)) return !1;
+		let t = P.querySelector(`.social-post[data-social-post="${CSS.escape(e)}"]`);
+		return it(t?.querySelector(".social-comment:last-child") || t?.querySelector(".social-stats"), P.querySelector(".phone-main"));
+	}
+	function B(e) {
+		if (e && !e.target.matches?.(".view-social, .view-social-profile") || N.hidden || we.isOpen || !["social", "social-profile"].includes(I.view)) return;
+		let t = P.querySelector(".phone-main"), n = [...new Set([...P.querySelectorAll(".social-comment[data-unread-reply]")].filter((e) => it(e, t)).map((e) => e.closest(".social-post").dataset.socialPost))];
 		n.length && o.markRepliesRead(n).then(() => {
 			for (let e of n) P.querySelectorAll(`.social-post[data-social-post="${CSS.escape(e)}"] [data-unread-reply]`).forEach((e) => e.removeAttribute("data-unread-reply"));
-			F.notice?.kind === "social-reply" && n.includes(F.notice.id) && tt();
+			I.notice?.kind === "social-reply" && n.includes(I.notice.id) && nt();
 		}).catch(() => {
 			z({
 				error: !0,
@@ -15390,28 +15503,28 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			}), V();
 		});
 	}
-	function B(e) {
-		if (I.refresh(), we || I.isClearing) return;
+	function ot(e) {
+		if (we.refresh(), Te || we.isClearing) return;
 		let n = t.read().notifications?.items || [], r = e.filter((e) => n.some((t) => t.key === e.key)).filter(({ kind: e, id: t }) => {
-			if (I.isOpen) return !0;
-			if (e === "message") return !(De() && Oe() === t);
-			if (e === "social-reply") return !it(t);
-			if (e === "social-author") return F.view !== "social-profile" || F.socialAuthorId !== t;
-			if (e === "social-feed") return F.view !== "social";
-			if (e === "forum" || e === "forum-circle") return F.view !== "forum" || F.forumScope !== (e === "forum-circle" ? "circle" : "public");
-			if (e === "forum-post" || e === "forum-circle-post") return F.view !== "post" || F.postId !== t || F.forumScope !== (e === "forum-circle-post" ? "circle" : "public");
-			if (e === "liangshi-post") return F.view !== "liangshi" || F.liangshiPage.kind !== "post" || F.liangshiPage.id !== t;
-			if (e === "liangshi-topic") return F.view !== "liangshi" || F.liangshiPage.kind !== "hot-topic" || F.liangshiPage.id !== t;
+			if (we.isOpen) return !0;
+			if (e === "message") return !(Oe() && ke() === t);
+			if (e === "social-reply") return !at(t);
+			if (e === "social-author") return I.view !== "social-profile" || I.socialAuthorId !== t;
+			if (e === "social-feed") return I.view !== "social";
+			if (e === "forum" || e === "forum-circle") return I.view !== "forum" || I.forumScope !== (e === "forum-circle" ? "circle" : "public");
+			if (e === "forum-post" || e === "forum-circle-post") return I.view !== "post" || I.postId !== t || I.forumScope !== (e === "forum-circle-post" ? "circle" : "public");
+			if (e === "liangshi-post") return I.view !== "liangshi" || I.liangshiPage.kind !== "post" || I.liangshiPage.id !== t;
+			if (e === "liangshi-topic") return I.view !== "liangshi" || I.liangshiPage.kind !== "hot-topic" || I.liangshiPage.id !== t;
 			let n = e === "liangshi-following" ? "following" : e === "liangshi-hot" ? "hot" : "square";
-			return F.view !== "liangshi" || F.liangshiPage.kind !== "feed" || F.liangshiPage.tab !== n;
+			return I.view !== "liangshi" || I.liangshiPage.kind !== "feed" || I.liangshiPage.tab !== n;
 		});
-		r.length && nt(r.at(-1));
-	}
-	function ot() {
-		let e = P.querySelector(".chat-stage");
-		e && !N.hidden && p.particlesEnabled() ? ke ? ke.attach(e) : ke = nd(e) : (ke?.dispose(), ke = null);
+		r.length && rt(r.at(-1));
 	}
 	function st() {
+		let e = P.querySelector(".chat-stage");
+		e && !N.hidden && p.particlesEnabled() ? Ne ? Ne.attach(e) : Ne = ad(e) : (Ne?.dispose(), Ne = null);
+	}
+	function ct() {
 		let e = P.querySelector(".view-home.is-classic .home-artboard");
 		if (!e) return;
 		let t = e.querySelector("img"), n = "480px PocketPhoneClock", r = "0123456789", i = () => e.classList.add("is-ready");
@@ -15423,39 +15536,39 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 	}
 	function V({ bottom: e = !1 } = {}) {
 		if (!N.isConnected) return;
-		F.notice?.key && !t.read().notifications?.items.some((e) => e.key === F.notice.key) && tt(), F.view === "album" && F.albumPath && !dc(t.read(), F.albumPath, { defaultUser: O }) && (Qe.forgetCurrent(F.albumPath), F.albumPage = "gallery", F.albumPath = "", F.photo = null), F.view === "album" && F.albumPage === "gallery" && (F.albumScroll = P.querySelector(".album-gallery")?.scrollTop ?? F.albumScroll);
-		let n = JSON.stringify([F.view, F.view === "album" ? [F.albumPage, F.albumPath] : F.view === "liangshi" ? [F.liangshiPage, F.liangshiPage.kind === "compose" ? F.liangshiDraft?.postId : ""] : F.view === "favorite-detail" ? F.favoriteId : F.view === "post" ? [F.forumScope, F.postId] : F.view === "forum" ? F.forumScope : F.view === "social-profile" ? F.socialAuthorId : F.view === "contact-profile" ? [F.editor, F.editId] : F.view === "group-profile" ? F.groupEditId : De() ? Oe() : ""]), r = n === be;
-		(!r || F.view !== "settings" || !F.drawers.content) && (fe = null), r || (ct(), dt(), me.close(), Ge(), Ue = !1), _e && !w() && ct(), ve && !w() && dt();
-		let i = r && (F.view !== "settings" || Se === xe);
+		I.notice?.key && !t.read().notifications?.items.some((e) => e.key === I.notice.key) && nt(), I.view === "album" && I.albumPath && !dc(t.read(), I.albumPath, { defaultUser: O }) && ($e.forgetCurrent(I.albumPath), I.albumPage = "gallery", I.albumPath = "", I.photo = null), I.view === "album" && I.albumPage === "gallery" && (I.albumScroll = P.querySelector(".album-gallery")?.scrollTop ?? I.albumScroll);
+		let n = JSON.stringify([I.view, I.view === "album" ? [I.albumPage, I.albumPath] : I.view === "liangshi" ? [I.liangshiPage, I.liangshiPage.kind === "compose" ? I.liangshiDraft?.postId : ""] : I.view === "favorite-detail" ? I.favoriteId : I.view === "post" ? [I.forumScope, I.postId] : I.view === "forum" ? I.forumScope : I.view === "social-profile" ? I.socialAuthorId : I.view === "contact-profile" ? [I.editor, I.editId] : I.view === "group-profile" ? I.groupEditId : Oe() ? ke() : ""]), r = n === be;
+		(!r || I.view !== "settings" || !I.drawers.content) && (fe = null), r || (lt(), ft(), he.close(), Ke(), We = !1), _e && !w() && lt(), ye && !w() && ft();
+		let i = r && (I.view !== "settings" || Se === xe);
 		Se = xe, be = n;
 		let a = P.querySelector(".view-home img.home-wallpaper, .view-home img.home-art");
-		a && (Pe = a, Le = a.getAttribute("src") || "");
-		let o = r ? P.querySelector(".phone-main")?.scrollTop : void 0, s = r && De() ? P.querySelector(".message-feed")?.scrollTop : void 0, d = t.read(), m = C.isEnabled();
-		N.dataset.enabled = String(m), m || (F.view = "settings", F.photo = null, F.attachment = ""), [
+		a && (Le = a, Re = a.getAttribute("src") || "");
+		let o = r ? P.querySelector(".phone-main")?.scrollTop : void 0, s = r && Oe() ? P.querySelector(".message-feed")?.scrollTop : void 0, d = t.read(), m = C.isEnabled();
+		N.dataset.enabled = String(m), m || (I.view = "settings", I.photo = null, I.attachment = ""), [
 			"inbox",
 			"chat",
 			"group-chat",
 			"group-profile",
 			"social",
 			"social-profile"
-		].includes(F.view) && (d = {
+		].includes(I.view) && (d = {
 			...d,
-			contacts: wd(d.contacts, x?.())
+			contacts: Dd(d.contacts, x?.())
 		});
 		let h = D();
-		F.batch?.key !== h.key && (F.historyOpen = !1, F.visibleHistory = 60), F.batch = h, N.dataset.theme = d.theme === "night" ? "night" : "day", ee(N.dataset.theme);
-		let v = df[F.view];
+		I.batch?.key !== h.key && (I.historyOpen = !1, I.visibleHistory = 60), I.batch = h, N.dataset.theme = d.theme === "night" ? "night" : "day", ee(N.dataset.theme);
+		let v = mf[I.view];
 		[
 			"contact-profile",
 			"user-profile",
 			"group-profile"
-		].includes(F.view) || (F.avatarMenuOpen = !1);
-		let y = F.view === "home" ? T() : null;
-		ae.classList.toggle("is-stacked-lock", F.view === "home" && d.lockStyle === "stacked"), ae.classList.toggle("is-rounded-theme", ["home", "desktop"].includes(F.view) && d.lockStyle === "rounded");
-		let b = F.view === "calendar" ? S.month(F.calendarOffset) : F.view === "desktop" ? S.month(0) : null;
-		I.beforeRender(), le.render(Du({
+		].includes(I.view) || (I.avatarMenuOpen = !1);
+		let y = I.view === "home" ? T() : null;
+		F.classList.toggle("is-stacked-lock", I.view === "home" && d.lockStyle === "stacked"), F.classList.toggle("is-rounded-theme", ["home", "desktop"].includes(I.view) && d.lockStyle === "rounded");
+		let b = I.view === "calendar" ? S.month(I.calendarOffset) : I.view === "desktop" ? S.month(0) : null;
+		we.beforeRender(), le.render(Au({
 			content: v(d, {
-				ui: F,
+				ui: I,
 				busy: ge,
 				sourcePermissions: c,
 				sourcePermissionMarkup: fe?.outerHTML || "",
@@ -15465,49 +15578,49 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				appearance: p,
 				control: C,
 				mode: g,
-				apps: uf,
+				apps: pf,
 				calendar: b,
 				weather: y,
 				updates: _,
-				albumEditor: F.view === "album" && F.albumPage === "editor" ? Qe.model() : void 0,
-				profileAvatar: F.view === "contact-profile" ? Cd(F.profileDraft, t.read().contacts.find((e) => e.id === F.editId), x?.()) : void 0
+				albumEditor: I.view === "album" && I.albumPage === "editor" ? $e.model() : void 0,
+				profileAvatar: I.view === "contact-profile" ? Ed(I.profileDraft, t.read().contacts.find((e) => e.id === I.editId), x?.()) : void 0
 			}),
-			view: F.view,
+			view: I.view,
 			enabled: m,
 			weather: y,
-			feedback: F.feedback,
-			photo: F.photo,
-			conflict: F.conflict,
+			feedback: I.feedback,
+			photo: I.photo,
+			conflict: I.conflict,
 			mode: g,
 			conflictBusy: ge.has("conflict"),
 			lockStyle: d.lockStyle,
-			settingsVersion: F.view === "settings" ? Ku(g, _) : ""
+			settingsVersion: I.view === "settings" ? Yu(g, _) : ""
 		}), i, fe && {
 			node: fe,
 			selector: "#qqj-settings-worldbook"
 		});
 		let E = P.querySelector("[data-worldbook-settings]");
 		E && de && (fe || (fe = de.renderSettings({
-			open: F.worldbookOpen,
+			open: I.worldbookOpen,
 			onDrawerToggle: (e) => {
-				F.worldbookOpen = e;
+				I.worldbookOpen = e;
 			}
-		}), fe.querySelector("summary").insertAdjacentHTML("beforeend", Z("next"))), (E.firstElementChild !== fe || E.children.length !== 1) && E.replaceChildren(fe)), pe.mount(n, ge), $e && F.view === "settings" && (P.querySelector("[data-update-controls]")?.append($e.controls), P.querySelector("[data-update-notice]")?.append($e.noticeButton)), !F.conflict && m && ae.insertAdjacentHTML("beforeend", Fd(d, F.notice)), I.attach(), ue.attach();
+		}), fe.querySelector("summary").insertAdjacentHTML("beforeend", Z("next"))), (E.firstElementChild !== fe || E.children.length !== 1) && E.replaceChildren(fe)), pe.mount(n, ge), tt && I.view === "settings" && (P.querySelector("[data-update-controls]")?.append(tt.controls), P.querySelector("[data-update-notice]")?.append(tt.noticeButton)), !I.conflict && m && F.insertAdjacentHTML("beforeend", Rd(d, I.notice)), we.attach(), ue.attach();
 		let k = P.querySelector(".view-home img.home-wallpaper, .view-home img.home-art");
-		if (Pe && k && Le === k.getAttribute("src") ? (Pe.alt = k.alt, Pe.className = k.className, Pe !== k && k.replaceWith(Pe)) : k && (Pe = k, Le = k.getAttribute("src") || ""), F.conflict) {
-			for (let e of ae.children) e.inert = !e.classList.contains("phone-dialog-backdrop");
+		if (Le && k && Re === k.getAttribute("src") ? (Le.alt = k.alt, Le.className = k.className, Le !== k && k.replaceWith(Le)) : k && (Le = k, Re = k.getAttribute("src") || ""), I.conflict) {
+			for (let e of F.children) e.inert = !e.classList.contains("phone-dialog-backdrop");
 			P.querySelector("[data-action=\"conflict-continue\"]").focus({ preventScroll: !0 });
 		}
-		if (Ee.refresh(), st(), en(), ce.attach({
+		if (De.refresh(), ct(), tn(), ce.attach({
 			followFocus: !r || e,
 			key: n
 		}), e) {
 			let e = P.querySelector(".message-feed");
 			e && (e.scrollTop = e.scrollHeight);
 		} else s !== void 0 && (P.querySelector(".message-feed").scrollTop = s);
-		if (o !== void 0 && (P.querySelector(".phone-main").scrollTop = o), F.view === "album" && F.albumPage === "gallery" && (P.querySelector(".album-gallery").scrollTop = F.albumScroll), me.update(n), ce.revealEditor(), ot(), Ne?.attach(), Qe.attach(), F.photo) {
+		if (o !== void 0 && (P.querySelector(".phone-main").scrollTop = o), I.view === "album" && I.albumPage === "gallery" && (P.querySelector(".album-gallery").scrollTop = I.albumScroll), he.update(n), ce.revealEditor(), st(), Pe?.attach(), $e.attach(), I.photo) {
 			let e = P.querySelector(".photo-viewer");
-			for (let t of ae.children) t.inert = t !== e;
+			for (let t of F.children) t.inert = t !== e;
 			P.querySelector("[data-action=\"close-photo\"]")?.focus({ preventScroll: !0 });
 		}
 	}
@@ -15531,34 +15644,34 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 					text: e?.message || "操作未完成，请重试。"
 				});
 			} finally {
-				if (!N.hidden && !I.isOpen && De() && C.isEnabled()) try {
-					await t.markRead(Oe());
+				if (!N.hidden && !we.isOpen && Oe() && C.isEnabled()) try {
+					await t.markRead(ke());
 				} catch {
 					z({
 						error: !0,
 						text: "消息的已读状态保存失败，请检查酒馆连接。"
 					});
 				}
-				ge.delete(e), V({ bottom: De() && (e === "profile" || e === "group-profile" || e === `send:${Oe()}` || e === `continue:${Oe()}`) });
+				ge.delete(e), V({ bottom: Oe() && (e === "profile" || e === "group-profile" || e === `send:${ke()}` || e === `continue:${ke()}`) });
 			}
 		}
 	}
-	function ct() {
+	function lt() {
 		_e && (_e = null, ue.dispose());
 	}
-	function lt() {
-		let e = Oe(), n = F.view === "group-chat";
-		if (!De() || !w() || ge.has(`send:${e}`) || ge.has(`continue:${e}`)) return;
-		Vt();
+	function ut() {
+		let e = ke(), n = I.view === "group-chat";
+		if (!Oe() || !w() || ge.has(`send:${e}`) || ge.has(`continue:${e}`)) return;
+		Ht();
 		let r = {
 			id: e,
 			group: n,
-			anchor: { key: F.batch.key },
+			anchor: { key: I.batch.key },
 			route: be,
-			draft: F.drafts.get(e)
+			draft: I.drafts.get(e)
 		};
 		_e = r;
-		let i = () => _e === r && !N.hidden && N.isConnected && w() && be === r.route && Oe() === r.id && F.view === "group-chat" === r.group, a = M.createElement("p");
+		let i = () => _e === r && !N.hidden && N.isConnected && w() && be === r.route && ke() === r.id && I.view === "group-chat" === r.group, a = M.createElement("p");
 		a.textContent = "删除此会话当前这段消息及其未发送草稿；其他时间段、其他会话、人物资料和相册照片保留。", ue.custom({
 			title: "清空聊天",
 			content: a,
@@ -15570,26 +15683,26 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				_e === r && (_e = null);
 			},
 			submit: async () => {
-				if (!i()) return ct(), !1;
+				if (!i()) return lt(), !1;
 				let e = !1;
 				return await H(`clear:${r.id}`, () => t.clearConversation(r.id, r.anchor), () => {
-					e = !0, i() && (F.selectedMessage = "", F.drafts.get(r.id) === r.draft && F.drafts.delete(r.id)), j();
+					e = !0, i() && (I.selectedMessage = "", I.drafts.get(r.id) === r.draft && I.drafts.delete(r.id)), j();
 				}), e;
 			}
 		});
 	}
-	let ut = (e) => JSON.parse(decodeURIComponent(e.dataset.favoriteRef));
-	function dt() {
-		ve && (ve = null, ue.dispose());
+	let dt = (e) => JSON.parse(decodeURIComponent(e.dataset.favoriteRef));
+	function ft() {
+		ye && (ye = null, ue.dispose());
 	}
-	function ft(e) {
+	function pt(e) {
 		if (!w()) return;
 		let n = {
 			id: e,
 			route: be
 		};
-		ve = n;
-		let r = () => ve === n && w() && !N.hidden && N.isConnected && be === n.route, i = M.createElement("p");
+		ye = n;
+		let r = () => ye === n && w() && !N.hidden && N.isConnected && be === n.route, i = M.createElement("p");
 		i.textContent = "从收藏夹移除这条摘录；原内容和照片保留。", ue.custom({
 			title: "取消收藏",
 			content: i,
@@ -15598,25 +15711,25 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			danger: !0,
 			dismissOnBackdrop: !0,
 			onClose: () => {
-				ve === n && (ve = null);
+				ye === n && (ye = null);
 			},
 			submit: async () => {
-				if (!r()) return dt(), !1;
+				if (!r()) return ft(), !1;
 				let n = !1;
 				return await H(`favorite-remove:${e}`, () => t.removeFavorite(e), () => {
 					n = !0;
-				}), n && r() && (ve = null, ue.dispose(), pt()), n;
+				}), n && r() && (ye = null, ue.dispose(), mt()), n;
 			}
 		});
 	}
-	function pt() {
-		kt("favorites"), P.querySelector(".phone-main").scrollTop = F.favoriteScroll;
+	function mt() {
+		At("favorites"), P.querySelector(".phone-main").scrollTop = I.favoriteScroll;
 	}
-	async function mt(e) {
+	async function ht(e) {
 		if (!e.length || !m?.recoverMissing || !C.isEnabled()) return [];
 		try {
 			let t = await m.recoverMissing(e);
-			return t.length && (F.photo && t.includes($o(F.photo.path)) && (F.photo = null), V()), t;
+			return t.length && (I.photo && t.includes($o(I.photo.path)) && (I.photo = null), V()), t;
 		} catch (e) {
 			return z({
 				error: !0,
@@ -15624,18 +15737,18 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			}), null;
 		}
 	}
-	let ht = "默认头像未能保存，请检查酒馆连接后重新打开手机。";
-	async function gt() {
+	let gt = "默认头像未能保存，请检查酒馆连接后重新打开手机。";
+	async function _t() {
 		if (!b?.readStatus) return;
 		let e = () => {
 			let e = P.querySelector("[data-story-sms-install]");
-			e && (e.outerHTML = Gu(F, ge, C));
+			e && (e.outerHTML = Ju(I, ge, C));
 		};
 		ge.add("story-sms-status"), e();
 		try {
-			F.storySmsStatus = await b.readStatus();
+			I.storySmsStatus = await b.readStatus();
 		} catch (e) {
-			F.storySmsStatus = null, z({
+			I.storySmsStatus = null, z({
 				error: !0,
 				text: e.message || "楼内信息注入状态读取失败，请重新打开内容设置。"
 			});
@@ -15643,60 +15756,60 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			ge.delete("story-sms-status"), e();
 		}
 	}
-	function _t() {
-		C.isEnabled() && (F.feedback?.text === ht && z(null), t.fillMissingAvatars().catch(() => {
+	function vt() {
+		C.isEnabled() && (I.feedback?.text === gt && z(null), t.fillMissingAvatars().catch(() => {
 			z({
 				error: !0,
-				text: ht
+				text: gt
 			});
 		}));
 	}
-	function vt() {
-		mt([...P.querySelectorAll("img[data-phone-image]")].map((e) => e.dataset.phoneImage));
+	function yt() {
+		ht([...P.querySelectorAll("img[data-phone-image]")].map((e) => e.dataset.phoneImage));
 	}
-	function yt(e) {
-		e.target.matches?.("img[data-phone-image]") && mt([e.target.dataset.phoneImage]);
+	function bt(e) {
+		e.target.matches?.("img[data-phone-image]") && ht([e.target.dataset.phoneImage]);
 	}
-	async function bt(e, t) {
-		let n = be, r = Dt(t), i = P.querySelector(".message-feed")?.scrollTop, a = t && [...t.attributes].filter((e) => e.name.startsWith("data-")).map(({ name: e, value: t }) => `[${e}="${CSS.escape(t)}"]`).join(""), o = e();
-		if (!o?.path || await mt([o.path]) === null) return;
+	async function xt(e, t) {
+		let n = be, r = Ot(t), i = P.querySelector(".message-feed")?.scrollTop, a = t && [...t.attributes].filter((e) => e.name.startsWith("data-")).map(({ name: e, value: t }) => `[${e}="${CSS.escape(t)}"]`).join(""), o = e();
+		if (!o?.path || await ht([o.path]) === null) return;
 		let s = e();
 		s?.path && n === be && (Ce = {
 			route: n,
 			position: r,
 			feedScroll: i,
 			selector: a
-		}, F.photo = s, V());
+		}, I.photo = s, V());
 	}
-	function xt() {
+	function St() {
 		let e = Ce;
-		if (Ce = null, F.photo = null, V(), Qe.releaseViewer(), e?.route !== be) return;
-		Ot(e.position);
+		if (Ce = null, I.photo = null, V(), $e.releaseViewer(), e?.route !== be) return;
+		kt(e.position);
 		let t = P.querySelector(".message-feed");
 		t && e.feedScroll !== void 0 && (t.scrollTop = e.feedScroll), e.selector && P.querySelector(e.selector)?.focus({ preventScroll: !0 });
 	}
-	function St() {
-		F.liangshiDraft = null, F.liangshiPage.kind === "compose" && (F.liangshiPage = {
+	function Ct() {
+		I.liangshiDraft = null, I.liangshiPage.kind === "compose" && (I.liangshiPage = {
 			kind: "feed",
 			tab: "mine"
-		}, F.liangshiTrail = []);
-	}
-	function Ct() {
-		ct(), dt(), Ge(), I.close({
-			immediate: !0,
-			restoreFocus: !1
-		}), Qe.leave(), St(), z(null), Ne?.close(), Jt(), tt(), se.stop(), ce.stop(), N.hidden = !0, Ee.stop(), ke?.dispose(), ke = null, k?.();
+		}, I.liangshiTrail = []);
 	}
 	function wt() {
+		lt(), ft(), Ke(), we.close({
+			immediate: !0,
+			restoreFocus: !1
+		}), $e.leave(), Ct(), z(null), Pe?.close(), Yt(), nt(), oe.stop(), ce.stop(), N.hidden = !0, De.stop(), Ne?.dispose(), Ne = null, k?.();
+	}
+	function Tt() {
 		if (N.hidden) return !1;
 		for (let e = N.nextElementSibling; e; e = e.nextElementSibling) if (e.matches(".pocket-phone:not([hidden])")) return !1;
 		return !0;
 	}
-	function Tt(e = !1) {
-		xe++, F.manual = e, F.apiDraft = l.readDraft(e ? null : l.getSelected()), F.models = [], F.modelSearch = "", F.modelsOpen = !1, F.sourcesOpen = !1;
+	function Et(e = !1) {
+		xe++, I.manual = e, I.apiDraft = l.readDraft(e ? null : l.getSelected()), I.models = [], I.modelSearch = "", I.modelsOpen = !1, I.sourcesOpen = !1;
 	}
-	let Et = () => F.manual || !l.listSources().length || l.getSelected()?.kind === "none";
-	function Dt(e) {
+	let Dt = () => I.manual || !l.listSources().length || l.getSelected()?.kind === "none";
+	function Ot(e) {
 		let t = P.querySelector(".phone-main"), n = e?.closest(".forum-card[data-post], .social-post[data-social-post], .ls-post[data-liangshi-id], .ls-hot-row[data-liangshi-hot]"), r = n && [
 			"data-post",
 			"data-social-post",
@@ -15712,7 +15825,7 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			} } : {}
 		};
 	}
-	function Ot(e) {
+	function kt(e) {
 		let t = P.querySelector(".phone-main");
 		if (!t) return;
 		let n = typeof e == "number" ? { scroll: e } : e;
@@ -15723,42 +15836,42 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			t.scrollTop += i.getBoundingClientRect().top - e.top - a;
 		}
 	}
-	function kt(e, { bottom: t = !1, sourceNode: n } = {}) {
-		Ge(), I.close({
+	function At(e, { bottom: t = !1, sourceNode: n } = {}) {
+		Ke(), we.close({
 			immediate: !0,
 			restoreFocus: !1
-		}), F.view === "album" && e !== "album" && Qe.leave(), F.view === "album" && F.albumPage === "gallery" && (F.albumScroll = P.querySelector(".album-gallery")?.scrollTop ?? F.albumScroll), e !== "liangshi" && St(), e === "settings" && F.view !== "settings" && Tt(), F.view === "favorites" && e !== "favorites" && (F.favoriteScroll = P.querySelector(".phone-main")?.scrollTop || 0), F.view === "social" && e !== "social" && (F.socialScroll = Dt(n)), Jt(), e !== "group-chat" && (F.replyToId = ""), F.view = e, z(null), F.attachment = "", F.photo = null, V({ bottom: t }), e === "settings" && F.drawers.content && gt(), vt(), e === "social" && Ot(F.socialScroll), at();
+		}), I.view === "album" && e !== "album" && $e.leave(), I.view === "album" && I.albumPage === "gallery" && (I.albumScroll = P.querySelector(".album-gallery")?.scrollTop ?? I.albumScroll), e !== "liangshi" && Ct(), e === "settings" && I.view !== "settings" && Et(), I.view === "favorites" && e !== "favorites" && (I.favoriteScroll = P.querySelector(".phone-main")?.scrollTop || 0), I.view === "social" && e !== "social" && (I.socialScroll = Ot(n)), Yt(), e !== "group-chat" && (I.replyToId = ""), I.view = e, z(null), I.attachment = "", I.photo = null, V({ bottom: t }), e === "settings" && I.drawers.content && _t(), yt(), e === "social" && kt(I.socialScroll), B();
 	}
-	function At(e, n = !1) {
-		I.close({
+	function jt(e, n = !1) {
+		we.close({
 			immediate: !0,
 			restoreFocus: !1
-		}), n ? (F.groupId = e, F.view = "group-chat") : (F.contactId = e, F.view = "chat"), F.chatMenu = !1, F.inboxMenu = !1, F.selectedMessage = "", F.visibleMessages = 60, F.historyOpen = !1, F.visibleHistory = 60, z(null), F.attachment = "", F.attachmentDraft = {}, V({ bottom: !0 }), vt(), t.markRead(e).catch(() => {
+		}), n ? (I.groupId = e, I.view = "group-chat") : (I.contactId = e, I.view = "chat"), I.chatMenu = !1, I.inboxMenu = !1, I.selectedMessage = "", I.visibleMessages = 60, I.historyOpen = !1, I.visibleHistory = 60, z(null), I.attachment = "", I.attachmentDraft = {}, V({ bottom: !0 }), yt(), t.markRead(e).catch(() => {
 			z({
 				error: !0,
 				text: "消息的已读状态保存失败，请检查酒馆连接。"
 			}), V();
 		});
 	}
-	function jt(e) {
-		if (!De()) return;
-		let t = () => {
-			e === "earlier" ? F.visibleMessages += 60 : e === "earlier-history" ? F.visibleHistory += 60 : e === "history" && (F.historyOpen = !F.historyOpen, F.selectedMessage = ""), V();
-		};
-		e === "history" && F.historyOpen ? t() : ce.prepend(t);
-	}
 	function Mt(e) {
-		let n = t.read(), r = n.social?.posts.find((t) => t.id === e);
-		if (!r) return;
-		F.socialAuthorId = r.authorId, F.socialLimit = Math.max(F.socialLimit, Go(n, { authorId: r.authorId }).findIndex((t) => t.id === e) + 1), kt("social-profile");
-		let i = P.querySelector(`.social-post[data-social-post="${CSS.escape(e)}"]`), a = P.querySelector(".view-social-profile"), o = i?.querySelector(".social-comments") || i;
-		o && a && (a.scrollTop += o.getBoundingClientRect().top - a.getBoundingClientRect().top - 8), at();
+		if (!Oe()) return;
+		let t = () => {
+			e === "earlier" ? I.visibleMessages += 60 : e === "earlier-history" ? I.visibleHistory += 60 : e === "history" && (I.historyOpen = !I.historyOpen, I.selectedMessage = ""), V();
+		};
+		e === "history" && I.historyOpen ? t() : ce.prepend(t);
 	}
 	function Nt(e) {
+		let n = t.read(), r = n.social?.posts.find((t) => t.id === e);
+		if (!r) return;
+		I.socialAuthorId = r.authorId, I.socialLimit = Math.max(I.socialLimit, Go(n, { authorId: r.authorId }).findIndex((t) => t.id === e) + 1), At("social-profile");
+		let i = P.querySelector(`.social-post[data-social-post="${CSS.escape(e)}"]`), a = P.querySelector(".view-social-profile"), o = i?.querySelector(".social-comments") || i;
+		o && a && (a.scrollTop += o.getBoundingClientRect().top - a.getBoundingClientRect().top - 8), B();
+	}
+	function Pt(e) {
 		if (!e) return !1;
-		let n = Te, r = () => n === Te && N.isConnected && !N.hidden, i = !1;
+		let n = Ee, r = () => n === Ee && N.isConnected && !N.hidden, i = !1;
 		e.key && t.dismissNotification(e.key, () => i).then(() => {
-			r() && (F.notice?.key === e.key && tt(), I.refresh());
+			r() && (I.notice?.key === e.key && nt(), we.refresh());
 		}).catch((e) => {
 			r() && z({
 				error: !0,
@@ -15766,7 +15879,7 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			});
 		});
 		try {
-			return i = Pt(e), i;
+			return i = Ft(e), i;
 		} catch (e) {
 			return r() && z({
 				error: !0,
@@ -15774,50 +15887,50 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			}), !1;
 		}
 	}
-	function Pt(e) {
+	function Ft(e) {
 		let n = t.read(), r = (e) => {
-			kt(e), z({ text: "通知的来源已不存在。" });
+			At(e), z({ text: "通知的来源已不存在。" });
 		};
 		if (e.kind === "message") {
 			let t = n.groups?.some((t) => t.id === e.id);
-			t || n.contacts.some((t) => t.id === e.id) ? At(e.id, t) : r("inbox");
-		} else if (e.kind === "social-reply") n.social?.posts.some((t) => t.id === e.id) ? Mt(e.id) : r("social");
-		else if (e.kind === "social-author") [...n.contacts || [], ...n.social?.npcs || []].some((t) => t.id === e.id) ? (F.socialAuthorId = e.id, kt("social-profile")) : r("social");
-		else if (e.kind === "social-feed") kt("social");
-		else if (e.kind === "forum" || e.kind === "forum-circle") Lt(e.kind === "forum-circle" ? "circle" : "public"), kt("forum"), Ot(F.forumScroll);
-		else if (e.kind === "forum-post" || e.kind === "forum-circle-post") Lt(e.kind === "forum-circle-post" ? "circle" : "public"), L(n, F.forumScope).posts.some((t) => t.id === e.id) ? (F.forumScroll = 0, F.forumTag = "", F.postId = e.id, kt("post")) : r("forum");
-		else if (e.kind === "liangshi-feed") F.liangshiTrail = [], Ft({
+			t || n.contacts.some((t) => t.id === e.id) ? jt(e.id, t) : r("inbox");
+		} else if (e.kind === "social-reply") n.social?.posts.some((t) => t.id === e.id) ? Nt(e.id) : r("social");
+		else if (e.kind === "social-author") [...n.contacts || [], ...n.social?.npcs || []].some((t) => t.id === e.id) ? (I.socialAuthorId = e.id, At("social-profile")) : r("social");
+		else if (e.kind === "social-feed") At("social");
+		else if (e.kind === "forum" || e.kind === "forum-circle") Rt(e.kind === "forum-circle" ? "circle" : "public"), At("forum"), kt(I.forumScroll);
+		else if (e.kind === "forum-post" || e.kind === "forum-circle-post") Rt(e.kind === "forum-circle-post" ? "circle" : "public"), L(n, I.forumScope).posts.some((t) => t.id === e.id) ? (I.forumScroll = 0, I.forumTag = "", I.postId = e.id, At("post")) : r("forum");
+		else if (e.kind === "liangshi-feed") I.liangshiTrail = [], It({
 			kind: "feed",
 			tab: "square"
 		}, !1);
-		else if (e.kind === "liangshi-following") F.liangshiTrail = [], Ft({
+		else if (e.kind === "liangshi-following") I.liangshiTrail = [], It({
 			kind: "feed",
 			tab: "following"
 		}, !1);
-		else if (e.kind === "liangshi-hot") F.liangshiTrail = [], Ft({
+		else if (e.kind === "liangshi-hot") I.liangshiTrail = [], It({
 			kind: "feed",
 			tab: "hot"
 		}, !1);
-		else if (e.kind === "liangshi-topic") n.liangshi?.topics.some((t) => t.id === e.id) ? (F.liangshiTrail = [{
+		else if (e.kind === "liangshi-topic") n.liangshi?.topics.some((t) => t.id === e.id) ? (I.liangshiTrail = [{
 			page: {
 				kind: "feed",
 				tab: "hot"
 			},
 			scroll: 0
-		}], Ft({
+		}], It({
 			kind: "hot-topic",
 			id: e.id
-		}, !1)) : (F.liangshiTrail = [], Ft({
+		}, !1)) : (I.liangshiTrail = [], It({
 			kind: "feed",
 			tab: "hot"
 		}, !1));
 		else if (e.kind === "liangshi-post") {
 			let t = n.liangshi, r = t && Ks(t, e.id);
-			if (!t?.posts.some((t) => t.id === e.id)) return F.liangshiTrail = [], Ft({
+			if (!t?.posts.some((t) => t.id === e.id)) return I.liangshiTrail = [], It({
 				kind: "feed",
 				tab: "square"
 			}, !1), !0;
-			F.liangshiTrail = Js(t, e.id) ? [{
+			I.liangshiTrail = Js(t, e.id) ? [{
 				page: {
 					kind: "feed",
 					tab: "mine"
@@ -15841,39 +15954,39 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 					id: r.id
 				},
 				scroll: 0
-			}] : [], Ft({
+			}] : [], It({
 				kind: "post",
 				id: e.id
 			}, !1);
 		} else return !1;
 		return !0;
 	}
-	function Ft(e, t = !0, n) {
-		e.kind !== "compose" && (F.liangshiDraft = null), t && F.view === "liangshi" && F.liangshiTrail.push({
-			page: F.liangshiPage,
-			...Dt(n)
-		}), F.liangshiPage = e, kt("liangshi"), P.querySelector(".phone-main").scrollTop = 0;
+	function It(e, t = !0, n) {
+		e.kind !== "compose" && (I.liangshiDraft = null), t && I.view === "liangshi" && I.liangshiTrail.push({
+			page: I.liangshiPage,
+			...Ot(n)
+		}), I.liangshiPage = e, At("liangshi"), P.querySelector(".phone-main").scrollTop = 0;
 	}
-	function It() {
-		if (F.view === "favorite-detail") {
-			pt();
+	function Lt() {
+		if (I.view === "favorite-detail") {
+			mt();
 			return;
 		}
-		if (F.view === "album" && F.albumPage !== "gallery") {
-			Qe.leave(), F.albumPage = F.albumPage === "editor" ? "detail" : "gallery", V();
+		if (I.view === "album" && I.albumPage !== "gallery") {
+			$e.leave(), I.albumPage = I.albumPage === "editor" ? "detail" : "gallery", V();
 			return;
 		}
-		if (F.view === "liangshi" && (F.liangshiTrail.length || F.liangshiPage.kind !== "feed")) {
-			F.liangshiPage.kind === "compose" && (F.liangshiDraft = null);
-			let e = F.liangshiTrail.pop();
-			F.liangshiPage = e?.page || {
+		if (I.view === "liangshi" && (I.liangshiTrail.length || I.liangshiPage.kind !== "feed")) {
+			I.liangshiPage.kind === "compose" && (I.liangshiDraft = null);
+			let e = I.liangshiTrail.pop();
+			I.liangshiPage = e?.page || {
 				kind: "feed",
 				tab: "square"
-			}, kt("liangshi"), Ot(e);
+			}, At("liangshi"), kt(e);
 			return;
 		}
 		let e = "desktop";
-		switch (F.view) {
+		switch (I.view) {
 			case "chat":
 			case "group-chat":
 				e = "inbox";
@@ -15885,33 +15998,33 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				e = "social";
 				break;
 			case "contact-profile":
-				e = F.editId ? "chat" : "inbox", F.profileDraft = {};
+				e = I.editId ? "chat" : "inbox", I.profileDraft = {};
 				break;
 			case "group-profile":
-				e = F.groupEditId ? "group-chat" : "inbox", F.groupDraft = {};
+				e = I.groupEditId ? "group-chat" : "inbox", I.groupDraft = {};
 				break;
 			case "user-profile":
-				F.profileDraft = {}, e = "settings";
+				I.profileDraft = {}, e = "settings";
 				break;
 			case "authoring": e = "settings";
 		}
-		e === "forum" && (F.forumTag = F.forumScroll?.tag || ""), kt(e, { bottom: ["chat", "group-chat"].includes(e) }), e === "forum" && Ot(F.forumScroll);
+		e === "forum" && (I.forumTag = I.forumScroll?.tag || ""), At(e, { bottom: ["chat", "group-chat"].includes(e) }), e === "forum" && kt(I.forumScroll);
 	}
-	function Lt(e) {
+	function Rt(e) {
 		let t = Ae(e);
-		F.forumPages[F.forumScope] = {
-			tag: F.forumTag,
-			scroll: F.view === "forum" ? Dt() : F.forumScroll
-		}, F.forumScope = t, F.forumTag = F.forumPages[t].tag, F.forumScroll = F.forumPages[t].scroll;
+		I.forumPages[I.forumScope] = {
+			tag: I.forumTag,
+			scroll: I.view === "forum" ? Ot() : I.forumScroll
+		}, I.forumScope = t, I.forumTag = I.forumPages[t].tag, I.forumScroll = I.forumPages[t].scroll;
 	}
-	function Rt(e, t) {
-		for (let e of t) F.forumDrafts.delete(e), F.forumVotes.delete(e);
-		F.forumPages[e] = {
+	function zt(e, t) {
+		for (let e of t) I.forumDrafts.delete(e), I.forumVotes.delete(e);
+		I.forumPages[e] = {
 			tag: "",
 			scroll: 0
-		}, F.forumScope === e && (F.forumTag = "", F.forumScroll = 0);
+		}, I.forumScope === e && (I.forumTag = "", I.forumScroll = 0);
 	}
-	function zt() {
+	function Bt() {
 		let e = je(L(t.read(), "circle").profile), n = M.createElement("div");
 		n.className = "profile-form forum-circle-editor", n.innerHTML = `<label class="field-label" for="forum-circle-name">社区名称</label><input id="forum-circle-name" name="circle-name" value="${Q(e?.name || "")}" required><label class="field-label" for="forum-circle-members">成员范围</label><textarea id="forum-circle-members" name="circle-members" rows="2" required>${Q(e?.memberScope || "")}</textarea><p class="forum-profile-warning">保存不同的圈内范围会清空当前圈内帖子，已收藏内容和照片保留。</p>`, ue.custom({
 			title: "圈内范围",
@@ -15927,71 +16040,71 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				});
 				if (!i) throw Error("请填写社区名称和成员范围。");
 				let a = L(t.read(), "circle"), o = !Me(a.profile, i), s = a.posts.map((e) => e.id);
-				return await t.saveCircleProfile(i), o && (Rt("circle", s), V()), !0;
+				return await t.saveCircleProfile(i), o && (zt("circle", s), V()), !0;
 			}
 		});
 	}
-	function Bt(e = "") {
+	function Vt(e = "") {
 		let n = t.read().groups?.find((t) => t.id === e);
-		F.groupEditId = e, F.groupDraft = {
+		I.groupEditId = e, I.groupDraft = {
 			name: n?.name || "",
 			avatar: n?.avatar || "",
 			background: n?.background || "",
 			memberIds: [...n?.memberIds || []],
 			userIsMember: n?.userIsMember ?? !0
-		}, F.groupMembersOpen = !e, F.view = "group-profile", F.chatMenu = !1, F.inboxMenu = !1, z(null), V();
-	}
-	function Vt() {
-		me.close(!0);
+		}, I.groupMembersOpen = !e, I.view = "group-profile", I.chatMenu = !1, I.inboxMenu = !1, z(null), V();
 	}
 	function Ht() {
-		F.selectedMessage = "", P.querySelectorAll(".message-actions").forEach((e) => e.remove()), P.querySelectorAll(".is-selected").forEach((e) => e.classList.remove("is-selected")), P.querySelectorAll("[data-message][aria-expanded=\"true\"]").forEach((e) => e.setAttribute("aria-expanded", "false"));
+		he.close(!0);
 	}
 	function Ut() {
-		Vt(), F.liangshiMenu = "";
+		I.selectedMessage = "", P.querySelectorAll(".message-actions").forEach((e) => e.remove()), P.querySelectorAll(".is-selected").forEach((e) => e.classList.remove("is-selected")), P.querySelectorAll("[data-message][aria-expanded=\"true\"]").forEach((e) => e.setAttribute("aria-expanded", "false"));
 	}
-	function Wt(e, t, n) {
-		pe.close(), Kt(), Gt(), Ht(), me.open({
+	function Wt() {
+		Ht(), I.liangshiMenu = "";
+	}
+	function Gt(e, t, n) {
+		pe.close(), qt(), Kt(), Ut(), he.open({
 			title: e,
 			content: t,
 			triggerSelector: n,
 			route: be
 		});
 	}
-	function Gt() {
-		F.modelsOpen = !1, P.querySelector(".model-picker .model-popup")?.remove(), P.querySelector("[data-action=\"models-menu\"]")?.setAttribute("aria-expanded", "false");
-	}
 	function Kt() {
-		F.sourcesOpen = !1, P.querySelector(".source-picker > .source-popup")?.remove(), P.querySelector("#api-source")?.setAttribute("aria-expanded", "false");
+		I.modelsOpen = !1, P.querySelector(".model-picker .model-popup")?.remove(), P.querySelector("[data-action=\"models-menu\"]")?.setAttribute("aria-expanded", "false");
 	}
-	function qt(e = 1) {
-		Gt(), F.sourcesOpen = !0, V();
+	function qt() {
+		I.sourcesOpen = !1, P.querySelector(".source-picker > .source-popup")?.remove(), P.querySelector("#api-source")?.setAttribute("aria-expanded", "false");
+	}
+	function Jt(e = 1) {
+		Kt(), I.sourcesOpen = !0, V();
 		let t = [...P.querySelectorAll("[data-api-source]")];
 		(t.find((e) => e.getAttribute("aria-selected") === "true") || (e > 0 ? t[0] : t.at(-1)))?.focus();
 	}
-	function Jt(e) {
+	function Yt(e) {
 		let t = e?.composedPath().some((e) => e.dataset?.action === "toggle-notification-shade" || e.classList?.contains("phone-notification-layer"));
-		if (t && le.hold(), pe.dismiss(e), me.dismiss(e), F.selectedMessage && !e?.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".bubble, .card-more, .message-actions")) && Ht(), F.identityOwnersOpen && !e?.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".identity-picker")) && Yt(), e && !t) {
+		if (t && le.hold(), pe.dismiss(e), he.dismiss(e), I.selectedMessage && !e?.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".bubble, .card-more, .message-actions")) && Ut(), I.identityOwnersOpen && !e?.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".identity-picker")) && Xt(), e && !t) {
 			let t = e.composedPath();
 			for (let e of P.querySelectorAll(".social-comment-form")) {
 				let n = e.dataset.socialCommentForm;
 				if (t.includes(e) || t.some((e) => e.dataset?.action === "social-comment-toggle" && e.dataset.socialPost === n)) continue;
 				let r = e.querySelector("textarea");
-				P.activeElement === r && r.blur(), !r.value.trim() && (F.socialCommentOpen.delete(n), F.socialDrafts.delete(n), e.remove(), P.querySelector(`[data-action="social-comment-toggle"][data-social-post="${CSS.escape(n)}"]`)?.setAttribute("aria-expanded", "false"));
+				P.activeElement === r && r.blur(), !r.value.trim() && (I.socialCommentOpen.delete(n), I.socialDrafts.delete(n), e.remove(), P.querySelector(`[data-action="social-comment-toggle"][data-social-post="${CSS.escape(n)}"]`)?.setAttribute("aria-expanded", "false"));
 			}
 		}
-		F.attachment && e && !e.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".attachment-panel, .attachment-button, .phone-action-popup, .phone-select-popup")) && (F.attachment = "", P.querySelector(".attachment-panel")?.remove()), F.modelsOpen && !e?.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".api-form")) && Gt(), F.sourcesOpen && !e?.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".source-picker")) && Kt();
-	}
-	function Yt() {
-		F.identityOwnersOpen = !1, P.querySelector(".identity-popup")?.remove(), P.querySelector("#identity-owner")?.setAttribute("aria-expanded", "false");
+		I.attachment && e && !e.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".attachment-panel, .attachment-button, .phone-action-popup, .phone-select-popup")) && (I.attachment = "", P.querySelector(".attachment-panel")?.remove()), I.modelsOpen && !e?.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".api-form")) && Kt(), I.sourcesOpen && !e?.composedPath().some((e) => e.getRootNode?.() === P && e.matches?.(".source-picker")) && qt();
 	}
 	function Xt() {
-		Yt(), F.identityOwnersOpen = !0, P.querySelector(".identity-picker")?.insertAdjacentHTML("beforeend", Ju(t.read(), F)), P.querySelector("#identity-owner")?.setAttribute("aria-expanded", "true"), P.querySelector("[data-identity-owner][aria-selected=\"true\"]")?.focus({ preventScroll: !0 });
+		I.identityOwnersOpen = !1, P.querySelector(".identity-popup")?.remove(), P.querySelector("#identity-owner")?.setAttribute("aria-expanded", "false");
 	}
-	function Zt(e, n = "") {
-		F.editor = e, F.editId = n;
+	function Zt() {
+		Xt(), I.identityOwnersOpen = !0, P.querySelector(".identity-picker")?.insertAdjacentHTML("beforeend", Zu(t.read(), I)), P.querySelector("#identity-owner")?.setAttribute("aria-expanded", "true"), P.querySelector("[data-identity-owner][aria-selected=\"true\"]")?.focus({ preventScroll: !0 });
+	}
+	function Qt(e, n = "") {
+		I.editor = e, I.editId = n;
 		let r = t.read(), i = e === "user" ? r.userProfile || { name: O } : r.contacts.find((e) => e.id === n) || {};
-		F.profileDraft = Object.fromEntries([
+		I.profileDraft = Object.fromEntries([
 			"name",
 			"nickname",
 			"avatar",
@@ -16001,43 +16114,43 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				"background",
 				"identityOwnerId"
 			] : []
-		].map((e) => [e, i[e] || ""])), F.view = `${e}-profile`, F.chatMenu = !1, F.inboxMenu = !1, z(null), V();
+		].map((e) => [e, i[e] || ""])), I.view = `${e}-profile`, I.chatMenu = !1, I.inboxMenu = !1, z(null), V();
 	}
-	function Qt(e) {
-		if (I.keydown(e) || me.keydown(e) || pe.keydown(e)) return;
+	function $t(e) {
+		if (we.keydown(e) || he.keydown(e) || pe.keydown(e)) return;
 		if (e.target.matches("[data-action=\"forum-menu\"]") && ["ArrowDown", "ArrowUp"].includes(e.key)) {
-			e.preventDefault(), Wt("论坛范围", () => zu(t.read(), { ui: F }), "[data-action=\"forum-menu\"]");
+			e.preventDefault(), Gt("论坛范围", () => Hu(t.read(), { ui: I }), "[data-action=\"forum-menu\"]");
 			return;
 		}
-		if (F.identityOwnersOpen || e.target.id === "identity-owner") {
-			if (e.key === "Escape" && F.identityOwnersOpen) {
-				e.preventDefault(), e.stopPropagation(), Yt(), P.querySelector("#identity-owner")?.focus({ preventScroll: !0 });
+		if (I.identityOwnersOpen || e.target.id === "identity-owner") {
+			if (e.key === "Escape" && I.identityOwnersOpen) {
+				e.preventDefault(), e.stopPropagation(), Xt(), P.querySelector("#identity-owner")?.focus({ preventScroll: !0 });
 				return;
 			}
 			if (["ArrowDown", "ArrowUp"].includes(e.key) && (e.target.id === "identity-owner" || e.target.closest(".identity-popup"))) {
-				e.preventDefault(), e.stopPropagation(), F.identityOwnersOpen || Xt();
+				e.preventDefault(), e.stopPropagation(), I.identityOwnersOpen || Zt();
 				let t = [...P.querySelectorAll("[data-identity-owner]")], n = t.indexOf(e.target), r = e.key === "ArrowDown" ? 1 : -1;
 				t[n < 0 ? r > 0 ? 0 : t.length - 1 : (n + r + t.length) % t.length]?.focus({ preventScroll: !0 });
 				return;
 			}
 		}
-		if (F.conflict) {
-			if (e.stopPropagation(), e.key === "Escape" && !ge.has("conflict") && (F.conflict = !1, V()), e.key === "Tab") {
+		if (I.conflict) {
+			if (e.stopPropagation(), e.key === "Escape" && !ge.has("conflict") && (I.conflict = !1, V()), e.key === "Tab") {
 				let t = [...P.querySelectorAll(".phone-dialog button:not(:disabled)")], n = t.indexOf(P.activeElement);
 				e.preventDefault(), t[(n + (e.shiftKey ? -1 : 1) + t.length) % t.length]?.focus();
 			}
 			return;
 		}
 		let n = e.target.closest("[data-api-source]"), r = e.target.id === "api-source";
-		if (r || F.sourcesOpen && (n || e.key === "Escape")) {
+		if (r || I.sourcesOpen && (n || e.key === "Escape")) {
 			if (e.stopPropagation(), e.key === "Escape") {
-				e.preventDefault(), Kt(), P.querySelector("#api-source")?.focus();
+				e.preventDefault(), qt(), P.querySelector("#api-source")?.focus();
 				return;
 			}
 			if (["ArrowDown", "ArrowUp"].includes(e.key)) {
 				e.preventDefault();
 				let t = e.key === "ArrowDown" ? 1 : -1;
-				if (r) qt(t);
+				if (r) Jt(t);
 				else {
 					let e = [...P.querySelectorAll("[data-api-source]")];
 					e[(e.indexOf(n) + t + e.length) % e.length]?.focus();
@@ -16046,9 +16159,9 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			}
 		}
 		let i = e.target.closest("[data-model]");
-		if (F.modelsOpen && (i || e.target.id === "model-search")) {
+		if (I.modelsOpen && (i || e.target.id === "model-search")) {
 			if (e.key === "Escape") {
-				e.preventDefault(), e.stopPropagation(), Gt(), P.querySelector("[data-action=\"models-menu\"]")?.focus();
+				e.preventDefault(), e.stopPropagation(), Kt(), P.querySelector("[data-action=\"models-menu\"]")?.focus();
 				return;
 			}
 			let t = [...P.querySelectorAll("[data-model]")];
@@ -16064,26 +16177,26 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			}
 			i && ["Enter", " "].includes(e.key) && e.stopPropagation();
 		}
-		if (F.photo && e.key === "Tab") {
+		if (I.photo && e.key === "Tab") {
 			e.preventDefault(), e.stopPropagation(), P.querySelector("[data-action=\"close-photo\"]")?.focus({ preventScroll: !0 });
 			return;
 		}
 		if (e.key === "Escape") {
-			if (e.stopPropagation(), F.avatarMenuOpen) Jt(), P.querySelector(".avatar-menu-toggle")?.focus({ preventScroll: !0 });
-			else if (F.selectedMessage) {
-				let e = P.querySelector(`[data-message="${CSS.escape(F.selectedMessage)}"]`);
-				Ht(), e?.focus({ preventScroll: !0 });
-			} else F.photo ? xt() : F.notice ? tt() : Ct();
+			if (e.stopPropagation(), I.avatarMenuOpen) Yt(), P.querySelector(".avatar-menu-toggle")?.focus({ preventScroll: !0 });
+			else if (I.selectedMessage) {
+				let e = P.querySelector(`[data-message="${CSS.escape(I.selectedMessage)}"]`);
+				Ut(), e?.focus({ preventScroll: !0 });
+			} else I.photo ? St() : I.notice ? nt() : wt();
 		} else if (e.target.matches("input, textarea, select") || e.target.isContentEditable) {
 			e.stopPropagation();
 			let t = e.target, n = t.form;
-			n ? Ld(e, () => {
+			n ? Bd(e, () => {
 				let e = n.querySelector("button[type=\"submit\"], input[type=\"submit\"], button:not([type])");
 				e ? e.click() : n.requestSubmit();
-			}, le.isComposing(t)) : ["font-css-url", "story-reference-floors"].includes(t.id) && Ld(e, () => t.blur(), le.isComposing(t));
+			}, le.isComposing(t)) : ["font-css-url", "story-reference-floors"].includes(t.id) && Bd(e, () => t.blur(), le.isComposing(t));
 		}
 	}
-	function $t(e) {
+	function en(e) {
 		if (pe.click(e)) return;
 		let c = e.target.closest("button[data-action^=\"favorite-\"]");
 		if (c && !c.disabled) {
@@ -16091,74 +16204,74 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			let n = c.dataset.action;
 			if (n === "favorite-add") {
 				if (!w()) {
-					Vt(), z({
+					Ht(), z({
 						error: !0,
 						text: "聊天已切换，请重新打开手机。"
 					});
 					return;
 				}
-				let e = ut(c), n = c.dataset.favoriteId, r = `favorite-add:${JSON.stringify(e)}`, i = be;
-				Vt(), H(r, () => n ? t.removeFavorite(n) : t.addFavorite(e, { defaultUser: O }), () => {
+				let e = dt(c), n = c.dataset.favoriteId, r = `favorite-add:${JSON.stringify(e)}`, i = be;
+				Ht(), H(r, () => n ? t.removeFavorite(n) : t.addFavorite(e, { defaultUser: O }), () => {
 					i === be && w() && z({
 						text: n ? "已取消收藏" : "已收藏",
 						compact: !0
 					});
 				});
-			} else n === "favorite-filter" ? (F.favoriteFilter = c.dataset.favoriteFilter, F.favoriteScroll = 0, V(), P.querySelector(".phone-main").scrollTop = 0) : n === "favorite-open" ? (F.favoriteId = c.dataset.favoriteId, kt("favorite-detail")) : n === "favorite-back" ? pt() : n === "favorite-remove" ? ft(F.favoriteId) : n === "favorite-photo" && bt(() => (t.read().favorites || []).find((e) => e.id === F.favoriteId)?.snapshot.image, c);
+			} else n === "favorite-filter" ? (I.favoriteFilter = c.dataset.favoriteFilter, I.favoriteScroll = 0, V(), P.querySelector(".phone-main").scrollTop = 0) : n === "favorite-open" ? (I.favoriteId = c.dataset.favoriteId, At("favorite-detail")) : n === "favorite-back" ? mt() : n === "favorite-remove" ? pt(I.favoriteId) : n === "favorite-photo" && xt(() => (t.read().favorites || []).find((e) => e.id === I.favoriteId)?.snapshot.image, c);
 			return;
 		}
 		if (e.target.closest("button[data-action=\"dismiss\"]")) {
 			z(null);
 			return;
 		}
-		if (F.conflict) {
+		if (I.conflict) {
 			let t = e.target.closest("button");
 			if (!t || t.disabled) return;
-			t.dataset.action === "conflict-continue" && (F.conflict = !1, z(null), V()), t.dataset.action === "conflict-disable" && H("conflict", () => C.setEnabled(!1), () => {
-				F.conflict = !1, F.view = "settings", f.refreshVisibility?.(), j();
+			t.dataset.action === "conflict-continue" && (I.conflict = !1, z(null), V()), t.dataset.action === "conflict-disable" && H("conflict", () => C.setEnabled(!1), () => {
+				I.conflict = !1, I.view = "settings", f.refreshVisibility?.(), j();
 			});
 			return;
 		}
 		let u = e.target.closest(".message-original, .message-translation, .message-reply > span, .post-body, .post-excerpt, .social-caption, .social-comment, .comment-row p, .ls-copy, .ls-quote, .photo-description, .photo-viewer p, .location-message > strong, .location-message > small, .transfer-amount, .transfer-message > span:not(.card-label)"), g = P.getSelection?.() || M.getSelection();
 		if (u && g && !g.isCollapsed && g.containsNode(u, !0)) return;
 		if (e.target.matches(".photo-viewer")) {
-			xt();
+			St();
 			return;
 		}
 		let _ = e.target.closest("button");
 		if (_?.disabled) return;
 		if (_?.dataset.albumPhoto) {
-			Qe.leave(), F.albumScroll = P.querySelector(".album-gallery")?.scrollTop || 0, F.albumPath = _.dataset.albumPhoto, F.albumPage = "detail", V(), vt();
+			$e.leave(), I.albumScroll = P.querySelector(".album-gallery")?.scrollTop || 0, I.albumPath = _.dataset.albumPhoto, I.albumPage = "detail", V(), yt();
 			return;
 		}
 		if (_?.dataset.albumTemplate) {
-			Qe.setTemplate(_.dataset.albumTemplate);
+			$e.setTemplate(_.dataset.albumTemplate);
 			return;
 		}
 		if (_?.dataset.albumTab) {
-			Qe.setTab(_.dataset.albumTab);
+			$e.setTab(_.dataset.albumTab);
 			return;
 		}
-		if (_?.closest(".phone-action-popup") && Vt(), _?.dataset.apiSource) {
+		if (_?.closest(".phone-action-popup") && Ht(), _?.dataset.apiSource) {
 			let e = _.dataset.apiSource;
-			if (Kt(), e === "manual") {
-				Tt(!0), V();
+			if (qt(), e === "manual") {
+				Et(!0), V();
 				return;
 			}
-			let t = l.listSources().find((t) => Gl(t.ref) === e);
-			t && H("api", () => l.select(t.ref), () => Tt());
+			let t = l.listSources().find((t) => Jl(t.ref) === e);
+			t && H("api", () => l.select(t.ref), () => Et());
 			return;
 		}
 		if (_?.dataset.liangshiHot !== void 0) {
 			let e = _.dataset.liangshiHot;
-			Ft({
+			It({
 				kind: "hot-topic",
 				id: e
 			}, !0, _);
 			return;
 		}
 		if (_?.dataset.liangshiTopic !== void 0) {
-			Ft({
+			It({
 				kind: "topic",
 				topic: _.dataset.liangshiTopic,
 				source: _.dataset.liangshiTopicSource
@@ -16166,15 +16279,15 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			return;
 		}
 		if (_?.dataset.liangshiDetailTab) {
-			F.liangshiPage = {
-				...F.liangshiPage,
+			I.liangshiPage = {
+				...I.liangshiPage,
 				tab: _.dataset.liangshiDetailTab
 			}, V();
 			return;
 		}
 		let v = e.target.closest("[data-liangshi-open]");
 		if (v) {
-			Ft({
+			It({
 				kind: "post",
 				id: v.dataset.liangshiOpen,
 				tab: v.dataset.liangshiSection || "comments"
@@ -16182,7 +16295,7 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			return;
 		}
 		if (_?.dataset.liangshiTab) {
-			F.liangshiTrail = [], Ft({
+			I.liangshiTrail = [], It({
 				kind: "feed",
 				tab: _.dataset.liangshiTab
 			}, !1);
@@ -16195,57 +16308,57 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			return;
 		}
 		if (_.dataset.chatBackground !== void 0) {
-			let e = F.view === "group-profile" ? F.groupDraft : F.profileDraft;
+			let e = I.view === "group-profile" ? I.groupDraft : I.profileDraft;
 			e.background = _.dataset.chatBackground, V();
 			return;
 		}
 		if (_.dataset.calendarDay) {
-			F.calendarDay = Number(_.dataset.calendarDay), V();
+			I.calendarDay = Number(_.dataset.calendarDay), V();
 			return;
 		}
-		if (_.matches(".message-avatar") && De()) {
-			Je(_, e);
+		if (_.matches(".message-avatar") && Oe()) {
+			Ye(_, e);
 			return;
 		}
 		if (_.dataset.inlineEmoji) {
 			let e = et(_.dataset.inlineEmoji), t = P.querySelector("#sms-draft");
-			e && t && !t.disabled && (t.setRangeText(e.emoji, t.selectionStart, t.selectionEnd, "end"), tn({ target: t }));
+			e && t && !t.disabled && (t.setRangeText(e.emoji, t.selectionStart, t.selectionEnd, "end"), nn({ target: t }));
 			return;
 		}
 		if (_.dataset.stickerPack) {
-			F.stickerPack = _.dataset.stickerPack, V();
+			I.stickerPack = _.dataset.stickerPack, V();
 			return;
 		}
 		if (_.dataset.sticker) {
-			let e = Oe(), t = F.view === "group-chat" ? r : n;
+			let e = ke(), t = I.view === "group-chat" ? r : n;
 			H(`send:${e}`, () => t.sendCard(e, {
 				type: "sticker",
 				stickerId: _.dataset.sticker
-			}, F.view === "group-chat" ? { replyToId: F.replyToId } : void 0), () => {
-				F.attachment = "", F.replyToId = "", j();
+			}, I.view === "group-chat" ? { replyToId: I.replyToId } : void 0), () => {
+				I.attachment = "", I.replyToId = "", j();
 			});
 			return;
 		}
 		if (_.dataset.transferId) {
-			let e = Oe(), n = F.batch;
+			let e = ke(), n = I.batch;
 			H(`transfer:${_.dataset.transferId}`, () => t.respondTransfer(e, _.dataset.transferId, _.dataset.transferStatus, "@user", n), j);
 			return;
 		}
 		if (_.hasAttribute("data-identity-owner")) {
-			F.profileDraft.identityOwnerId = _.dataset.identityOwner;
+			I.profileDraft.identityOwnerId = _.dataset.identityOwner;
 			let e = _.textContent;
-			Yt();
+			Xt();
 			let t = P.querySelector("#identity-owner");
 			t && (t.querySelector("span").textContent = e, t.focus({ preventScroll: !0 }));
 			return;
 		}
 		if (_.dataset.model) {
-			F.apiDraft.model = _.dataset.model, P.querySelector("#api-model").value = _.dataset.model, P.querySelector(".model-options").innerHTML = Hu(F);
+			I.apiDraft.model = _.dataset.model, P.querySelector("#api-model").value = _.dataset.model, P.querySelector(".model-options").innerHTML = Gu(I);
 			return;
 		}
 		if (_.dataset.drawer) {
 			let e = _.dataset.drawer;
-			Kt(), Gt(), F.drawers[e] = !F.drawers[e], V(), e === "content" && F.drawers.content && gt();
+			qt(), Kt(), I.drawers[e] = !I.drawers[e], V(), e === "content" && I.drawers.content && _t();
 			return;
 		}
 		if (_.dataset.tab) {
@@ -16253,110 +16366,110 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				te();
 				return;
 			}
-			kt(uf.find((e) => e.id === _.dataset.tab)?.view || _.dataset.tab);
+			At(pf.find((e) => e.id === _.dataset.tab)?.view || _.dataset.tab);
 			return;
 		}
 		if (_.dataset.contact || _.dataset.group) {
-			At(_.dataset.group || _.dataset.contact, !!_.dataset.group);
+			jt(_.dataset.group || _.dataset.contact, !!_.dataset.group);
 			return;
 		}
 		if (_.dataset.message) {
-			let e = _.dataset.message, t = F.selectedMessage === e;
-			Vt(), F.chatMenu = !1, F.selectedMessage = t ? "" : e, V();
+			let e = _.dataset.message, t = I.selectedMessage === e;
+			Ht(), I.chatMenu = !1, I.selectedMessage = t ? "" : e, V();
 			return;
 		}
 		if (_.dataset.post) {
-			F.forumScroll = {
-				...Dt(_),
-				tag: F.forumTag
-			}, F.forumPages[F.forumScope] = {
-				tag: F.forumTag,
-				scroll: F.forumScroll
-			}, F.postId = _.dataset.post, F.view = "post", z(null), V();
+			I.forumScroll = {
+				...Ot(_),
+				tag: I.forumTag
+			}, I.forumPages[I.forumScope] = {
+				tag: I.forumTag,
+				scroll: I.forumScroll
+			}, I.postId = _.dataset.post, I.view = "post", z(null), V();
 			return;
 		}
-		let y = Oe(), x = F.view === "group-chat" ? r : n;
+		let y = ke(), x = I.view === "group-chat" ? r : n;
 		switch (_.dataset.action) {
 			case "album-back":
-				It();
+				Lt();
 				break;
 			case "album-view":
-				bt(() => dc(t.read(), F.albumPath, { defaultUser: O }), _);
+				xt(() => dc(t.read(), I.albumPath, { defaultUser: O }), _);
 				break;
 			case "album-edit":
-				F.albumPage = "editor", Qe.select(F.albumPath);
+				I.albumPage = "editor", $e.select(I.albumPath);
 				break;
 			case "album-reset":
-				Qe.reset();
+				$e.reset();
 				break;
 			case "album-zoom":
-				Qe.zoom(_);
+				$e.zoom(_);
 				break;
 			case "album-export":
-				Qe.download("art");
+				$e.download("art");
 				break;
 			case "album-export-pieces":
-				Qe.download("pieces");
+				$e.download("pieces");
 				break;
 			case "dismiss-phone-notice":
-				tt();
+				nt();
 				break;
 			case "open-phone-notice": {
 				let e = _.dataset.notificationKey, n = e ? t.read().notifications?.items.find((t) => t.key === e) : {
 					kind: _.dataset.noticeKind,
 					id: _.dataset.noticeId
 				};
-				F.notice && F.notice.key === e && tt(), n && Nt(n);
+				I.notice && I.notice.key === e && nt(), n && Pt(n);
 				break;
 			}
 			case "open-lock-notice":
-				Nt({
+				Pt({
 					key: _.dataset.notificationKey,
 					kind: _.dataset.noticeKind,
 					id: _.dataset.noticeId
 				});
 				break;
 			case "toggle-notification-shade":
-				I.isOpen ? I.close() : ne ? ne() : I.open();
+				we.isOpen ? we.close() : ne ? ne() : we.open();
 				break;
 			case "open-social-reply":
-				tt(), Mt(_.dataset.socialPost);
+				nt(), Nt(_.dataset.socialPost);
 				break;
 			case "unlock":
-				kt("desktop");
+				At("desktop");
 				break;
 			case "system-home":
-				kt("desktop");
+				At("desktop");
 				break;
 			case "system-back":
-				It();
+				Lt();
 				break;
 			case "liangshi-back":
-				It();
+				Lt();
 				break;
 			case "liangshi-menu": {
 				let e = _.dataset.liangshiId;
-				F.liangshiMenu === e ? Ut() : (Vt(), F.liangshiMenu = e, _.setAttribute("aria-expanded", "true"), Wt("本人微博操作", () => {
+				I.liangshiMenu === e ? Wt() : (Ht(), I.liangshiMenu = e, _.setAttribute("aria-expanded", "true"), Gt("本人微博操作", () => {
 					let t = s.getPost(e);
-					return t ? xd(t, ge) : "";
+					return t ? wd(t, ge) : "";
 				}, `[data-action="liangshi-menu"][data-liangshi-id="${CSS.escape(e)}"]`));
 				break;
 			}
 			case "liangshi-reply": {
-				let e = _.dataset.liangshiId, t = F.liangshiReplyDrafts.get(e);
-				F.liangshiReplyDrafts.set(e, {
+				let e = _.dataset.liangshiId, t = I.liangshiReplyDrafts.get(e);
+				I.liangshiReplyDrafts.set(e, {
 					replyToId: _.dataset.liangshiComment,
 					text: t?.text || ""
 				}), V(), P.querySelector("#ls-reply-text")?.focus({ preventScroll: !0 });
 				break;
 			}
 			case "liangshi-reply-cancel":
-				F.liangshiReplyDrafts.delete(_.dataset.liangshiId), V();
+				I.liangshiReplyDrafts.delete(_.dataset.liangshiId), V();
 				break;
 			case "liangshi-generate-replies":
 			case "liangshi-regenerate-replies": {
 				let e = _.dataset.liangshiId, t = _.dataset.action === "liangshi-regenerate-replies";
-				Ut(), H(`liangshi-replies:${e}`, () => s.generateReplies(e, { regenerate: t }), (e) => {
+				Wt(), H(`liangshi-replies:${e}`, () => s.generateReplies(e, { regenerate: t }), (e) => {
 					e === null && z({ text: "暂时没有新的回应。" });
 				});
 				break;
@@ -16364,19 +16477,19 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			case "liangshi-edit": {
 				let e = t.read().liangshi, n = e.posts.find((e) => e.id === _.dataset.liangshiId), r = e.accounts.find((e) => e.id === n?.authorId);
 				if (n?.userAuthored !== !0 || r?.ownerId !== "@user") break;
-				Ut(), F.liangshiDraft = {
+				Wt(), I.liangshiDraft = {
 					postId: n.id,
 					text: n.text,
 					seed: n.text,
 					imageDescription: n.image?.description || "",
 					imageSeed: n.image?.description || "",
 					translation: n.translation || ""
-				}, Ft({ kind: "compose" });
+				}, It({ kind: "compose" });
 				break;
 			}
 			case "liangshi-delete": {
 				let e = _.dataset.liangshiId, t = M.createElement("p");
-				Ut(), t.textContent = "删除这条本人微博？", ue.custom({
+				Wt(), t.textContent = "删除这条本人微博？", ue.custom({
 					title: "删除微博",
 					content: t,
 					confirmText: "删除",
@@ -16385,7 +16498,7 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 					submit: () => !0
 				}).then((t) => {
 					t && H(`liangshi-delete:${e}`, () => s.deleteUser(e), () => {
-						F.notice?.kind === "liangshi-post" && F.notice.id === e && tt(), F.view === "liangshi" && F.liangshiPage.kind === "post" && F.liangshiPage.id === e && (F.liangshiTrail = [], Ft({
+						I.notice?.kind === "liangshi-post" && I.notice.id === e && nt(), I.view === "liangshi" && I.liangshiPage.kind === "post" && I.liangshiPage.id === e && (I.liangshiTrail = [], It({
 							kind: "feed",
 							tab: "mine"
 						}, !1));
@@ -16394,32 +16507,32 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				break;
 			}
 			case "liangshi-compose":
-				F.liangshiDraft = {
+				I.liangshiDraft = {
 					text: "",
 					seed: "",
 					imageDescription: "",
 					imageSeed: "",
 					translation: ""
-				}, Ft({ kind: "compose" });
+				}, It({ kind: "compose" });
 				break;
 			case "liangshi-draft": {
-				let e = F.liangshiDraft, t = { ...e };
+				let e = I.liangshiDraft, t = { ...e };
 				H("liangshi-draft", () => s.draftUser({
 					seed: t.seed,
 					imageSeed: t.imageSeed
 				}), (n) => {
-					F.view === "liangshi" && F.liangshiPage.kind === "compose" && F.liangshiDraft === e && e.text === t.text && e.seed === t.seed && e.imageSeed === t.imageSeed && e.imageDescription === t.imageDescription && Object.assign(e, n, { translation: n.translation || "" });
+					I.view === "liangshi" && I.liangshiPage.kind === "compose" && I.liangshiDraft === e && e.text === t.text && e.seed === t.seed && e.imageSeed === t.imageSeed && e.imageDescription === t.imageDescription && Object.assign(e, n, { translation: n.translation || "" });
 				});
 				break;
 			}
 			case "liangshi-refresh":
 				H("liangshi", () => s.refresh(), () => {
-					F.view === "liangshi" && F.liangshiPage.kind === "feed" && F.liangshiPage.tab === "square" && (F.liangshiTrail = [], F.liangshiExpanded.clear());
+					I.view === "liangshi" && I.liangshiPage.kind === "feed" && I.liangshiPage.tab === "square" && (I.liangshiTrail = [], I.liangshiExpanded.clear());
 				});
 				break;
 			case "liangshi-following-refresh":
 				H("liangshi-following", () => s.refreshFollowing(), () => {
-					F.view === "liangshi" && F.liangshiPage.kind === "feed" && F.liangshiPage.tab === "following" && (F.liangshiTrail = [], F.liangshiExpanded.clear());
+					I.view === "liangshi" && I.liangshiPage.kind === "feed" && I.liangshiPage.tab === "following" && (I.liangshiTrail = [], I.liangshiExpanded.clear());
 				});
 				break;
 			case "liangshi-hot-refresh":
@@ -16427,12 +16540,12 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				break;
 			case "liangshi-topic-load":
 			case "liangshi-topic-refresh": {
-				let e = F.liangshiPage.id;
+				let e = I.liangshiPage.id;
 				H(`liangshi-topic:${e}`, () => s.loadTopic(e, { refresh: _.dataset.action === "liangshi-topic-refresh" }));
 				break;
 			}
 			case "liangshi-more": {
-				let e = F.liangshiPage.id;
+				let e = I.liangshiPage.id;
 				H(`liangshi-more:${e}`, () => s.loadMore(e), (e) => {
 					e === null && z({ text: "暂时没有新的互动。" });
 				});
@@ -16462,7 +16575,7 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 					let i = t.read().liangshi?.posts.find((t) => t.id === e);
 					return n && i ? As(i, r).find((e) => e.id === n)?.image : i?.image;
 				};
-				i()?.path ? bt(i, _) : H(`liangshi-image:${e}${n ? `:${n}` : ""}`, () => m.generateLiangshi(e, {
+				i()?.path ? xt(i, _) : H(`liangshi-image:${e}${n ? `:${n}` : ""}`, () => m.generateLiangshi(e, {
 					collection: r,
 					id: n
 				}));
@@ -16470,7 +16583,7 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			}
 			case "liangshi-expand": {
 				let e = _.dataset.liangshiId;
-				F.liangshiExpanded.has(e) ? F.liangshiExpanded.delete(e) : F.liangshiExpanded.add(e), V();
+				I.liangshiExpanded.has(e) ? I.liangshiExpanded.delete(e) : I.liangshiExpanded.add(e), V();
 				break;
 			}
 			case "social-like": {
@@ -16482,111 +16595,111 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				let e = new Set((t.read().social?.posts || []).map((e) => e.id));
 				H("social", () => o.refresh(), (n) => {
 					let r = new Set((Array.isArray(n) ? n : t.read().social?.posts || []).map((e) => e.id));
-					for (let t of e) r.has(t) || (F.socialDrafts.delete(t), F.socialCommentOpen.delete(t));
+					for (let t of e) r.has(t) || (I.socialDrafts.delete(t), I.socialCommentOpen.delete(t));
 					j();
 				});
 				break;
 			}
 			case "social-comment-toggle": {
 				let e = _.dataset.socialPost;
-				F.socialCommentOpen.has(e) ? F.socialCommentOpen.delete(e) : F.socialCommentOpen.add(e), V(), F.socialCommentOpen.has(e) && P.querySelector(`[data-social-comment-form="${CSS.escape(e)}"] textarea`)?.focus({ preventScroll: !0 });
+				I.socialCommentOpen.has(e) ? I.socialCommentOpen.delete(e) : I.socialCommentOpen.add(e), V(), I.socialCommentOpen.has(e) && P.querySelector(`[data-social-comment-form="${CSS.escape(e)}"] textarea`)?.focus({ preventScroll: !0 });
 				break;
 			}
 			case "social-author": {
 				let e = _.dataset.socialAuthor;
-				(F.view !== "social-profile" || F.socialAuthorId !== e) && (F.socialAuthorId = e, kt("social-profile", { sourceNode: _ }));
+				(I.view !== "social-profile" || I.socialAuthorId !== e) && (I.socialAuthorId = e, At("social-profile", { sourceNode: _ }));
 				break;
 			}
 			case "social-author-refresh": {
-				let e = F.socialAuthorId;
+				let e = I.socialAuthorId;
 				H(`social-author:${e}`, () => o.generateAuthor(e));
 				break;
 			}
 			case "social-back":
-				It();
+				Lt();
 				break;
 			case "social-past":
-				F.socialPastOpen = !F.socialPastOpen, V();
+				I.socialPastOpen = !I.socialPastOpen, V();
 				break;
 			case "social-earlier":
-				F.socialLimit += 30, V();
+				I.socialLimit += 30, V();
 				break;
 			case "social-image": {
 				let e = _.dataset.socialImage, n = () => t.read().social?.posts.find((t) => t.id === e)?.image;
-				n()?.path ? bt(n, _) : H(`social-image:${e}`, () => m.generatePost(e));
+				n()?.path ? xt(n, _) : H(`social-image:${e}`, () => m.generatePost(e));
 				break;
 			}
 			case "restore-chat-background": {
-				let e = F.view === "group-profile" ? F.groupDraft : F.profileDraft;
+				let e = I.view === "group-profile" ? I.groupDraft : I.profileDraft;
 				e.background = "", V();
 				break;
 			}
 			case "open-calendar":
-				F.view = "calendar", F.calendarOffset = 0, F.calendarDay = null, z(null), V();
+				I.view = "calendar", I.calendarOffset = 0, I.calendarDay = null, z(null), V();
 				break;
 			case "calendar-prev":
-				F.calendarOffset--, F.calendarDay = null, V();
+				I.calendarOffset--, I.calendarDay = null, V();
 				break;
 			case "calendar-next":
-				F.calendarOffset++, F.calendarDay = null, V();
+				I.calendarOffset++, I.calendarDay = null, V();
 				break;
 			case "calendar-today":
-				F.calendarOffset = 0, F.calendarDay = null, V();
+				I.calendarOffset = 0, I.calendarDay = null, V();
 				break;
 			case "calendar-month":
-				F.calendarDay = null, V();
+				I.calendarDay = null, V();
 				break;
 			case "authoring":
-				F.view = "authoring", z(null), V();
+				I.view = "authoring", z(null), V();
 				break;
 			case "back-authoring":
-				It();
+				Lt();
 				break;
 			case "export-card":
-				H("export", () => h.exportScript({ coreUrl: F.exportLocal ? Ie : Fe }), (e) => {
+				H("export", () => h.exportScript({ coreUrl: I.exportLocal ? Ie : Fe }), (e) => {
 					let t = URL.createObjectURL(new Blob([JSON.stringify(e.script, null, 2)], { type: "application/json" })), n = M.createElement("a");
 					n.href = t, n.download = e.filename, M.body.append(n), n.click(), n.remove(), setTimeout(() => URL.revokeObjectURL(t), 0), z({ text: "酒馆助手脚本已导出。" });
 				});
 				break;
 			case "attachments":
-				F.attachment = F.attachment ? "" : "menu", F.selectedMessage = "", F.chatMenu = !1, V();
+				I.attachment = I.attachment ? "" : "menu", I.selectedMessage = "", I.chatMenu = !1, V();
 				break;
 			case "choose-stickers":
-				F.attachment = "stickers", V();
+				I.attachment = "stickers", V();
 				break;
 			case "choose-location":
-				F.attachment = "location", F.attachmentDraft = {}, V();
+				I.attachment = "location", I.attachmentDraft = {}, V();
 				break;
 			case "choose-transfer":
-				F.attachment = "transfer", F.attachmentDraft = { currency: "CNY" }, V();
+				I.attachment = "transfer", I.attachmentDraft = { currency: "CNY" }, V();
 				break;
 			case "close-attachment":
-				F.attachment = "", V();
+				I.attachment = "", V();
 				break;
 			case "close-photo":
-				xt();
+				St();
 				break;
 			case "photo":
-				(t.read().conversations[y]?.find((e) => e.id === _.dataset.photo))?.image.path ? bt(() => t.read().conversations[y]?.find((e) => e.id === _.dataset.photo)?.image, _) : H(`image:${_.dataset.photo}`, () => m.generate(y, _.dataset.photo));
+				(t.read().conversations[y]?.find((e) => e.id === _.dataset.photo))?.image.path ? xt(() => t.read().conversations[y]?.find((e) => e.id === _.dataset.photo)?.image, _) : H(`image:${_.dataset.photo}`, () => m.generate(y, _.dataset.photo));
 				break;
 			case "forum-reply": {
-				let e = F.forumDrafts.get(F.postId);
-				F.forumDrafts.set(F.postId, {
+				let e = I.forumDrafts.get(I.postId);
+				I.forumDrafts.set(I.postId, {
 					text: e?.text || "",
 					replyToId: _.dataset.forumComment
 				}), V(), P.querySelector(".forum-comment-form")?.scrollIntoView({ block: "nearest" }), P.querySelector("#forum-comment-text")?.focus({ preventScroll: !0 });
 				break;
 			}
 			case "forum-reply-cancel": {
-				let e = F.forumDrafts.get(F.postId);
-				F.forumDrafts.set(F.postId, {
+				let e = I.forumDrafts.get(I.postId);
+				I.forumDrafts.set(I.postId, {
 					text: e?.text || "",
 					replyToId: ""
 				}), V();
 				break;
 			}
 			case "forum-jump": {
-				let e = _.dataset.forumComment === F.postId ? P.querySelector(".post-detail") : [...P.querySelectorAll(".comment-row[data-forum-comment]")].find((e) => e.dataset.forumComment === _.dataset.forumComment);
+				let e = _.dataset.forumComment === I.postId ? P.querySelector(".post-detail") : [...P.querySelectorAll(".comment-row[data-forum-comment]")].find((e) => e.dataset.forumComment === _.dataset.forumComment);
 				if (e && (e.scrollIntoView({ block: "center" }), e.focus({ preventScroll: !0 }), !M.defaultView.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
 					let t = e.querySelector(":scope > div") || e;
 					t.animate([{ backgroundColor: M.defaultView.getComputedStyle(e).getPropertyValue("--pp-pale") }, { backgroundColor: M.defaultView.getComputedStyle(t).backgroundColor }], {
@@ -16598,7 +16711,7 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			}
 			case "forum-vote": {
 				let e = _.dataset.forumVote;
-				F.forumVotes.set(F.postId, F.forumVotes.get(F.postId) === e ? "" : e), V(), M.defaultView.matchMedia("(prefers-reduced-motion: reduce)").matches || P.querySelector(`[data-forum-vote="${e}"]`)?.animate([
+				I.forumVotes.set(I.postId, I.forumVotes.get(I.postId) === e ? "" : e), V(), M.defaultView.matchMedia("(prefers-reduced-motion: reduce)").matches || P.querySelector(`[data-forum-vote="${e}"]`)?.animate([
 					{ transform: "scale(1)" },
 					{
 						transform: "scale(1.12)",
@@ -16612,67 +16725,67 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				break;
 			}
 			case "forum-more": {
-				let e = F.postId, t = F.forumScope;
+				let e = I.postId, t = I.forumScope;
 				H(`forum-more:${e}`, () => a.loadMore(e, t), (e) => {
 					e === null && z({ text: "暂时没有新的回帖。" });
 				});
 				break;
 			}
 			case "forum-tag":
-				F.forumTag = _.dataset.forumTag, F.forumPages[F.forumScope] = {
-					tag: F.forumTag,
+				I.forumTag = _.dataset.forumTag, I.forumPages[I.forumScope] = {
+					tag: I.forumTag,
 					scroll: 0
 				}, V(), P.querySelector(".phone-main").scrollTop = 0;
 				break;
 			case "forum-image": {
-				let e = F.postId, n = F.forumScope, r = _.dataset.forumComment, i = () => {
+				let e = I.postId, n = I.forumScope, r = _.dataset.forumComment, i = () => {
 					let i = L(t.read(), n).posts.find((t) => t.id === e);
 					return r && i ? gs(i).find((e) => e.id === r)?.image : i?.image;
 				};
-				i()?.path ? bt(i, _) : H(`forum-image:${e}${r ? `:${r}` : ""}`, () => m.generateForum(e, r, n));
+				i()?.path ? xt(i, _) : H(`forum-image:${e}${r ? `:${r}` : ""}`, () => m.generateForum(e, r, n));
 				break;
 			}
 			case "back-inbox":
 			case "back-forum":
-				It();
+				Lt();
 				break;
 			case "profile":
-				Zt("contact", y);
+				Qt("contact", y);
 				break;
 			case "edit-user":
-				Zt("user");
+				Qt("user");
 				break;
 			case "add-contact":
-				Zt("contact");
+				Qt("contact");
 				break;
 			case "inbox-menu": {
-				let e = F.inboxMenu;
-				Vt(), e || (F.inboxMenu = !0, Wt("通讯录操作", () => Pu(ge), "[data-action=\"inbox-menu\"]"));
+				let e = I.inboxMenu;
+				Ht(), e || (I.inboxMenu = !0, Gt("通讯录操作", () => Lu(ge), "[data-action=\"inbox-menu\"]"));
 				break;
 			}
 			case "add-group":
-				Bt();
+				Vt();
 				break;
 			case "edit-group":
-				Bt(F.groupId);
+				Vt(I.groupId);
 				break;
 			case "back-group":
-				It();
+				Lt();
 				break;
 			case "organize":
-				F.inboxMenu = !1, H("directory", () => i.organize(), (e) => {
+				I.inboxMenu = !1, H("directory", () => i.organize(), (e) => {
 					z({ text: e.contacts.length || e.groups.length ? `新增 ${e.contacts.length} 位联系人、${e.groups.length} 个群聊。` : "没有需要新增的联系人或群聊。" }), j();
 				});
 				break;
 			case "remove-contact":
 			case "remove-group": {
 				if (ge.has("remove")) break;
-				let e = _.dataset.action === "remove-group", n = e ? F.view === "group-profile" ? F.groupEditId : F.groupId : F.view === "contact-profile" ? F.editId : F.contactId, r = (e ? t.read().groups || [] : t.read().contacts).find((e) => e.id === n), i = {
+				let e = _.dataset.action === "remove-group", n = e ? I.view === "group-profile" ? I.groupEditId : I.groupId : I.view === "contact-profile" ? I.editId : I.contactId, r = (e ? t.read().groups || [] : t.read().contacts).find((e) => e.id === n), i = {
 					kind: e ? "group" : "contact",
 					id: n,
 					name: r.name
 				}, a = M.createElement("div");
-				a.innerHTML = Qu(i), ue.custom({
+				a.innerHTML = td(i), ue.custom({
 					title: `删除${e ? "群聊" : "联系人"}`,
 					content: a,
 					confirmText: "确认删除",
@@ -16682,57 +16795,57 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 					submit: () => !0
 				}).then((e) => {
 					e && H("remove", () => i.kind === "group" ? t.deleteGroup(i.id) : t.deleteContact(i.id), () => {
-						F.drafts.delete(i.id), F.selectedMessage = "", F.profileDraft = {}, F.groupDraft = {}, F.view = "inbox", j();
+						I.drafts.delete(i.id), I.selectedMessage = "", I.profileDraft = {}, I.groupDraft = {}, I.view = "inbox", j();
 					});
 				});
 				break;
 			}
 			case "back-profile":
-				It();
+				Lt();
 				break;
 			case "identity-menu":
-				F.identityOwnersOpen ? Yt() : Xt();
+				I.identityOwnersOpen ? Xt() : Zt();
 				break;
 			case "avatar-menu": {
-				let e = F.avatarMenuOpen;
-				Vt(), e || (F.avatarMenuOpen = !0, Wt("头像操作", () => $l(P.querySelector(".avatar-menu-toggle")?.dataset.avatarCanRestore === "true"), ".avatar-menu-toggle"));
+				let e = I.avatarMenuOpen;
+				Ht(), e || (I.avatarMenuOpen = !0, Gt("头像操作", () => nu(P.querySelector(".avatar-menu-toggle")?.dataset.avatarCanRestore === "true"), ".avatar-menu-toggle"));
 				break;
 			}
 			case "upload-avatar":
 				P.querySelector(".avatar-picker input[type=\"file\"]")?.click();
 				break;
 			case "remove-avatar": {
-				F.avatarMenuOpen = !1;
-				let e = F.view === "group-profile" ? F.groupDraft : F.profileDraft;
-				e.avatar = "", F.editor === "contact" && F.view === "contact-profile" && (e.automaticAvatar = !1), V(), P.querySelector(".avatar-menu-toggle")?.focus({ preventScroll: !0 });
+				I.avatarMenuOpen = !1;
+				let e = I.view === "group-profile" ? I.groupDraft : I.profileDraft;
+				e.avatar = "", I.editor === "contact" && I.view === "contact-profile" && (e.automaticAvatar = !1), V(), P.querySelector(".avatar-menu-toggle")?.focus({ preventScroll: !0 });
 				break;
 			}
 			case "restore-avatar": {
-				F.avatarMenuOpen = !1;
-				let e = F.profileDraft, n = t.read().contacts.find((e) => e.id === F.editId);
+				I.avatarMenuOpen = !1;
+				let e = I.profileDraft, n = t.read().contacts.find((e) => e.id === I.editId);
 				e.avatar = qa(e.avatar) ? e.avatar : qa(n?.avatar) ? n.avatar : Ja(), e.automaticAvatar = !0, V(), P.querySelector(".avatar-menu-toggle")?.focus({ preventScroll: !0 });
 				break;
 			}
 			case "refine-style": {
-				let e = F.profileDraft, t = e.expression, r = F.editId;
+				let e = I.profileDraft, t = e.expression, r = I.editId;
 				H("style", () => n.refineOnlineStyle(r), (n) => {
 					e.expression === t ? e.expression = n : z({ text: "你已手动修改线上方式，保留当前编辑。" });
 				});
 				break;
 			}
 			case "chat-menu":
-				F.chatMenu ? Vt() : (Vt(), F.chatMenu = !0, F.selectedMessage = "", Wt("聊天选项", () => Nu(t.read(), {
-					ui: F,
+				I.chatMenu ? Ht() : (Ht(), I.chatMenu = !0, I.selectedMessage = "", Gt("聊天选项", () => Iu(t.read(), {
+					ui: I,
 					busy: ge
 				}), "[data-action=\"chat-menu\"]"));
 				break;
 			case "clear-chat":
-				lt();
+				ut();
 				break;
 			case "delete-history": {
-				let e = t.read(), n = Cc(e.conversations[y] || [], F.batch).past.find((e) => e.key === _.dataset.historyKey);
+				let e = t.read(), n = Cc(e.conversations[y] || [], I.batch).past.find((e) => e.key === _.dataset.historyKey);
 				if (!n) break;
-				let r = F.view === "group-chat" ? e.groups.find((e) => e.id === y) : e.contacts.find((e) => e.id === y), i = M.createElement("p");
+				let r = I.view === "group-chat" ? e.groups.find((e) => e.id === y) : e.contacts.find((e) => e.id === y), i = M.createElement("p");
 				i.textContent = `${n.label}，共 ${n.messages.length} 条消息。删除“${R(r)}”的这一整段历史；其他历史、当前消息、草稿和相册照片保留。`, ue.custom({
 					title: "删除这段历史",
 					content: i,
@@ -16743,7 +16856,7 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 					submit: () => !0
 				}).then((e) => {
 					e && H(`delete-history:${y}`, () => t.clearConversation(y, { key: n.key }), () => {
-						F.selectedMessage = "", j();
+						I.selectedMessage = "", j();
 					});
 				});
 				break;
@@ -16751,37 +16864,37 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			case "delete-message": {
 				let e = _.dataset.messageTarget;
 				H(`delete:${y}`, () => t.deleteMessage(y, e), () => {
-					F.selectedMessage = "", j();
+					I.selectedMessage = "", j();
 				});
 				break;
 			}
 			case "reply-message":
-				if (F.view !== "group-chat") break;
-				F.replyToId = _.dataset.messageTarget, F.selectedMessage = "", V(), P.querySelector("#sms-draft")?.focus({ preventScroll: !0 });
+				if (I.view !== "group-chat") break;
+				I.replyToId = _.dataset.messageTarget, I.selectedMessage = "", V(), P.querySelector("#sms-draft")?.focus({ preventScroll: !0 });
 				break;
 			case "cancel-reply":
-				F.replyToId = "", V(), P.querySelector("#sms-draft")?.focus({ preventScroll: !0 });
+				I.replyToId = "", V(), P.querySelector("#sms-draft")?.focus({ preventScroll: !0 });
 				break;
 			case "earlier":
 			case "history":
 			case "earlier-history":
-				jt(_.dataset.action);
+				Mt(_.dataset.action);
 				break;
 			case "install-story-sms":
 				H("story-sms-install", () => b.install(), (e) => {
-					F.storySmsStatus = {
+					I.storySmsStatus = {
 						state: "installed",
 						bookName: e.bookName
 					};
 				});
 				break;
 			case "close":
-				Ct();
+				wt();
 				break;
 			case "send": {
-				let e = (F.drafts.get(y) || "").trim();
-				e && H(`send:${y}`, () => F.view === "group-chat" ? x.send(y, e, { replyToId: F.replyToId }) : x.send(y, e), () => {
-					(F.drafts.get(y) || "").trim() === e && F.drafts.set(y, ""), F.replyToId = "", j();
+				let e = (I.drafts.get(y) || "").trim();
+				e && H(`send:${y}`, () => I.view === "group-chat" ? x.send(y, e, { replyToId: I.replyToId }) : x.send(y, e), () => {
+					(I.drafts.get(y) || "").trim() === e && I.drafts.set(y, ""), I.replyToId = "", j();
 				});
 				break;
 			}
@@ -16789,20 +16902,20 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				H(`continue:${y}`, () => x.continueChat(y), j);
 				break;
 			case "refresh": {
-				let e = F.forumScope, n = L(t.read(), e).posts.map((e) => e.id);
-				H(e === "circle" ? "forum:circle" : "forum", () => a.refresh(e), () => Rt(e, n));
+				let e = I.forumScope, n = L(t.read(), e).posts.map((e) => e.id);
+				H(e === "circle" ? "forum:circle" : "forum", () => a.refresh(e), () => zt(e, n));
 				break;
 			}
 			case "forum-menu": {
 				let e = _.getAttribute("aria-expanded") === "true";
-				Vt(), e || Wt("论坛范围", () => zu(t.read(), { ui: F }), "[data-action=\"forum-menu\"]");
+				Ht(), e || Gt("论坛范围", () => Hu(t.read(), { ui: I }), "[data-action=\"forum-menu\"]");
 				break;
 			}
 			case "forum-scope":
-				Lt(_.dataset.forumScope), kt("forum"), Ot(F.forumScroll), P.querySelector("[data-action=\"forum-menu\"]")?.focus({ preventScroll: !0 });
+				Rt(_.dataset.forumScope), At("forum"), kt(I.forumScroll), P.querySelector("[data-action=\"forum-menu\"]")?.focus({ preventScroll: !0 });
 				break;
 			case "forum-circle-profile":
-				zt();
+				Bt();
 				break;
 			case "restore-wallpaper": {
 				let e = t.read().theme;
@@ -16810,28 +16923,28 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				break;
 			}
 			case "restore-font":
-				p.setFontCssUrl(id).catch((e) => z({
+				p.setFontCssUrl(sd).catch((e) => z({
 					error: !0,
 					text: e.message
 				}));
 				break;
 			case "sources-menu":
-				F.sourcesOpen ? Kt() : qt();
+				I.sourcesOpen ? qt() : Jt();
 				break;
 			case "models-menu":
-				Kt(), F.modelsOpen = !F.modelsOpen, V(), F.modelsOpen && P.querySelector("#model-search").focus();
+				qt(), I.modelsOpen = !I.modelsOpen, V(), I.modelsOpen && P.querySelector("#model-search").focus();
 				break;
 			case "api-edit":
 			case "api-new":
 				try {
-					Bd({
+					Ud({
 						documentRef: M,
 						dialog: ue,
 						apiSettings: l,
 						isComposing: le.isComposing,
 						isNew: _.dataset.action === "api-new",
 						onSaved: () => {
-							F.sourcesOpen = !1, V();
+							I.sourcesOpen = !1, V();
 						}
 					}).catch((e) => z({
 						error: !0,
@@ -16845,78 +16958,78 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 				}
 				break;
 			case "fetch-models": {
-				let e = { ...F.apiDraft }, t = Et() ? null : l.getSelected();
+				let e = { ...I.apiDraft }, t = Dt() ? null : l.getSelected();
 				H("models", () => l.fetchModels(e, t), (n) => {
-					if (F.apiDraft.url !== e.url || F.apiDraft.key !== e.key || Gl(Et() ? null : l.getSelected()) !== Gl(t)) {
+					if (I.apiDraft.url !== e.url || I.apiDraft.key !== e.key || Jl(Dt() ? null : l.getSelected()) !== Jl(t)) {
 						z({ text: "连接已修改，请重新拉取模型。" });
 						return;
 					}
-					F.models = n, F.modelSearch = "", F.modelsOpen = !0, F.apiDraft.model?.trim() || (F.apiDraft.model = n[0]);
+					I.models = n, I.modelSearch = "", I.modelsOpen = !0, I.apiDraft.model?.trim() || (I.apiDraft.model = n[0]);
 				});
 				break;
 			}
 		}
 	}
-	function en() {
+	function tn() {
 		let e = P.querySelector("#sms-draft");
 		e && (e.style.height = "auto", e.style.height = `${Math.min(e.scrollHeight + 2, 120)}px`);
 	}
-	function tn(e) {
+	function nn(e) {
 		if (e.target.id === "story-reference-floors") {
-			F.storyReferenceFloorsDraft = e.target.value;
+			I.storyReferenceFloorsDraft = e.target.value;
 			return;
 		}
 		if (e.target.id === "album-hole-size") {
-			Qe.setSize(e.target.value);
+			$e.setSize(e.target.value);
 			return;
 		}
-		e.target.closest(".attachment-form") && e.target.name && (F.attachmentDraft[e.target.name] = e.target.value), e.target.id === "sms-draft" && (F.drafts.set(Oe(), e.target.value), en());
+		e.target.closest(".attachment-form") && e.target.name && (I.attachmentDraft[e.target.name] = e.target.value), e.target.id === "sms-draft" && (I.drafts.set(ke(), e.target.value), tn());
 		let t = e.target.closest(".ls-reply-form");
 		if (t && e.target.name === "reply") {
-			let n = F.liangshiReplyDrafts.get(t.dataset.liangshiReplyForm);
+			let n = I.liangshiReplyDrafts.get(t.dataset.liangshiReplyForm);
 			n && (n.text = e.target.value);
 		}
 		let n = e.target.closest(".forum-comment-form");
 		if (n && e.target.name === "comment") {
-			let t = n.dataset.forumPost, r = F.forumDrafts.get(t) || {
+			let t = n.dataset.forumPost, r = I.forumDrafts.get(t) || {
 				text: "",
 				replyToId: ""
 			};
-			r.text = e.target.value, F.forumDrafts.set(t, r);
+			r.text = e.target.value, I.forumDrafts.set(t, r);
 		}
 		let r = e.target.closest(".social-comment-form");
-		if (r && e.target.name === "comment" && F.socialDrafts.set(r.dataset.socialCommentForm, e.target.value), e.target.closest(".ls-compose-form") && F.liangshiDraft) {
-			let t = F.liangshiDraft;
+		if (r && e.target.name === "comment" && I.socialDrafts.set(r.dataset.socialCommentForm, e.target.value), e.target.closest(".ls-compose-form") && I.liangshiDraft) {
+			let t = I.liangshiDraft;
 			e.target.name === "text" && (t.text = e.target.value, t.seed = e.target.value, t.translation = "", P.querySelector(".ls-draft-translation")?.remove()), e.target.name === "imageDescription" && (t.imageDescription = e.target.value, t.imageSeed = e.target.value);
 		}
-		e.target.closest(".api-form") && e.target.name && (F.apiDraft[e.target.name] = e.target.value), e.target.id === "model-search" && (F.modelSearch = e.target.value, P.querySelector(".model-options").innerHTML = Hu(F)), ["api-url", "api-key"].includes(e.target.id) && (F.models = [], F.modelSearch = "", Gt(), P.querySelector(".model-list-toggle")?.remove()), e.target.id === "api-model" && F.modelsOpen && (P.querySelector(".model-options").innerHTML = Hu(F));
+		e.target.closest(".api-form") && e.target.name && (I.apiDraft[e.target.name] = e.target.value), e.target.id === "model-search" && (I.modelSearch = e.target.value, P.querySelector(".model-options").innerHTML = Gu(I)), ["api-url", "api-key"].includes(e.target.id) && (I.models = [], I.modelSearch = "", Kt(), P.querySelector(".model-list-toggle")?.remove()), e.target.id === "api-model" && I.modelsOpen && (P.querySelector(".model-options").innerHTML = Gu(I));
 		let i = e.target.closest(".profile-form, .group-form");
 		if (i && e.target.name && e.target.type !== "checkbox") {
-			let t = i.matches(".group-form") ? F.groupDraft : F.profileDraft;
-			t[e.target.name] = e.target.value, e.target.name === "avatar" && (t.automaticAvatar = !1), (e.target.name === "avatar" || ["name", "nickname"].includes(e.target.name) && !P.querySelector(".profile-avatar img")) && (P.querySelector(".profile-avatar").innerHTML = Zl(t));
+			let t = i.matches(".group-form") ? I.groupDraft : I.profileDraft;
+			t[e.target.name] = e.target.value, e.target.name === "avatar" && (t.automaticAvatar = !1), (e.target.name === "avatar" || ["name", "nickname"].includes(e.target.name) && !P.querySelector(".profile-avatar img")) && (P.querySelector(".profile-avatar").innerHTML = eu(t));
 		}
 	}
-	function nn(e) {
+	function rn(e) {
 		if (e.target.id === "story-reference-floors") {
 			let n = e.target.value;
-			F.storyReferenceFloorsDraft = n, H("story-reference-floors", async () => {
+			I.storyReferenceFloorsDraft = n, H("story-reference-floors", async () => {
 				try {
 					return await t.setStoryReferenceFloors(n);
 				} finally {
-					delete F.storyReferenceFloorsDraft;
+					delete I.storyReferenceFloorsDraft;
 				}
 			}, j);
 			return;
 		}
-		if (e.target.id === "default-language" && H("default-language", () => t.setDefaultLanguage(e.target.value), j), e.target.id === "image-provider" && H("image-provider", () => u.select(e.target.value)), e.target.id === "export-source" && (F.exportLocal = e.target.value === "local", V()), e.target.id === "phone-enabled") {
+		if (e.target.id === "default-language" && H("default-language", () => t.setDefaultLanguage(e.target.value), j), e.target.id === "image-provider" && H("image-provider", () => u.select(e.target.value)), e.target.id === "export-source" && (I.exportLocal = e.target.value === "local", V()), e.target.id === "phone-enabled") {
 			let t = e.target.checked;
 			H("enabled", () => C.setEnabled(t), () => {
-				F.view = "settings", f.refreshVisibility?.(), j(), t && (_t(), A());
+				I.view = "settings", f.refreshVisibility?.(), j(), t && (vt(), A());
 			});
 		}
-		if (e.target.closest(".attachment-form") && e.target.name && (F.attachmentDraft[e.target.name] = e.target.value), e.target.closest(".group-form") && e.target.name === "member") {
+		if (e.target.closest(".attachment-form") && e.target.name && (I.attachmentDraft[e.target.name] = e.target.value), e.target.closest(".group-form") && e.target.name === "member") {
 			let { value: t, checked: n } = e.target;
-			t === "@user" ? F.groupDraft.userIsMember = n : F.groupDraft.memberIds = n ? [...F.groupDraft.memberIds, t] : F.groupDraft.memberIds.filter((e) => e !== t), P.querySelector(".group-members-fold summary span").textContent = `${F.groupDraft.memberIds.length + Number(F.groupDraft.userIsMember)} 人`;
+			t === "@user" ? I.groupDraft.userIsMember = n : I.groupDraft.memberIds = n ? [...I.groupDraft.memberIds, t] : I.groupDraft.memberIds.filter((e) => e !== t), P.querySelector(".group-members-fold summary span").textContent = `${I.groupDraft.memberIds.length + Number(I.groupDraft.userIsMember)} 人`;
 		}
 		if (e.target.id === "inject-enabled") {
 			let n = e.target.checked;
@@ -16945,162 +17058,162 @@ function ff({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 		}
 		if (e.target.id === "phone-theme" && H("theme", () => t.setTheme(e.target.value)), e.target.id === "phone-lock-style" && H("lock-style", () => t.setLockStyle(e.target.value)), e.target.id === "wallpaper-file" && e.target.files[0]) {
 			let n = e.target.files[0], r = t.read().theme;
-			H("wallpaper", async () => d.upload(r, await Xu(n, M, 1600)));
+			H("wallpaper", async () => d.upload(r, await $u(n, M, 1600)));
 		}
 		if (e.target.id === "chat-background-file" && e.target.files[0]) {
-			let t = e.target.files[0], n = F.view === "group-profile" ? F.groupDraft : F.profileDraft;
-			H("chat-background", async () => d.uploadImage(await Xu(t, M, 1600)), (e) => {
+			let t = e.target.files[0], n = I.view === "group-profile" ? I.groupDraft : I.profileDraft;
+			H("chat-background", async () => d.uploadImage(await $u(t, M, 1600)), (e) => {
 				n.background = e;
 			});
 		}
 		if (e.target.matches(".avatar-picker input[type=\"file\"]") && e.target.files[0]) {
-			let t = e.target.files[0], n = e.target.closest(".group-form") ? F.groupDraft : F.profileDraft;
-			F.avatarMenuOpen = !1, H("avatar", async () => {
-				Ne = fd(ae, t);
+			let t = e.target.files[0], n = e.target.closest(".group-form") ? I.groupDraft : I.profileDraft;
+			I.avatarMenuOpen = !1, H("avatar", async () => {
+				Pe = hd(F, t);
 				try {
-					return await Ne.result;
+					return await Pe.result;
 				} finally {
-					Ne = null;
+					Pe = null;
 				}
 			}, (e) => {
 				e && (n.avatar = e, n.automaticAvatar = !1);
 			}).then(() => P.querySelector(".avatar-menu-toggle")?.focus({ preventScroll: !0 }));
 		}
 	}
-	function rn(e) {
+	function an(e) {
 		if (e.target.matches(".forum-comment-form")) {
 			e.preventDefault();
-			let t = e.target.dataset.forumPost, n = e.target.dataset.forumScope || "public", r = F.forumDrafts.get(t);
+			let t = e.target.dataset.forumPost, n = e.target.dataset.forumScope || "public", r = I.forumDrafts.get(t);
 			if (!r) return;
 			let i = { ...r };
 			H(`forum-comment:${t}`, () => a.publishComment(t, i, n), () => {
-				F.forumDrafts.get(t) === r && r.text === i.text && r.replyToId === i.replyToId && F.forumDrafts.delete(t);
+				I.forumDrafts.get(t) === r && r.text === i.text && r.replyToId === i.replyToId && I.forumDrafts.delete(t);
 			});
 			return;
 		}
 		let i = e.target.closest(".ls-reply-form");
 		if (i) {
 			e.preventDefault();
-			let t = i.dataset.liangshiReplyForm, n = F.liangshiReplyDrafts.get(t);
+			let t = i.dataset.liangshiReplyForm, n = I.liangshiReplyDrafts.get(t);
 			if (!n) return;
 			let r = { ...n };
 			H(`liangshi-reply:${t}`, () => s.publishReply(t, r), () => {
-				F.liangshiReplyDrafts.get(t) === n && n.text === r.text && n.replyToId === r.replyToId && F.liangshiReplyDrafts.delete(t);
+				I.liangshiReplyDrafts.get(t) === n && n.text === r.text && n.replyToId === r.replyToId && I.liangshiReplyDrafts.delete(t);
 			});
 			return;
 		}
 		if (e.preventDefault(), e.target.matches(".attachment-form")) {
-			let e = Oe(), t = F.view === "group-chat" ? r : n, i = F.attachment, a = {
+			let e = ke(), t = I.view === "group-chat" ? r : n, i = I.attachment, a = {
 				type: i,
-				[i]: { ...F.attachmentDraft }
+				[i]: { ...I.attachmentDraft }
 			};
-			H(`send:${e}`, () => F.view === "group-chat" ? t.sendCard(e, a, { replyToId: F.replyToId }) : t.sendCard(e, a), () => {
-				F.attachment = "", F.attachmentDraft = {}, F.replyToId = "", j();
+			H(`send:${e}`, () => I.view === "group-chat" ? t.sendCard(e, a, { replyToId: I.replyToId }) : t.sendCard(e, a), () => {
+				I.attachment = "", I.attachmentDraft = {}, I.replyToId = "", j();
 			});
 		}
 		if (e.target.matches(".composer") && P.querySelector("[data-action=\"send\"]")?.click(), e.target.matches(".social-comment-form")) {
-			let t = e.target.dataset.socialCommentForm, n = (F.socialDrafts.get(t) || "").trim();
+			let t = e.target.dataset.socialCommentForm, n = (I.socialDrafts.get(t) || "").trim();
 			if (!n) return;
 			H(`social-comment:${t}`, () => o.comment(t, n, { onPosted: (e) => {
-				e.id, (F.socialDrafts.get(t) || "").trim() === n && F.socialDrafts.delete(t), V();
+				e.id, (I.socialDrafts.get(t) || "").trim() === n && I.socialDrafts.delete(t), V();
 			} }), (e) => {
 				j();
 			});
 		}
 		if (e.target.matches(".ls-compose-form")) {
-			let e = F.liangshiDraft, t = { ...e };
+			let e = I.liangshiDraft, t = { ...e };
 			H(t.postId ? `liangshi-edit:${t.postId}` : "liangshi-publish", () => t.postId ? s.editUser(t.postId, t) : s.publishUser(t), (n) => {
-				F.view === "liangshi" && F.liangshiPage.kind === "compose" && F.liangshiDraft === e && e.text === t.text && e.imageDescription === t.imageDescription ? (F.liangshiTrail = [{
+				I.view === "liangshi" && I.liangshiPage.kind === "compose" && I.liangshiDraft === e && e.text === t.text && e.imageDescription === t.imageDescription ? (I.liangshiTrail = [{
 					page: {
 						kind: "feed",
 						tab: "mine"
 					},
 					scroll: 0
-				}], Ft({
+				}], It({
 					kind: "post",
 					id: n.id
 				}, !1)) : z({ text: t.postId ? "修改已保存。" : "微博已发布。" });
 			});
 		}
-		if (e.target.matches(".api-form") && H("api", () => Et() ? l.saveManual({ ...F.apiDraft }) : l.saveCurrent({ ...F.apiDraft }), () => {
-			Tt(), z({ text: "连接已保存。" });
+		if (e.target.matches(".api-form") && H("api", () => Dt() ? l.saveManual({ ...I.apiDraft }) : l.saveCurrent({ ...I.apiDraft }), () => {
+			Et(), z({ text: "连接已保存。" });
 		}), e.target.matches(".profile-form")) {
-			let e = { ...F.profileDraft }, n = F.editor, r = F.editId;
+			let e = { ...I.profileDraft }, n = I.editor, r = I.editId;
 			H("profile", () => n === "user" ? t.saveUserProfile(e) : t.saveContact(r, e), (e) => {
-				n === "user" ? F.view = "settings" : (F.contactId = e.id, F.view = "chat"), F.profileDraft = {}, j();
+				n === "user" ? I.view = "settings" : (I.contactId = e.id, I.view = "chat"), I.profileDraft = {}, j();
 			});
 		}
 		if (e.target.matches(".group-form")) {
 			let e = {
-				...F.groupDraft,
-				memberIds: [...F.groupDraft.memberIds]
-			}, n = F.groupEditId;
+				...I.groupDraft,
+				memberIds: [...I.groupDraft.memberIds]
+			}, n = I.groupEditId;
 			H("group-profile", () => t.saveGroup(n, e), (e) => {
-				F.groupId = e.id, F.view = "group-chat", F.groupDraft = {}, F.selectedMessage = "";
+				I.groupId = e.id, I.view = "group-chat", I.groupDraft = {}, I.selectedMessage = "";
 			});
 		}
 	}
-	let an = () => {
-		!N.hidden && ["calendar", "desktop"].includes(F.view) && V();
-	}, on = (e) => {
-		e.target.matches?.(".group-members-fold") && (F.groupMembersOpen = e.target.open);
-	}, sn = p.subscribe(() => {
+	let on = () => {
+		!N.hidden && ["calendar", "desktop"].includes(I.view) && V();
+	}, sn = (e) => {
+		e.target.matches?.(".group-members-fold") && (I.groupMembersOpen = e.target.open);
+	}, cn = p.subscribe(() => {
 		let e = P.querySelector("#particles-enabled");
 		e && (e.checked = p.particlesEnabled());
 		let t = P.querySelector("#font-css-url");
-		t && P.activeElement !== t && (t.value = p.fontPreference().cssUrl), N.hidden || oe.apply(), ot();
+		t && P.activeElement !== t && (t.value = p.fontPreference().cssUrl), N.hidden || ae.apply(), st();
 	});
-	return M.defaultView.addEventListener("st-sevendayscal:calendar-changed", an), P.addEventListener("keydown", Qt), P.addEventListener("pointerdown", Ye), P.addEventListener("compositionstart", Xe), P.addEventListener("compositionend", Ze), P.addEventListener("click", $t), P.addEventListener("input", tn), P.addEventListener("change", nn), P.addEventListener("submit", rn), P.addEventListener("toggle", on, !0), P.addEventListener("error", yt, !0), P.addEventListener("scroll", at, !0), M.addEventListener("pointerdown", Jt, !0), V(), oe.apply(), _t(), _?.ensureChecked(), {
+	return M.defaultView.addEventListener("st-sevendayscal:calendar-changed", on), P.addEventListener("keydown", $t), P.addEventListener("pointerdown", Xe), P.addEventListener("compositionstart", Ze), P.addEventListener("compositionend", Qe), P.addEventListener("click", en), P.addEventListener("input", nn), P.addEventListener("change", rn), P.addEventListener("submit", an), P.addEventListener("toggle", sn, !0), P.addEventListener("error", bt, !0), P.addEventListener("scroll", B, !0), M.addEventListener("pointerdown", Yt, !0), V(), ae.apply(), vt(), _?.ensureChecked(), {
 		get isOpen() {
 			return !N.hidden;
 		},
 		get isFrontmost() {
-			return wt();
+			return Tt();
 		},
 		isReading(e) {
-			return N.isConnected && !N.hidden && !I.isOpen && De() && Oe() === e;
+			return N.isConnected && !N.hidden && !we.isOpen && Oe() && ke() === e;
 		},
-		isReadingSocial: it,
-		notifyNotifications: B,
+		isReadingSocial: at,
+		notifyNotifications: ot,
 		openNotifications() {
-			I.open();
+			we.open();
 		},
 		invalidateNotifications() {
-			Te++, I.close({
+			Ee++, we.close({
 				immediate: !0,
 				restoreFocus: !1
-			}), tt();
+			}), nt();
 		},
-		cancelAvatarGesture: Ge,
-		close: Ct,
+		cancelAvatarGesture: Ke,
+		close: wt,
 		openAlbum() {
-			F.albumPage = "gallery", F.albumPath = "", kt("album");
+			I.albumPage = "gallery", I.albumPath = "", At("album");
 		},
 		invalidateAlbum() {
-			Qe.invalidate(), F.albumPage = "gallery", F.albumPath = "", F.albumScroll = 0, F.photo?.derived && (F.photo = null, Ce = null), F.view === "album" && Ct();
+			$e.invalidate(), I.albumPage = "gallery", I.albumPath = "", I.albumScroll = 0, I.photo?.derived && (I.photo = null, Ce = null), I.view === "album" && wt();
 		},
 		open() {
-			F.conflict = C.hasConflict?.(M) === !0, N.hidden && (F.view = "home", F.photo = null, F.attachment = ""), N.hidden = !1, oe.apply(), wt() || e.append(N), V(), _t(), vt(), se.refresh();
+			I.conflict = C.hasConflict?.(M) === !0, N.hidden && (I.view = "home", I.photo = null, I.attachment = ""), N.hidden = !1, ae.apply(), Tt() || e.append(N), V(), vt(), yt(), oe.refresh();
 		},
 		refreshTime() {
-			if (Ee.refresh(), !N.hidden && ((De() || [
+			if (De.refresh(), !N.hidden && ((Oe() || [
 				"inbox",
 				"calendar",
 				"desktop",
 				"album"
-			].includes(F.view)) && V(), F.view === "home")) {
+			].includes(I.view)) && V(), I.view === "home")) {
 				let e = T(), t = P.querySelector(".lock-weather");
 				t.title = e.source === "decoration" ? "装饰天气" : "构画剧情天气", t.lastElementChild.textContent = `${e.text} ${e.temperature}`;
 			}
 		},
 		dispose() {
-			ct(), dt(), Ge(), Te++, I.dispose(), Qe.dispose(), z(null), pe.close(), me.close(), ue.dispose(), $e?.dispose(), tt(), Ne?.close(), sn(), oe.dispose(), Ee.stop(), ke?.dispose(), ce.dispose(), le.dispose(), se.dispose(), Pe = null, Le = "", M.defaultView.removeEventListener("st-sevendayscal:calendar-changed", an), M.removeEventListener("pointerdown", Jt, !0), P.removeEventListener("keydown", Qt), P.removeEventListener("pointerdown", Ye), P.removeEventListener("compositionstart", Xe), P.removeEventListener("compositionend", Ze), P.removeEventListener("click", $t), P.removeEventListener("input", tn), P.removeEventListener("change", nn), P.removeEventListener("submit", rn), P.removeEventListener("toggle", on, !0), P.removeEventListener("error", yt, !0), P.removeEventListener("scroll", at, !0), N.remove(), re.remove();
+			lt(), ft(), Ke(), Ee++, we.dispose(), $e.dispose(), z(null), pe.close(), he.close(), ue.dispose(), tt?.dispose(), nt(), Pe?.close(), cn(), ae.dispose(), De.stop(), Ne?.dispose(), ce.dispose(), le.dispose(), se(), oe.dispose(), Le = null, Re = "", M.defaultView.removeEventListener("st-sevendayscal:calendar-changed", on), M.removeEventListener("pointerdown", Yt, !0), P.removeEventListener("keydown", $t), P.removeEventListener("pointerdown", Xe), P.removeEventListener("compositionstart", Ze), P.removeEventListener("compositionend", Qe), P.removeEventListener("click", en), P.removeEventListener("input", nn), P.removeEventListener("change", rn), P.removeEventListener("submit", an), P.removeEventListener("toggle", sn, !0), P.removeEventListener("error", bt, !0), P.removeEventListener("scroll", B, !0), N.remove(), re.remove();
 		}
 	};
 }
 //#endregion
 //#region src/wallpaper.js
-function pf({ host: e, store: t }) {
+function gf({ host: e, store: t }) {
 	let n = {
 		async uploadImage(t) {
 			let n = /^data:image\/webp;base64,(.+)$/.exec(t)?.[1];
@@ -17113,7 +17226,7 @@ function pf({ host: e, store: t }) {
 						image: n,
 						format: "webp",
 						ch_name: "pocket-phone",
-						filename: he()
+						filename: me()
 					})
 				});
 			} catch {
@@ -17140,9 +17253,121 @@ function pf({ host: e, store: t }) {
 	return n;
 }
 //#endregion
+//#region src/ui/fab-appearance.js
+function _f(e) {
+	return typeof e == "string" ? e.trim() : "";
+}
+var vf = Object.freeze({
+	day: Object.freeze({
+		panel: "#f6f8f8",
+		ink: "#22282b",
+		knot: "#a8322f"
+	}),
+	night: Object.freeze({
+		panel: "#1c2327",
+		ink: "#e7ecee",
+		knot: "#d9707a"
+	})
+}), yf = (e) => e === void 0 ? 1 : Math.min(1, Math.max(0, Number.parseFloat(e) / (e.endsWith("%") ? 100 : 1))), bf = (e, t = 1) => {
+	let n = e.map((e) => e.endsWith("%") ? Math.round(Math.min(100, Math.max(0, Number.parseFloat(e))) * 2.55) : Math.round(Math.min(255, Math.max(0, Number.parseFloat(e)))));
+	return {
+		value: `rgb(${n.join(", ")})`,
+		rgb: n,
+		alpha: t
+	};
+}, xf = (e, t) => {
+	let n = _f(t);
+	if (!n || n.toLowerCase() === "transparent") return null;
+	let r = /^#([\da-f]{3,8})$/iu.exec(n);
+	if (r) {
+		let e = r[1], t = e.length <= 4 ? [...e].map((e) => e + e).join("") : e;
+		if (![6, 8].includes(t.length)) return null;
+		let n = t.slice(0, 6), i = Number.parseInt(n, 16);
+		return {
+			value: `#${n}`,
+			rgb: [
+				i >> 16,
+				i >> 8 & 255,
+				i & 255
+			],
+			alpha: t.length === 8 ? Number.parseInt(t.slice(6), 16) / 255 : 1
+		};
+	}
+	let i = /^rgba?\(\s*([-+]?(?:\d*\.)?\d+%?)\s*(?:,|\s)\s*([-+]?(?:\d*\.)?\d+%?)\s*(?:,|\s)\s*([-+]?(?:\d*\.)?\d+%?)(?:\s*(?:,|\/)\s*([-+]?(?:\d*\.)?\d+%?))?\s*\)$/iu.exec(n);
+	if (i) return bf(i.slice(1, 4), yf(i[4]));
+	try {
+		let t = (e?.createElement?.("canvas"))?.getContext?.("2d");
+		if (!t || (t.fillStyle = "#010203", t.fillStyle = n, t.fillStyle === "#010203" && n.toLowerCase() !== "#010203")) return null;
+		t.clearRect(0, 0, 1, 1), t.fillRect(0, 0, 1, 1);
+		let [r, i, a, o] = t.getImageData(0, 0, 1, 1).data;
+		return {
+			value: `rgb(${r}, ${i}, ${a})`,
+			rgb: [
+				r,
+				i,
+				a
+			],
+			alpha: o / 255
+		};
+	} catch {
+		return null;
+	}
+}, Sf = ({ documentRef: e, windowRef: t }) => {
+	try {
+		let n = t?.getComputedStyle?.(e?.documentElement);
+		if (!n) return {};
+		let r = (e) => _f(n.getPropertyValue(e));
+		return {
+			body: r("--SmartThemeBodyColor"),
+			quote: r("--SmartThemeQuoteColor"),
+			bot: r("--SmartThemeBotMesBlurTintColor")
+		};
+	} catch {
+		return {};
+	}
+}, Cf = (e) => Math.min(255, Math.max(0, Number(e) || 0)), wf = (e) => e?.rgb ? .2126 * Cf(e.rgb[0]) + .7152 * Cf(e.rgb[1]) + .0722 * Cf(e.rgb[2]) : null, Tf = (e, t, n) => {
+	let r = xf(e, t), i = xf(e, n);
+	return !r || !i || r.alpha <= 0 ? n : r.alpha >= 1 ? r.value : `rgb(${r.rgb.map((e, t) => Math.round(e * r.alpha + i.rgb[t] * (1 - r.alpha))).join(", ")})`;
+};
+function Ef({ documentRef: e = globalThis.document, windowRef: t = e?.defaultView ?? globalThis } = {}) {
+	let n = Sf({
+		documentRef: e,
+		windowRef: t
+	}), r = xf(e, n.body), i = r ? (wf(r) ?? 0) > 127 ? "night" : "day" : null, a = t?.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "day" : "night", o = i ?? a, s = vf[o], c = (t, n) => xf(e, t)?.value ?? n;
+	return {
+		mode: "auto",
+		effectiveTheme: o,
+		hasHostSignal: !!i,
+		palette: {
+			ink: c(n.body, s.ink),
+			knot: c(n.quote, s.knot),
+			panel: Tf(e, n.bot, s.panel)
+		}
+	};
+}
+function Df({ documentRef: e = globalThis.document, windowRef: t = e?.defaultView ?? globalThis, onChange: n } = {}) {
+	let r = !1, i = null, a = () => r ? i : (i = Ef({
+		documentRef: e,
+		windowRef: t
+	}), n?.(i), i), o = t?.MutationObserver ?? globalThis.MutationObserver, s = typeof o == "function" && e?.documentElement ? new o(a) : null;
+	s?.observe?.(e.documentElement, {
+		attributes: !0,
+		attributeFilter: ["style", "class"]
+	});
+	let c = t?.matchMedia?.("(prefers-color-scheme: light)"), l = () => {
+		Ef({
+			documentRef: e,
+			windowRef: t
+		}).hasHostSignal || a();
+	};
+	return c?.addEventListener?.("change", l), a(), { destroy() {
+		r = !0, s?.disconnect?.(), c?.removeEventListener?.("change", l);
+	} };
+}
+//#endregion
 //#region src/ui/fab.js
-var mf = "tmt-fab-pos", hf = 36, gf = (e, t) => Math.max(0, Math.min(Math.max(0, t - hf), e));
-function _f({ onClick: e, documentRef: t = globalThis.document, windowRef: n = globalThis, storage: r = n.localStorage, storageKey: i = mf, id: a = "tmt-fab-host", label: o = "打开两三事（悬浮球）", offset: s = 0 } = {}) {
+var Of = "tmt-fab-pos", kf = 36, Af = (e, t) => Math.max(0, Math.min(Math.max(0, t - kf), e));
+function jf({ onClick: e, documentRef: t = globalThis.document, windowRef: n = globalThis, storage: r = n.localStorage, storageKey: i = Of, id: a = "tmt-fab-host", label: o = "打开两三事（悬浮球）", offset: s = 0 } = {}) {
 	let c = () => Number(n.innerWidth) <= 640 || n.matchMedia?.("(max-width: 640px)").matches, l = () => ({
 		width: Number(n.innerWidth) || 0,
 		height: Number(n.innerHeight) || 0
@@ -17150,7 +17375,7 @@ function _f({ onClick: e, documentRef: t = globalThis.document, windowRef: n = g
 	u.id = a, u.attachShadow({ mode: "open" });
 	let d = u.shadowRoot;
 	d.innerHTML = `<style>
-    :host{all:initial;isolation:isolate;text-shadow:none;--tmt-fab-primary:var(--SmartThemeQuoteColor,#397584);--tmt-fab-ink:var(--SmartThemeBodyColor,#222a29);--tmt-fab-surface:var(--SmartThemeBlurTintColor,#f3f1e8);--tmt-fab-border:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));--tmt-fab-glow:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));position:fixed;right:106px;top:calc(100dvh - 80px - 44px);z-index:2000000;touch-action:none}
+    :host{all:initial;isolation:isolate;text-shadow:none;--tmt-fab-primary:#a8322f;--tmt-fab-ink:#22282b;--tmt-fab-surface:#f6f8f8;--tmt-fab-border:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));--tmt-fab-glow:color-mix(in srgb,var(--tmt-fab-primary) 45%,var(--tmt-fab-surface));position:fixed;right:106px;top:calc(100dvh - 80px - 44px);z-index:2000000;touch-action:none}
     :host([hidden]){display:none!important}
     button{width:36px;height:36px;border:1.5px solid var(--tmt-fab-border);border-radius:50%;background:transparent;color:var(--tmt-fab-ink);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4);touch-action:none;display:grid;place-items:center;padding:0;opacity:.45;transition:transform .15s,box-shadow .15s,color .15s,background .15s,opacity .2s}
     button:hover{opacity:1;transform:scale(1.1);box-shadow:0 6px 20px rgba(0,0,0,.5)}
@@ -17177,7 +17402,7 @@ function _f({ onClick: e, documentRef: t = globalThis.document, windowRef: n = g
 	}, y = (e, t = "desktop") => {
 		let n = l();
 		if (!n.width || !n.height || !e) return;
-		let r = gf(e.x, n.width), i = gf(e.y, n.height);
+		let r = Af(e.x, n.width), i = Af(e.y, n.height);
 		u.style.left = `${r}px`, u.style.top = `${i}px`, u.style.right = "auto", t === "mobile" ? g = {
 			x: r,
 			y: i
@@ -17187,8 +17412,8 @@ function _f({ onClick: e, documentRef: t = globalThis.document, windowRef: n = g
 		};
 	}, b = () => {
 		let e = u.getBoundingClientRect(), t = l(), n = {
-			x: gf(e.left, t.width),
-			y: gf(e.top, t.height)
+			x: Af(e.left, t.width),
+			y: Af(e.top, t.height)
 		};
 		if (c()) {
 			g = n;
@@ -17223,32 +17448,43 @@ function _f({ onClick: e, documentRef: t = globalThis.document, windowRef: n = g
 		if (!p.dragging && Math.hypot(t, n) <= 5) return;
 		p.dragging = !0, e.preventDefault?.();
 		let r = l();
-		u.style.left = `${gf(p.origX + t, r.width)}px`, u.style.top = `${gf(p.origY + n, r.height)}px`, u.style.right = "auto";
+		u.style.left = `${Af(p.origX + t, r.width)}px`, u.style.top = `${Af(p.origY + n, r.height)}px`, u.style.right = "auto";
 	}, T = (e) => {
 		p && (m = p.dragging, p.dragging && b(), p = null, f.releasePointerCapture?.(e?.pointerId));
 	}, E = (e) => {
 		let t = e === !0;
 		return f.classList.toggle("busy", t), f.setAttribute("aria-busy", String(t)), t;
 	};
-	return E(!1), f.addEventListener("pointerdown", C), f.addEventListener("pointermove", w), f.addEventListener("pointerup", T), f.addEventListener("pointercancel", T), f.addEventListener("click", (t) => {
+	E(!1), f.addEventListener("pointerdown", C), f.addEventListener("pointermove", w), f.addEventListener("pointerup", T), f.addEventListener("pointercancel", T), f.addEventListener("click", (t) => {
 		if (m) {
 			t.preventDefault(), m = !1;
 			return;
 		}
 		e?.(t);
-	}), n.addEventListener?.("resize", S), x(), {
+	}), n.addEventListener?.("resize", S), x();
+	let D = ({ mode: e = "auto", effectiveTheme: t = "day", palette: n = {} } = {}) => {
+		u.setAttribute("data-theme-mode", e), u.setAttribute("data-effective-theme", t), n.knot && u.style.setProperty("--tmt-fab-primary", n.knot), n.ink && u.style.setProperty("--tmt-fab-ink", n.ink), n.panel && u.style.setProperty("--tmt-fab-surface", n.panel);
+	}, O = Df({
+		documentRef: t,
+		windowRef: n,
+		onChange: D
+	});
+	return {
 		host: u,
 		root: d,
 		button: f,
 		restore: x,
 		onResize: S,
 		setBusy: E,
-		destroy: () => n.removeEventListener?.("resize", S)
+		setAppearance: D,
+		destroy() {
+			O.destroy(), n.removeEventListener?.("resize", S);
+		}
 	};
 }
 //#endregion
 //#region src/entries.js
-function vf({ host: e, documentRef: t, open: n, toggle: r, defaults: i = {}, isEnabled: a = () => !0 }) {
+function Mf({ host: e, documentRef: t, open: n, toggle: r, defaults: i = {}, isEnabled: a = () => !0 }) {
 	let o = e.mode === "embedded", s = o ? "两三事 · 随卡" : "两三事", c = e.phoneSettingsKey || "pocketPhone", l = o ? {
 		setName: s,
 		command: e.openCommand
@@ -17264,7 +17500,7 @@ function vf({ host: e, documentRef: t, open: n, toggle: r, defaults: i = {}, isE
 		(e.key === "Enter" || e.key === " ") && (e.preventDefault(), d());
 	};
 	u.addEventListener("click", d), u.addEventListener("keydown", f);
-	let p = _f({
+	let p = jf({
 		documentRef: t,
 		windowRef: t.defaultView,
 		...o ? {
@@ -17293,7 +17529,7 @@ function vf({ host: e, documentRef: t, open: n, toggle: r, defaults: i = {}, isE
 		};
 	}, g = () => {
 		let t = h(), n = a(), r = e.readQuickReplies();
-		p.host.hidden = !t.fabShow || !n, t.qrShow && r && me(r, !0, {
+		p.host.hidden = !t.fabShow || !n, t.qrShow && r && I(r, !0, {
 			...l,
 			visible: n
 		}).catch((t) => e.reportError(t.message));
@@ -17309,7 +17545,7 @@ function vf({ host: e, documentRef: t, open: n, toggle: r, defaults: i = {}, isE
 			let r = t === "qrShow" ? e.readQuickReplies() : null;
 			if (t === "qrShow") {
 				if (n && !m) throw Error("当前酒馆没有提供快捷命令入口。");
-				await me(r, n, {
+				await I(r, n, {
 					...l,
 					visible: a()
 				});
@@ -17330,13 +17566,13 @@ function vf({ host: e, documentRef: t, open: n, toggle: r, defaults: i = {}, isE
 			u.focus({ preventScroll: !0 });
 		},
 		dispose({ preserveQuickReply: t = !1 } = {}) {
-			m?.(), _(), p.destroy(), p.host.remove(), u.removeEventListener("click", d), u.removeEventListener("keydown", f), u.remove(), o && !t && h().qrShow && me(e.readQuickReplies(), !1, l).catch(() => e.reportError("随卡快捷按钮移除失败，请在快速回复的“两三事 · 随卡”组中删除“手机”按钮。"));
+			m?.(), _(), p.destroy(), p.host.remove(), u.removeEventListener("click", d), u.removeEventListener("keydown", f), u.remove(), o && !t && h().qrShow && I(e.readQuickReplies(), !1, l).catch(() => e.reportError("随卡快捷按钮移除失败，请在快速回复的“两三事 · 随卡”组中删除“手机”按钮。"));
 		}
 	};
 }
 //#endregion
 //#region src/control.js
-function yf({ host: e, target: t }) {
+function Nf({ host: e, target: t }) {
 	let n = e.phoneSettingsKey || "pocketPhone", r = t.character?.avatar ? `character:${t.character.avatar}` : t.groupId ? `group:${t.groupId}` : `chat:${t.id}`, i = () => e.readSettings()[n]?.disabledCards?.[r] !== !0;
 	return {
 		isEnabled: i,
@@ -17364,8 +17600,8 @@ function yf({ host: e, target: t }) {
 }
 //#endregion
 //#region src/image-providers.js
-var bf = "generate-image-request", xf = "generate-image-response", Sf = (e) => String(e?.nameCN || e?.nameEN || "").split("|")[0].trim();
-function Cf({ host: e, baibai: t = () => globalThis.STBaiBaiImage, timeoutMs: n = 3e5 }) {
+var Pf = "generate-image-request", Ff = "generate-image-response", If = (e) => String(e?.nameCN || e?.nameEN || "").split("|")[0].trim();
+function Lf({ host: e, baibai: t = () => globalThis.STBaiBaiImage, timeoutMs: n = 3e5 }) {
 	let r = e.phoneSettingsKey || "pocketPhone", i = () => e.readSettings()["st-chatu8"] || {}, a = {
 		apiVersion: 1,
 		getBackendStatus() {
@@ -17380,7 +17616,7 @@ function Cf({ host: e, baibai: t = () => globalThis.STBaiBaiImage, timeoutMs: n 
 			let e = i();
 			return {
 				characters: Object.values(e.characterPresets || {}).flatMap((e) => {
-					let t = Sf(e), n = [
+					let t = If(e), n = [
 						"characterTraits",
 						"facialFeatures",
 						"upperBodySFW",
@@ -17397,7 +17633,7 @@ function Cf({ host: e, baibai: t = () => globalThis.STBaiBaiImage, timeoutMs: n 
 					}] : [];
 				}),
 				outfits: Object.values(e.outfitPresets || {}).flatMap((e) => {
-					let t = Sf(e);
+					let t = If(e);
 					return t && (e.upperBody || e.fullBody) ? [{
 						name: t,
 						tag: `$${JSON.stringify({
@@ -17410,15 +17646,15 @@ function Cf({ host: e, baibai: t = () => globalThis.STBaiBaiImage, timeoutMs: n 
 			};
 		},
 		async generate({ prompt: t, size: r }) {
-			let i = e.getEventSource(), a = `tmt:${he()}`, o = await new Promise((e, o) => {
+			let i = e.getEventSource(), a = `tmt:${me()}`, o = await new Promise((e, o) => {
 				let s = (t, n) => {
-					clearTimeout(l), i.removeListener(xf, c), t ? o(t) : e(n);
+					clearTimeout(l), i.removeListener(Ff, c), t ? o(t) : e(n);
 				}, c = (e) => {
 					e?.id === a && (e.success ? e.isVideo ? s(/* @__PURE__ */ Error("智绘姬返回了视频，请选择图片生图渠道。")) : s(null, e.imageData || e.imageUrl) : s(Error(e.error || "智绘姬没有生成成功，请检查其中的生图配置。")));
 				}, l = setTimeout(() => s(/* @__PURE__ */ Error("智绘姬生图等待超时，请检查渠道后重试。")), n);
-				i.on(xf, c);
+				i.on(Ff, c);
 				try {
-					Promise.resolve(i.emit(bf, {
+					Promise.resolve(i.emit(Pf, {
 						id: a,
 						prompt: t,
 						width: r === "landscape" ? 1216 : 832,
@@ -17437,7 +17673,7 @@ function Cf({ host: e, baibai: t = () => globalThis.STBaiBaiImage, timeoutMs: n 
 						image: s[2],
 						format: /^jpe?g$/i.test(s[1]) ? "jpg" : s[1].toLowerCase(),
 						ch_name: "pocket-phone",
-						filename: `generated-${he()}`
+						filename: `generated-${me()}`
 					})
 				});
 			} catch {
@@ -17480,8 +17716,8 @@ function Cf({ host: e, baibai: t = () => globalThis.STBaiBaiImage, timeoutMs: n 
 }
 //#endregion
 //#region src/phone-images.js
-var wf = Xa + "把手机照片描述转为绘图提示。结合sender辨明“我/自拍”的人物；只描述这张照片，不补写剧情。人物外观和衣着由柏宝绘角色库提供，prompt不自行编写这些特征。必须列出所有画面人物，库中缺少人物也要返回其姓名，不能为绕过缺档而省略。只输出JSON：{\"prompt\":\"场景、动作、构图的英文danbooru短标签，非空\",\"nl\":\"可选画面描述\",\"characters\":[\"画面中人物的准确姓名；有对应库条目时用库内姓名，无人物时为空\"],\"size\":\"portrait或landscape\"}。不输出说明或图片地址。";
-function Tf({ store: e, modelClient: t, files: n, host: r, providers: i = r ? Cf({ host: r }) : null, apiProvider: a = () => globalThis.STBaiBaiImage, assertEnabled: o = () => {}, onBusyChange: s = () => {}, defaultUser: c = "我" }) {
+var Rf = Xa + "把手机照片描述转为绘图提示。结合sender辨明“我/自拍”的人物；只描述这张照片，不补写剧情。人物外观和衣着由柏宝绘角色库提供，prompt不自行编写这些特征。必须列出所有画面人物，库中缺少人物也要返回其姓名，不能为绕过缺档而省略。只输出JSON：{\"prompt\":\"场景、动作、构图的英文danbooru短标签，非空\",\"nl\":\"可选画面描述\",\"characters\":[\"画面中人物的准确姓名；有对应库条目时用库内姓名，无人物时为空\"],\"size\":\"portrait或landscape\"}。不输出说明或图片地址。";
+function zf({ store: e, modelClient: t, files: n, host: r, providers: i = r ? Lf({ host: r }) : null, apiProvider: a = () => globalThis.STBaiBaiImage, assertEnabled: o = () => {}, onBusyChange: s = () => {}, defaultUser: c = "我" }) {
 	let l = (e) => ({
 		...e.userProfile,
 		name: e.userProfile?.name || c,
@@ -17546,7 +17782,7 @@ function Tf({ store: e, modelClient: t, files: n, host: r, providers: i = r ? Cf
 		let p = d.getBackendStatus();
 		if (!p.configured) throw Error(p.reason || `请先在${f}中完成生图设置。`);
 		let m = d.getCharacters(), h = u ? [] : m.characters || [], g = u ? [] : m.outfits || [], _ = g.length ? "如照片需要库中的服装，可附outfits数组，只填outfits给定的准确名称；没有对应就省略。" : "", v = jn(await t.complete({
-			system: wf.replaceAll("柏宝绘", f) + _ + (l ? "此图来自未绑定人物的路人账号，只允许无人风景或物品；characters必须为空，不能把人物照改说成风景。" : ""),
+			system: Rf.replaceAll("柏宝绘", f) + _ + (l ? "此图来自未绑定人物的路人账号，只允许无人风景或物品；characters必须为空，不能把人物照改说成风景。" : ""),
 			messages: [{
 				role: "user",
 				content: JSON.stringify({
@@ -17647,7 +17883,7 @@ function Tf({ store: e, modelClient: t, files: n, host: r, providers: i = r ? Cf
 			if (!c || c.image?.description !== u.image.description || d(e, t, c).key !== f.key) throw Error("回复、作者或配图已更新，图片未关联。");
 			let l = {
 				...c,
-				id: c.id || he(),
+				id: c.id || me(),
 				image: {
 					...c.image,
 					...h
@@ -17793,20 +18029,20 @@ function Tf({ store: e, modelClient: t, files: n, host: r, providers: i = r ? Cf
 }
 //#endregion
 //#region src/plugin-updates.js
-var Ef = () => /* @__PURE__ */ Error("无法识别两三事的安装位置，请到酒馆扩展页检查安装。");
-function Df({ moduleUrl: e, extensionTypes: t } = {}) {
+var Bf = () => /* @__PURE__ */ Error("无法识别两三事的安装位置，请到酒馆扩展页检查安装。");
+function Vf({ moduleUrl: e, extensionTypes: t } = {}) {
 	let n = new URL(e), r = n.pathname.match(/\/scripts\/extensions\/(third-party\/([^/]+))\//);
-	if (!r) throw Ef();
+	if (!r) throw Bf();
 	let i = decodeURIComponent(r[1]), a = decodeURIComponent(r[2]), o = t?.[i];
-	if (!["local", "global"].includes(o)) throw Ef();
+	if (!["local", "global"].includes(o)) throw Bf();
 	return {
 		extensionName: a,
 		global: o === "global",
 		baseUrl: new URL(`/scripts/extensions/${r[1]}/`, n).href
 	};
 }
-var Of = (e, t) => /* @__PURE__ */ Error(t === 403 ? "没有更新全局扩展的权限，请用管理员账号到酒馆扩展页更新。" : t === 404 ? "更新接口或安装目录不可用，请到酒馆扩展页确认安装及扩展功能已启用。" : t === 409 ? "更新未完成：检测到本地修改或版本冲突，请到酒馆扩展页处理后再更新。" : `${e}失败，请到酒馆扩展页检查后重试。`);
-function kf(e) {
+var Hf = (e, t) => /* @__PURE__ */ Error(t === 403 ? "没有更新全局扩展的权限，请用管理员账号到酒馆扩展页更新。" : t === 404 ? "更新接口或安装目录不可用，请到酒馆扩展页确认安装及扩展功能已启用。" : t === 409 ? "更新未完成：检测到本地修改或版本冲突，请到酒馆扩展页处理后再更新。" : `${e}失败，请到酒馆扩展页检查后重试。`);
+function Uf(e) {
 	let t = String(e.remoteUrl ?? "").replace(/^git@github\.com:/, "https://github.com/"), n;
 	try {
 		n = new URL(t);
@@ -17817,12 +18053,12 @@ function kf(e) {
 	let r = n.pathname.replace(/\.git\/?$/, "").split("/").filter(Boolean);
 	return r.length !== 2 || !e.currentBranchName ? null : `https://raw.githubusercontent.com/${r.map(encodeURIComponent).join("/")}/${encodeURIComponent(e.currentBranchName)}/`;
 }
-function Af(e, t) {
+function Wf(e, t) {
 	if (typeof t != "string" || !t.trim()) return null;
 	let n = new URL(t, e);
 	return n.href.startsWith(e) && !n.search && !n.hash ? n.href : null;
 }
-function jf({ moduleUrl: e = import.meta.url, extensionTypes: t = () => ({}), noticePath: n = "", fetchImpl: r = globalThis.fetch, headers: i = () => ({}) } = {}) {
+function Gf({ moduleUrl: e = import.meta.url, extensionTypes: t = () => ({}), noticePath: n = "", fetchImpl: r = globalThis.fetch, headers: i = () => ({}) } = {}) {
 	let a = Object.freeze({
 		status: "unchecked",
 		versionInfo: null,
@@ -17831,7 +18067,7 @@ function jf({ moduleUrl: e = import.meta.url, extensionTypes: t = () => ({}), no
 		a = Object.freeze(e);
 		for (let e of c) e(a);
 		return a;
-	}, u = async () => Df({
+	}, u = async () => Vf({
 		moduleUrl: e,
 		extensionTypes: await (typeof t == "function" ? t() : t)
 	}), d = async (e, t) => {
@@ -17846,15 +18082,15 @@ function jf({ moduleUrl: e = import.meta.url, extensionTypes: t = () => ({}), no
 				})
 			});
 		} catch {
-			throw Of(t);
+			throw Hf(t);
 		}
-		if (!o.ok) throw Of(t, o.status);
+		if (!o.ok) throw Hf(t, o.status);
 		try {
 			let e = await o.json();
 			if (!e || typeof e != "object" || Array.isArray(e)) throw Error();
 			return e;
 		} catch {
-			throw Of(t);
+			throw Hf(t);
 		}
 	}, f = () => (o = !0, s || (l({
 		...a,
@@ -17926,7 +18162,7 @@ function jf({ moduleUrl: e = import.meta.url, extensionTypes: t = () => ({}), no
 				message: e
 			});
 			try {
-				let e = t ? kf(a.versionInfo ?? {}) : (await u()).baseUrl;
+				let e = t ? Uf(a.versionInfo ?? {}) : (await u()).baseUrl;
 				if (!e) return i("此安装来源暂不支持读取公告，仍可更新。");
 				let o = t ? {
 					credentials: "omit",
@@ -17937,7 +18173,7 @@ function jf({ moduleUrl: e = import.meta.url, extensionTypes: t = () => ({}), no
 					if (!t.ok) throw Error();
 					s = (await t.json()).update_notice;
 				}
-				let c = Af(e, s);
+				let c = Wf(e, s);
 				if (!c) return i(t ? "更新来源尚未提供可用公告，仍可更新。" : "当前版本未提供更新公告。");
 				let l = await r(c, o);
 				if (!l.ok) throw Error();
@@ -17955,13 +18191,13 @@ function jf({ moduleUrl: e = import.meta.url, extensionTypes: t = () => ({}), no
 }
 //#endregion
 //#region src/embedded-updates.js
-var Mf = (e, t) => {
+var Kf = (e, t) => {
 	let n = t.split(".").map(Number), r = e.split(".").map(Number), i = r.findIndex((e, t) => e !== n[t]);
 	return i >= 0 && r[i] > n[i];
 };
-function Nf({ coreUrl: e = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js", releaseUrl: t = Oe(e), version: n, release: r, updateError: i = "", replaceCore: a, fetchImpl: o = globalThis.fetch } = {}) {
+function qf({ coreUrl: e = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@main/embed.js", releaseUrl: t = Oe(e), version: n, release: r, updateError: i = "", replaceCore: a, fetchImpl: o = globalThis.fetch } = {}) {
 	let s = r?.version === n ? r.update_notice || "" : Ee, c = Object.freeze({
-		status: r ? Mf(r.version, n) ? "available" : "stable" : i ? "error" : "unchecked",
+		status: r ? Kf(r.version, n) ? "available" : "stable" : i ? "error" : "unchecked",
 		versionInfo: r ?? null,
 		error: i
 	}), l = !!(r || i), u = null, d = /* @__PURE__ */ new Set(), f = (e) => {
@@ -17979,7 +18215,7 @@ function Nf({ coreUrl: e = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThin
 				fetchImpl: o
 			});
 			return f({
-				status: Mf(e.version, n) ? "available" : "stable",
+				status: Kf(e.version, n) ? "available" : "stable",
 				versionInfo: e,
 				error: ""
 			});
@@ -18056,20 +18292,20 @@ function Nf({ coreUrl: e = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThin
 }
 //#endregion
 //#region src/runtime.js
-function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n = document, qqjBridgeProvider: r, preset: i, coreUrl: a, release: o, updateError: s, replaceCore: c } = {}) {
+function Jf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n = document, qqjBridgeProvider: r, preset: i, coreUrl: a, release: o, updateError: s, replaceCore: c } = {}) {
 	re(t.readSettings(), t.saveSettings);
-	let l = t.mode === "embedded" ? Nf({
+	let l = t.mode === "embedded" ? qf({
 		coreUrl: a,
-		version: Wu,
+		version: qu,
 		release: o,
 		updateError: s,
 		replaceCore: c
-	}) : jf({
+	}) : Gf({
 		moduleUrl: import.meta.url,
 		extensionTypes: () => t.readExtensionTypes(),
 		headers: () => t.getRequestHeaders(),
 		noticePath: Ee
-	}), u = () => ({ ...j(t.readSettings()) }), d = i ? Be(i) : void 0, f = ts({ host: t }), p = Cf({ host: t }), m = sd({
+	}), u = () => ({ ...j(t.readSettings()) }), d = i ? Be(i) : void 0, f = ts({ host: t }), p = Lf({ host: t }), m = ud({
 		host: t,
 		documentRef: n
 	}), h = (e, t = {}) => ml({
@@ -18081,12 +18317,12 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 		Qc(n, (t.captureChat().metadata.pocketPhone || d)?.theme);
 	}
 	b();
-	let x = vf({
+	let x = Mf({
 		host: t,
 		documentRef: n,
 		open: A,
 		defaults: i?.entries,
-		isEnabled: () => yf({
+		isEnabled: () => Nf({
 			host: t,
 			target: t.captureChat()
 		}).isEnabled(),
@@ -18099,7 +18335,7 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 		if (r || ["quiet", "impersonate"].includes(e)) return;
 		let i = t.captureChat();
 		t.setPrompt("");
-		let a = yf({
+		let a = Nf({
 			host: t,
 			target: i
 		});
@@ -18124,7 +18360,7 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 	function O(e, n, r) {
 		let i = (e) => t.reportError(`主楼短信未能同步。${e.message || "请检查酒馆连接。"}`);
 		try {
-			if (yf({
+			if (Nf({
 				host: t,
 				target: e
 			}).isEnabled()) {
@@ -18141,7 +18377,7 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 		}
 	}
 	let k = t.onStoryChanged(() => {
-		let e = t.captureChat(), n = D(e) ? g : void 0, r = yf({
+		let e = t.captureChat(), n = D(e) ? g : void 0, r = Nf({
 			host: t,
 			target: e
 		});
@@ -18154,7 +18390,7 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 			return;
 		}
 		g?.dispose(), _ = e;
-		let i = yf({
+		let i = Nf({
 			host: t,
 			target: e
 		}), a, o = h(e, {
@@ -18192,7 +18428,7 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 			wrapperSettingsProvider: u,
 			memorySources: E
 		});
-		a = ff({
+		a = hf({
 			mount: n.documentElement,
 			store: o,
 			qqjBridgeProvider: r,
@@ -18237,7 +18473,7 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 				contextReader: k,
 				modelClient: b
 			}),
-			wallpaper: pf({
+			wallpaper: gf({
 				host: t,
 				store: o
 			}),
@@ -18257,7 +18493,7 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 			control: i,
 			isCurrentChat: () => D(t.captureChat()),
 			imageProviders: p,
-			images: Tf({
+			images: zf({
 				store: o,
 				modelClient: b,
 				files: f,
@@ -18266,7 +18502,7 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 				onBusyChange: T,
 				defaultUser: e.user
 			}),
-			readWeather: $u,
+			readWeather: nd,
 			onContextChange: () => t.setPrompt(""),
 			onThemeChange: (r) => {
 				D(e) && D(t.captureChat()) && Qc(n, r);
@@ -18291,4 +18527,4 @@ function Pf({ mode: e = "standalone", host: t = Ke({ mode: e }), documentRef: n 
 	};
 }
 //#endregion
-export { yf as createPhoneControl, Tf as createPhoneImageService, Pf as initialize };
+export { Nf as createPhoneControl, zf as createPhoneImageService, Jf as initialize };

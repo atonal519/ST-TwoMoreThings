@@ -100,7 +100,7 @@ try {
     const light = { color: 'rgb(32, 37, 37)', backgroundColor: 'rgb(244, 239, 231)', borderColor: 'rgb(115, 125, 117)' };
     const setHostTheme = async palette => {
       await page.evaluate(palette => {
-        for (const [key, value] of Object.entries({ '--SmartThemeBodyColor': palette.color, '--SmartThemeBlurTintColor': palette.backgroundColor, '--SmartThemeBorderColor': palette.borderColor, '--SmartThemeQuoteColor': palette.borderColor })) document.documentElement.style.setProperty(key, value);
+        for (const [key, value] of Object.entries({ '--SmartThemeBodyColor': palette.color, '--SmartThemeBlurTintColor': palette.backgroundColor, '--SmartThemeBotMesBlurTintColor': palette.backgroundColor, '--SmartThemeBorderColor': palette.borderColor, '--SmartThemeQuoteColor': palette.borderColor })) document.documentElement.style.setProperty(key, value);
       }, palette);
       await page.waitForTimeout(350);
     };

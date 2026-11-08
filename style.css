@@ -14,7 +14,7 @@
   --pp-text-font: var(--pp-custom-font, var(--pp-system-font));
   --pp-foreign: #596561;
   position: fixed; inset: 0; width: 100dvw; height: 100dvh; z-index: 2000001; display: block;
-  pointer-events: none; isolation: isolate; background: transparent; color: var(--pp-ink);
+  pointer-events: auto; isolation: isolate; background: transparent; color: var(--pp-ink);
   text-shadow: none !important; letter-spacing: normal; word-spacing: normal; text-transform: none;
   -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   font: 15px/1.6 var(--pp-text-font);
@@ -666,9 +666,10 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
 /* 千千结手机窗口边界已扣安全区，内部不重复留边。 */
 @media (max-width: 640px) {
   .phone-shell {
-    top: calc(20px + env(safe-area-inset-top, 0px)); left: 50%; right: auto; transform: translateX(-50%);
-    width: calc(100dvw - 20px); max-width: calc(100dvw - 20px);
-    height: calc(100dvh - 40px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    top: calc(var(--pp-window-top, 0px) + 20px + env(safe-area-inset-top, 0px));
+    left: calc(var(--pp-window-left, 0px) + var(--pp-window-width, 100dvw) / 2); right: auto; transform: translateX(-50%);
+    width: max(0px, calc(var(--pp-window-width, 100dvw) - 20px)); max-width: none;
+    height: max(0px, calc(var(--pp-window-height, 100dvh) - 40px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
   }
   .home-footer { margin-bottom: 13px; }
 }

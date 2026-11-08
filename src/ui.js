@@ -1,3 +1,4 @@
+import { bindOutsideClose } from './ui/panel-window.js';
 import { createSourcePermissionView } from './ui/source-permission-view.js';
 import { forumData, forumScope, circleProfile, sameCircleProfile } from './forum-scope.js';
 import { createUuid } from './uuid.js';
@@ -108,6 +109,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   mount.append(element);
   const appearanceFont = createAppearanceFontController({ appearance, root, element, documentRef: doc });
   const windowControls = createPhoneWindow(surface);
+  const unbindOutsideClose = bindOutsideClose({ target: element, panel: surface, close,
+    canClose: () => isFrontmost() && !root.querySelector('.phone-dialog-backdrop, .photo-viewer, [data-phone-overlay]'),
+  });
   const chatScroll = createChatScroll(root, {
     onEarlier: expandMessages, onPullStart: cancelAvatarGesture,
     canPull: () => !element.hidden && isFrontmost() && isCurrentChat() && !ui.photo && !ui.conflict && !notificationShade?.isOpen && !root.querySelector('[data-phone-overlay], .phone-action-popup'),
@@ -1625,6 +1629,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       clock.stop();
       particles?.dispose();
       chatScroll.dispose(); editing.dispose();
+      unbindOutsideClose();
       windowControls.dispose();
       lockImageNode = null;
       lockImageSrc = '';
