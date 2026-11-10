@@ -45,7 +45,7 @@ test('native dialog backdrop uses coordinates so dialog padding remains internal
 });
 
 
-test('foreign fixed shadow window remains interactive while ordinary host clicks dismiss', () => {
+test('foreign fixed shadow window remains interactive while outside blank dismisses', () => {
   const target = new Target(), ownHost = {}, foreignHost = {}, foreignRoot = { nodeType: 11, host: foreignHost };
   const panel = { getRootNode: () => ({ host: ownHost }), ownerDocument: { defaultView: { getComputedStyle: () => ({ position: 'fixed' }) } } };
   let closes = 0; layout.bindOutsideClose({ target, panel, close: () => closes++ });
@@ -53,4 +53,25 @@ test('foreign fixed shadow window remains interactive while ordinary host clicks
   assert.equal(closes, 0);
   for (const type of ['pointerdown', 'pointerup', 'click']) target.emit(type);
   assert.equal(closes, 1);
+});
+
+
+test('foreign standard dialogs and popup semantics retain clicks while fixed-body blank still dismisses', () => {
+  const target = new Target(), panel = { contains: () => false };
+  let closes = 0, blocked = 0;
+  layout.bindOutsideClose({ target, panel, close: () => closes++ });
+  const click = path => {
+    for (const type of ['pointerdown', 'pointerup', 'click']) target.emit(type, { composedPath: () => path,
+      preventDefault: () => blocked++, stopImmediatePropagation: () => blocked++ });
+  };
+  for (const selector of ['button', 'input', 'textarea', 'a[href]', 'label', 'summary', '[role~="button"]', '[tabindex]:not([tabindex="-1"])', 'dialog', 'select', 'input[list]', '[role~="dialog"]', '[role~="alertdialog"]', '[role~="menu"]', '[role~="listbox"]', '[role~="combobox"]', '[aria-haspopup]', '[popover]']) {
+    const popup = selector === '[popover]' ? { popover: 'auto', matches: value => value === ':popover-open' }
+      : selector === '[aria-haspopup]' ? { getAttribute: name => name === 'aria-haspopup' ? 'menu' : null }
+        : { matches: selectors => selectors.split(',').map(value => value.trim()).includes(selector === 'input[list]' ? 'input' : selector) };
+    click([{}, popup, target]);
+    assert.equal(closes, 0, selector); assert.equal(blocked, 0, selector);
+  }
+  const fixedBody = { matches: () => false, style: { position: 'fixed' } };
+  click([panel, fixedBody, target]); assert.equal(closes, 0, 'own panel remains internal');
+  click([fixedBody, target]); assert.equal(closes, 1, 'ordinary fixed ancestors are not foreign popups');
 });

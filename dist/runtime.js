@@ -11910,7 +11910,14 @@ function Bl({ target: e, panel: t, close: n, canClose: r = () => !0, nativeDialo
 			return e.clientX < n.left || e.clientX > n.left + n.width || e.clientY < n.top || e.clientY > n.top + n.height;
 		}
 		let n = e.composedPath?.(), r = t.getRootNode?.().host;
-		return !n?.some((e) => e?.nodeType === 11 && e.host !== r && t.ownerDocument?.defaultView?.getComputedStyle?.(e.host)?.position === "fixed") && !(n?.includes(t) ?? t.contains(e.target));
+		return !n?.some((e) => e?.matches?.("button,input,textarea,select,a[href],label,summary,[contenteditable]:not([contenteditable=\"false\"]),[tabindex]:not([tabindex=\"-1\"]),[role~=\"button\"],[role~=\"link\"],[role~=\"checkbox\"],[role~=\"radio\"],[role~=\"switch\"],[role~=\"textbox\"],dialog,[role~=\"dialog\"],[role~=\"alertdialog\"],[role~=\"menu\"],[role~=\"listbox\"],[role~=\"combobox\"]") || [
+			"true",
+			"menu",
+			"listbox",
+			"tree",
+			"grid",
+			"dialog"
+		].includes(e?.getAttribute?.("aria-haspopup")) || typeof e?.popover == "string" && e.matches?.(":popover-open") || e?.nodeType === 11 && e.host !== r && t.ownerDocument?.defaultView?.getComputedStyle?.(e.host)?.position === "fixed") && !(n?.includes(t) ?? t.contains(e.target));
 	}, s = (e) => {
 		a = e.button === 0 && e.isPrimary !== !1 && o(e) && r() ? {
 			id: e.pointerId,
@@ -12796,7 +12803,7 @@ function Gu({ value: e = "", theme: t, busy: n, chat: r = !1, preview: i, defaul
 }
 //#endregion
 //#region src/version.js
-var Ku = "0.6.4";
+var Ku = "0.6.5";
 //#endregion
 //#region src/ui/settings.js
 function qu(e, t, n) {

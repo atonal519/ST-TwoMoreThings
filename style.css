@@ -14,7 +14,7 @@
   --pp-text-font: var(--pp-custom-font, var(--pp-system-font));
   --pp-foreign: #596561;
   position: fixed; inset: 0; width: 100dvw; height: 100dvh; z-index: 2000001; display: block;
-  pointer-events: auto; isolation: isolate; background: transparent; color: var(--pp-ink);
+  pointer-events: none; isolation: isolate; background: transparent; color: var(--pp-ink);
   text-shadow: none !important; letter-spacing: normal; word-spacing: normal; text-transform: none;
   -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
   font: 15px/1.6 var(--pp-text-font);
