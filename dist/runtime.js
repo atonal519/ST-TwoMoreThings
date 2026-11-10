@@ -11909,15 +11909,8 @@ function Bl({ target: e, panel: t, close: n, canClose: r = () => !0, nativeDialo
 			let n = t.getBoundingClientRect();
 			return e.clientX < n.left || e.clientX > n.left + n.width || e.clientY < n.top || e.clientY > n.top + n.height;
 		}
-		let n = e.composedPath?.(), r = t.getRootNode?.().host;
-		return !n?.some((e) => e?.matches?.("button,input,textarea,select,a[href],label,summary,[contenteditable]:not([contenteditable=\"false\"]),[tabindex]:not([tabindex=\"-1\"]),[role~=\"button\"],[role~=\"link\"],[role~=\"checkbox\"],[role~=\"radio\"],[role~=\"switch\"],[role~=\"textbox\"],dialog,[role~=\"dialog\"],[role~=\"alertdialog\"],[role~=\"menu\"],[role~=\"listbox\"],[role~=\"combobox\"]") || [
-			"true",
-			"menu",
-			"listbox",
-			"tree",
-			"grid",
-			"dialog"
-		].includes(e?.getAttribute?.("aria-haspopup")) || typeof e?.popover == "string" && e.matches?.(":popover-open") || e?.nodeType === 11 && e.host !== r && t.ownerDocument?.defaultView?.getComputedStyle?.(e.host)?.position === "fixed") && !(n?.includes(t) ?? t.contains(e.target));
+		let n = e.composedPath?.(), r = t.getRootNode?.().host, a = n?.some((e) => e !== t && (e?.matches?.("dialog,[role~=\"dialog\"],[role~=\"alertdialog\"],[role~=\"menu\"],[role~=\"listbox\"],[role~=\"combobox\"]") || typeof e?.popover == "string" && e.matches?.(":popover-open")) || e?.nodeType === 11 && e.host !== r && t.ownerDocument?.defaultView?.getComputedStyle?.(e.host)?.position === "fixed"), o = n?.includes(t) ?? t.contains(e.target), s = o ? t.getBoundingClientRect?.() : null, c = s && (e.clientX < s.left || e.clientX > s.left + s.width || e.clientY < s.top || e.clientY > s.top + s.height);
+		return !a && (!o || c);
 	}, s = (e) => {
 		a = e.button === 0 && e.isPrimary !== !1 && o(e) && r() ? {
 			id: e.pointerId,
@@ -11942,8 +11935,8 @@ function Bl({ target: e, panel: t, close: n, canClose: r = () => !0, nativeDialo
 		["pointerup", l],
 		["pointercancel", u],
 		["click", (e) => {
-			let t = a?.up && !a.moved && o(e) && r();
-			u(), t && (e.preventDefault?.(), e.stopImmediatePropagation?.(), n());
+			let o = a?.up && !a.moved && r();
+			u(), o && ((i || e.composedPath?.().includes(t)) && (e.preventDefault?.(), e.stopImmediatePropagation?.()), n());
 		}]
 	];
 	for (let [t, n] of d) e.addEventListener(t, n, !0);
@@ -12803,7 +12796,7 @@ function Gu({ value: e = "", theme: t, busy: n, chat: r = !1, preview: i, defaul
 }
 //#endregion
 //#region src/version.js
-var Ku = "0.6.5";
+var Ku = "0.6.6";
 //#endregion
 //#region src/ui/settings.js
 function qu(e, t, n) {
@@ -15203,7 +15196,7 @@ function mf({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 	}), oe = hd(F), se = Bl({
 		target: M,
 		panel: F,
-		close: wt,
+		close: () => wt({ restoreFocus: !1 }),
 		canClose: () => M.defaultView.innerWidth <= 640 && Tt() && !P.querySelector(".phone-dialog-backdrop, .photo-viewer, [data-phone-overlay]")
 	}), ce = gd(P, {
 		onEarlier: Mt,
@@ -15780,11 +15773,11 @@ function mf({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 			tab: "mine"
 		}, I.liangshiTrail = []);
 	}
-	function wt() {
+	function wt({ restoreFocus: e = !0 } = {}) {
 		lt(), ft(), Ke(), we.close({
 			immediate: !0,
 			restoreFocus: !1
-		}), $e.leave(), Ct(), z(null), Pe?.close(), Yt(), nt(), oe.stop(), ce.stop(), N.hidden = !0, De.stop(), Ne?.dispose(), Ne = null, k?.();
+		}), $e.leave(), Ct(), z(null), Pe?.close(), Yt(), nt(), oe.stop(), ce.stop(), N.hidden = !0, De.stop(), Ne?.dispose(), Ne = null, e && k?.();
 	}
 	function Tt() {
 		if (N.hidden) return !1;

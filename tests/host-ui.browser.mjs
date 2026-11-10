@@ -124,6 +124,17 @@ try {
     check(`${kind}: open and edit do not call models or save data`, await page.evaluate(() => ({
       requests: previewHarness.requests.length, metadata: previewHarness.metadataSaves, settings: previewHarness.settingsSaves,
     })), { requests: 0, metadata: 0, settings: 0 });
+    await launcher.click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => {
+      const input = document.createElement('textarea'); input.id = 'host-input';
+      input.style.cssText = 'position:fixed;left:40px;bottom:0;width:260px;height:18px;z-index:1'; document.body.append(input);
+    });
+    await page.locator('#host-input').click();
+    check(`${kind}: mobile host input closes the phone`, await page.locator('.pocket-phone').evaluate(x => x.hidden), true);
+    check(`${kind}: outside close keeps host input focus`, await page.evaluate(() => document.activeElement?.id), 'host-input');
+    await page.locator('#host-input').press('x');
+    check(`${kind}: host input receives its first click`, await page.locator('#host-input').inputValue(), 'x');
     check(`${kind}: no runtime errors`, errors, []);
     await page.close();
   }

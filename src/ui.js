@@ -109,7 +109,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   mount.append(element);
   const appearanceFont = createAppearanceFontController({ appearance, root, element, documentRef: doc });
   const windowControls = createPhoneWindow(surface);
-  const unbindOutsideClose = bindOutsideClose({ target: doc, panel: surface, close,
+  const unbindOutsideClose = bindOutsideClose({ target: doc, panel: surface, close: () => close({ restoreFocus: false }),
     canClose: () => doc.defaultView.innerWidth <= 640 && isFrontmost() && !root.querySelector('.phone-dialog-backdrop, .photo-viewer, [data-phone-overlay]'),
   });
   const chatScroll = createChatScroll(root, {
@@ -583,7 +583,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.liangshiDraft = null;
     if (ui.liangshiPage.kind === 'compose') { ui.liangshiPage = { kind: 'feed', tab: 'mine' }; ui.liangshiTrail = []; }
   }
-  function close() {
+  function close({ restoreFocus = true } = {}) {
     cancelClearDialog();
     cancelFavoriteRemoval();
     cancelAvatarGesture();
@@ -600,7 +600,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     clock.stop();
     particles?.dispose();
     particles = null;
-    onClose?.();
+    if (restoreFocus) onClose?.();
   }
   function isFrontmost() {
     if (element.hidden) return false;
