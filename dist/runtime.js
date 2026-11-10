@@ -536,7 +536,7 @@ function we(e, t) {
 }
 //#endregion
 //#region src/release.js
-var Te = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@f3a5c271882925d8e379dac6ab69da225aebd30f/embed.js", Ee = "docs/updates-0.6.3.md";
+var Te = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@f3a5c271882925d8e379dac6ab69da225aebd30f/embed.js", Ee = "docs/updates-0.6.4.md";
 async function De({ url: e = "https://cdn.jsdelivr.net/gh/atonal519/ST-TwoMoreThings@latest/release.json", fetchImpl: t = globalThis.fetch, timeoutMs: n = 5e3 } = {}) {
 	let r = new AbortController(), i = setTimeout(() => r.abort(), n);
 	try {
@@ -11909,7 +11909,8 @@ function Bl({ target: e, panel: t, close: n, canClose: r = () => !0, nativeDialo
 			let n = t.getBoundingClientRect();
 			return e.clientX < n.left || e.clientX > n.left + n.width || e.clientY < n.top || e.clientY > n.top + n.height;
 		}
-		return !(e.composedPath?.().includes(t) ?? t.contains(e.target));
+		let n = e.composedPath?.(), r = t.getRootNode?.().host;
+		return !n?.some((e) => e?.nodeType === 11 && e.host !== r && t.ownerDocument?.defaultView?.getComputedStyle?.(e.host)?.position === "fixed") && !(n?.includes(t) ?? t.contains(e.target));
 	}, s = (e) => {
 		a = e.button === 0 && e.isPrimary !== !1 && o(e) && r() ? {
 			id: e.pointerId,
@@ -11935,13 +11936,13 @@ function Bl({ target: e, panel: t, close: n, canClose: r = () => !0, nativeDialo
 		["pointercancel", u],
 		["click", (e) => {
 			let t = a?.up && !a.moved && o(e) && r();
-			u(), t && n();
+			u(), t && (e.preventDefault?.(), e.stopImmediatePropagation?.(), n());
 		}]
 	];
-	for (let [t, n] of d) e.addEventListener(t, n);
+	for (let [t, n] of d) e.addEventListener(t, n, !0);
 	return () => {
 		u();
-		for (let [t, n] of d) e.removeEventListener(t, n);
+		for (let [t, n] of d) e.removeEventListener(t, n, !0);
 	};
 }
 //#endregion
@@ -12795,7 +12796,7 @@ function Gu({ value: e = "", theme: t, busy: n, chat: r = !1, preview: i, defaul
 }
 //#endregion
 //#region src/version.js
-var Ku = "0.6.3";
+var Ku = "0.6.4";
 //#endregion
 //#region src/ui/settings.js
 function qu(e, t, n) {
@@ -13398,56 +13399,66 @@ function md(e, t) {
 //#endregion
 //#region src/ui/window.js
 function hd(e) {
-	let t = e.ownerDocument.defaultView, n = t.matchMedia("(min-width: 641px)"), r = null, i = null;
-	function a(n, r, { width: i, height: a }) {
-		let o = zl(t);
-		e.style.left = `${Math.max(o.left + 10, Math.min(n, o.left + o.width - i - 10))}px`, e.style.top = `${Math.max(o.top + 10, Math.min(r, o.top + o.height - a - 10))}px`, e.style.right = "auto";
+	let t = e.ownerDocument.defaultView, n = e.getRootNode().host, r = t.matchMedia("(min-width: 641px)"), i = null, a = null;
+	function o(r, i, { width: a, height: o }) {
+		let s = zl(t), c = n.getBoundingClientRect();
+		e.style.left = `${Math.max(s.left + 10, Math.min(r, s.left + s.width - a - 10)) - c.left}px`, e.style.top = `${Math.max(s.top + 10, Math.min(i, s.top + s.height - o - 10)) - c.top}px`, e.style.right = "auto";
 	}
-	function o() {
-		if (!r) return;
-		let t = r.id;
-		r = null, e.classList.remove("is-dragging"), e.hasPointerCapture(t) && e.releasePointerCapture(t);
+	function s() {
+		if (!i) return;
+		let t = i.id;
+		i = null, e.classList.remove("is-dragging"), e.hasPointerCapture(t) && e.releasePointerCapture(t);
 	}
-	function s(t) {
-		if (!n.matches || t.button !== 0 || r || !t.target.closest(".phone-status") || t.target.closest("button")) return;
-		let i = e.getBoundingClientRect();
-		r = {
+	function c(t) {
+		if (!r.matches || t.button !== 0 || t.isPrimary === !1 || i || !t.target.closest(".phone-status") || t.target.closest("button")) return;
+		let n = e.getBoundingClientRect();
+		i = {
 			id: t.pointerId,
 			x: t.clientX,
 			y: t.clientY,
-			left: i.left,
-			top: i.top,
-			width: i.width,
-			height: i.height,
+			left: n.left,
+			top: n.top,
+			width: n.width,
+			height: n.height,
 			moved: !1
 		}, e.setPointerCapture(t.pointerId), t.preventDefault(), t.stopPropagation();
 	}
-	function c(t) {
-		if (!r || t.pointerId !== r.id) return;
-		let n = t.clientX - r.x, i = t.clientY - r.y;
-		!r.moved && Math.hypot(n, i) <= 5 || (r.moved = !0, e.classList.add("is-dragging"), a(r.left + n, r.top + i, r));
-	}
 	function l(t) {
-		if (t.pointerId === r?.id) {
-			if (t.type === "pointerup" && r.moved) {
+		if (!i || t.pointerId !== i.id) return;
+		if (t.pointerType === "mouse" && t.buttons === 0) {
+			s();
+			return;
+		}
+		let n = t.clientX - i.x, r = t.clientY - i.y;
+		!i.moved && Math.hypot(n, r) <= 5 || (i.moved = !0, e.classList.add("is-dragging"), o(i.left + n, i.top + r, i));
+	}
+	function u(t) {
+		if (t.pointerId === i?.id) {
+			if (t.type === "pointerup" && i.moved) {
 				let t = e.getBoundingClientRect();
-				i = {
+				a = {
 					left: t.left,
 					top: t.top
 				};
 			}
-			o();
+			s();
 		}
 	}
-	function u() {
-		let r = zl(t);
-		for (let t of [
-			"left",
-			"top",
-			"width",
-			"height"
-		]) e.style.setProperty(`--pp-window-${t}`, `${r[t]}px`);
-		if (!n.matches) {
+	function d() {
+		let i = zl(t);
+		Object.assign(n.style, {
+			position: "fixed",
+			left: "0px",
+			top: "0px",
+			right: "auto",
+			bottom: "auto",
+			width: `${i.width}px`,
+			height: `${i.height}px`
+		});
+		let s = n.getBoundingClientRect();
+		n.style.left = `${i.left - s.left}px`, n.style.top = `${i.top - s.top}px`;
+		for (let t of ["width", "height"]) e.style.setProperty(`--pp-window-${t}`, `${i[t]}px`);
+		if (!r.matches) {
 			for (let t of [
 				"left",
 				"top",
@@ -13457,29 +13468,29 @@ function hd(e) {
 			]) e.style.removeProperty(t);
 			return;
 		}
-		let o = Math.max(0, Math.min(360, r.width - 20)), s = Math.max(0, Math.min(600, r.height - 20));
-		e.style.width = `${o}px`, e.style.height = `${s}px`, a(i?.left ?? r.left + r.width - o - 20, i?.top ?? r.top + 80, {
-			width: o,
-			height: s
+		let c = Math.max(0, Math.min(360, i.width - 20)), l = Math.max(0, Math.min(600, i.height - 20));
+		e.style.width = `${c}px`, e.style.height = `${l}px`, o(a?.left ?? i.left + i.width - c - 20, a?.top ?? i.top + 70, {
+			width: c,
+			height: l
 		});
 	}
-	let d = () => {
-		o(), u();
-	}, f = [
-		["pointerdown", s],
-		["pointermove", c],
-		["pointerup", l],
-		["pointercancel", l],
-		["lostpointercapture", l]
+	let f = () => {
+		s(), d();
+	}, p = [
+		["pointerdown", c],
+		["pointermove", l],
+		["pointerup", u],
+		["pointercancel", u],
+		["lostpointercapture", u]
 	];
-	for (let [t, n] of f) e.addEventListener(t, n);
-	return t.addEventListener("resize", d), t.addEventListener("orientationchange", d), t.visualViewport?.addEventListener("resize", d), t.visualViewport?.addEventListener("scroll", d), {
-		stop: o,
-		refresh: u,
+	for (let [t, n] of p) e.addEventListener(t, n);
+	return t.addEventListener("resize", f), t.addEventListener("scroll", f), t.addEventListener("orientationchange", f), t.visualViewport?.addEventListener("resize", f), t.visualViewport?.addEventListener("scroll", f), d(), {
+		stop: s,
+		refresh: d,
 		dispose() {
-			o();
-			for (let [t, n] of f) e.removeEventListener(t, n);
-			t.removeEventListener("resize", d), t.removeEventListener("orientationchange", d), t.visualViewport?.removeEventListener("resize", d), t.visualViewport?.removeEventListener("scroll", d);
+			s();
+			for (let [t, n] of p) e.removeEventListener(t, n);
+			t.removeEventListener("resize", f), t.removeEventListener("scroll", f), t.removeEventListener("orientationchange", f), t.visualViewport?.removeEventListener("resize", f), t.visualViewport?.removeEventListener("scroll", f);
 		}
 	};
 }
@@ -15183,10 +15194,10 @@ function mf({ mount: e, store: t, messages: n, groups: r, directory: i, forum: a
 		element: N,
 		documentRef: M
 	}), oe = hd(F), se = Bl({
-		target: N,
+		target: M,
 		panel: F,
 		close: wt,
-		canClose: () => Tt() && !P.querySelector(".phone-dialog-backdrop, .photo-viewer, [data-phone-overlay]")
+		canClose: () => M.defaultView.innerWidth <= 640 && Tt() && !P.querySelector(".phone-dialog-backdrop, .photo-viewer, [data-phone-overlay]")
 	}), ce = gd(P, {
 		onEarlier: Mt,
 		onPullStart: Ke,

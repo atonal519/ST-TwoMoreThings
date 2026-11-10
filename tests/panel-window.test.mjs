@@ -43,3 +43,14 @@ test('native dialog backdrop uses coordinates so dialog padding remains internal
   click(35, 45); assert.equal(closes, 0);
   click(5, 5); assert.equal(closes, 1);
 });
+
+
+test('foreign fixed shadow window remains interactive while ordinary host clicks dismiss', () => {
+  const target = new Target(), ownHost = {}, foreignHost = {}, foreignRoot = { nodeType: 11, host: foreignHost };
+  const panel = { getRootNode: () => ({ host: ownHost }), ownerDocument: { defaultView: { getComputedStyle: () => ({ position: 'fixed' }) } } };
+  let closes = 0; layout.bindOutsideClose({ target, panel, close: () => closes++ });
+  for (const type of ['pointerdown', 'pointerup', 'click']) target.emit(type, { composedPath: () => [foreignRoot, foreignHost, target] });
+  assert.equal(closes, 0);
+  for (const type of ['pointerdown', 'pointerup', 'click']) target.emit(type);
+  assert.equal(closes, 1);
+});

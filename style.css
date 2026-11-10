@@ -55,8 +55,8 @@ h2 { font-size: 16px; font-weight: 550; }
 h3 { font-size: 14px; font-weight: 600; }
 /* 窗口几何沿用千千结默认值，内容页独立滚动。 */
 .phone-shell {
-  display: flex; flex-direction: column; position: fixed; pointer-events: auto;
-  top: clamp(10px, 80px, calc(100dvh - var(--pp-panel-height) - 10px)); right: 20px;
+  display: flex; flex-direction: column; position: absolute; pointer-events: auto;
+  top: clamp(10px, 70px, calc(100dvh - var(--pp-panel-height) - 10px)); right: 20px;
   width: 360px; max-width: calc(100dvw - 20px); height: var(--pp-panel-height);
   background: var(--pp-paper); border: 4px solid #141617; border-radius: 24px; overflow: hidden;
   box-shadow: 0 0 0 1px #515457, 0 12px 36px rgb(0 0 0 / 22%);
@@ -666,7 +666,7 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
 /* 手机主窗按可视窗口定位，安全区与外侧间距取较大值。 */
 @media (max-width: 640px) {
   .phone-shell {
-    top: calc(var(--pp-window-top, 0px) + max(40px, env(safe-area-inset-top, 0px)));
+    top: calc(var(--pp-window-top, 0px) + max(20px, env(safe-area-inset-top, 0px)));
     left: calc(var(--pp-window-left, 0px) + var(--pp-window-width, 100dvw) / 2); right: auto; transform: translateX(-50%);
     width: max(0px, calc(var(--pp-window-width, 100dvw) - 20px)); max-width: none;
     height: max(0px, calc(var(--pp-window-height, 100dvh) - max(40px, env(safe-area-inset-top, 0px)) - max(40px, env(safe-area-inset-bottom, 0px))));
@@ -947,3 +947,7 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
 .source-permission-settings .settings-input:focus{outline:none;border-color:var(--knot);box-shadow:inset 0 0 0 1px var(--knot)}
 .source-permission-settings .settings-hint{margin:-1px 0 0;line-height:1.6;color:var(--soft);font-size:var(--qqj-font-caption)}
 .source-permission-settings .source-permission-list{touch-action:pan-y}
+
+@media (min-width: 641px) {
+  :host { pointer-events: none; }
+}

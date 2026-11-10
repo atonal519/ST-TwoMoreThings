@@ -3,14 +3,16 @@ import { readPanelViewport } from './panel-window.js';
 // 窗口位置只属于当前 UI 实例；手机布局仍由 CSS 接管，不写入聊天或全局设置。
 export function createPhoneWindow(surface) {
   const win = surface.ownerDocument.defaultView;
+  const host = surface.getRootNode().host;
   const desktop = win.matchMedia('(min-width: 641px)');
   let gesture = null;
   let preferredPosition = null;
 
   function place(left, top, { width, height }) {
     const view = readPanelViewport(win);
-    surface.style.left = `${Math.max(view.left + 10, Math.min(left, view.left + view.width - width - 10))}px`;
-    surface.style.top = `${Math.max(view.top + 10, Math.min(top, view.top + view.height - height - 10))}px`;
+    const origin = host.getBoundingClientRect();
+    surface.style.left = `${Math.max(view.left + 10, Math.min(left, view.left + view.width - width - 10)) - origin.left}px`;
+    surface.style.top = `${Math.max(view.top + 10, Math.min(top, view.top + view.height - height - 10)) - origin.top}px`;
     surface.style.right = 'auto';
   }
   function stop() {
@@ -21,7 +23,7 @@ export function createPhoneWindow(surface) {
     if (surface.hasPointerCapture(id)) surface.releasePointerCapture(id);
   }
   function down(event) {
-    if (!desktop.matches || event.button !== 0 || gesture || !event.target.closest('.phone-status') || event.target.closest('button')) return;
+    if (!desktop.matches || event.button !== 0 || event.isPrimary === false || gesture || !event.target.closest('.phone-status') || event.target.closest('button')) return;
     const bounds = surface.getBoundingClientRect();
     gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height, moved: false };
     surface.setPointerCapture(event.pointerId);
@@ -30,6 +32,7 @@ export function createPhoneWindow(surface) {
   }
   function move(event) {
     if (!gesture || event.pointerId !== gesture.id) return;
+    if (event.pointerType === 'mouse' && event.buttons === 0) { stop(); return; }
     const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
     if (!gesture.moved && Math.hypot(dx, dy) <= 5) return;
     gesture.moved = true;
@@ -46,7 +49,12 @@ export function createPhoneWindow(surface) {
   }
   function refresh() {
     const view = readPanelViewport(win);
-    for (const property of ['left', 'top', 'width', 'height']) surface.style.setProperty(`--pp-window-${property}`, `${view[property]}px`);
+    Object.assign(host.style, { position: 'fixed', left: '0px', top: '0px', right: 'auto', bottom: 'auto', width: `${view.width}px`, height: `${view.height}px` });
+    // 宿主 html 的 transform 会改变 fixed 原点，补偿后仍对齐可视视口。
+    const origin = host.getBoundingClientRect();
+    host.style.left = `${view.left - origin.left}px`;
+    host.style.top = `${view.top - origin.top}px`;
+    for (const property of ['width', 'height']) surface.style.setProperty(`--pp-window-${property}`, `${view[property]}px`);
     if (!desktop.matches) {
       for (const property of ['left', 'top', 'right', 'width', 'height']) surface.style.removeProperty(property);
       return;
@@ -55,21 +63,24 @@ export function createPhoneWindow(surface) {
     const height = Math.max(0, Math.min(600, view.height - 20));
     surface.style.width = `${width}px`;
     surface.style.height = `${height}px`;
-    place(preferredPosition?.left ?? view.left + view.width - width - 20, preferredPosition?.top ?? view.top + 80, { width, height });
+    place(preferredPosition?.left ?? view.left + view.width - width - 20, preferredPosition?.top ?? view.top + 70, { width, height });
   }
   const resize = () => { stop(); refresh(); };
   const listeners = [['pointerdown', down], ['pointermove', move], ['pointerup', up], ['pointercancel', up], ['lostpointercapture', up]];
   for (const [type, handler] of listeners) surface.addEventListener(type, handler);
   win.addEventListener('resize', resize);
+  win.addEventListener('scroll', resize);
   win.addEventListener('orientationchange', resize);
   win.visualViewport?.addEventListener('resize', resize);
   win.visualViewport?.addEventListener('scroll', resize);
+  refresh();
   return {
     stop, refresh,
     dispose() {
       stop();
       for (const [type, handler] of listeners) surface.removeEventListener(type, handler);
       win.removeEventListener('resize', resize);
+      win.removeEventListener('scroll', resize);
       win.removeEventListener('orientationchange', resize);
       win.visualViewport?.removeEventListener('resize', resize);
       win.visualViewport?.removeEventListener('scroll', resize);

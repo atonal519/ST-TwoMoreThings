@@ -109,8 +109,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   mount.append(element);
   const appearanceFont = createAppearanceFontController({ appearance, root, element, documentRef: doc });
   const windowControls = createPhoneWindow(surface);
-  const unbindOutsideClose = bindOutsideClose({ target: element, panel: surface, close,
-    canClose: () => isFrontmost() && !root.querySelector('.phone-dialog-backdrop, .photo-viewer, [data-phone-overlay]'),
+  const unbindOutsideClose = bindOutsideClose({ target: doc, panel: surface, close,
+    canClose: () => doc.defaultView.innerWidth <= 640 && isFrontmost() && !root.querySelector('.phone-dialog-backdrop, .photo-viewer, [data-phone-overlay]'),
   });
   const chatScroll = createChatScroll(root, {
     onEarlier: expandMessages, onPullStart: cancelAvatarGesture,
