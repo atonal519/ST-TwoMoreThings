@@ -33,7 +33,7 @@ export function createEditingRenderer(surface) {
       const previous = held; held = null;
       if (restore && previous?.input.isConnected) { previous.input.focus({ preventScroll: true }); if (previous.start !== null) previous.input.setSelectionRange(previous.start, previous.end, previous.direction); }
     },
-    render(markup, sameRoute, preserved) {
+    render(markup, sameRoute, preserved, retainedInput) {
       const overlays = sameRoute && [...surface.children].filter(node => node.hasAttribute('data-phone-overlay'));
       if (overlays?.length) {
         const template = surface.ownerDocument.createElement('template'); template.innerHTML = markup;
@@ -42,7 +42,9 @@ export function createEditingRenderer(surface) {
         return;
       }
       const stable = sameRoute && preserved?.node?.isConnected && preserved.node.contains(root.activeElement) ? preserved : null;
-      const input = stable?.node || sameRoute && (held?.input.isConnected ? held.input : root.activeElement);
+      // A picker may own focus while its input still owns the native selection.
+      const active = root.activeElement;
+      const input = stable?.node || sameRoute && (held?.input.isConnected ? held.input : active?.matches?.('textarea, input') ? active : retainedInput?.isConnected ? retainedInput : active);
       const form = stable?.node || input?.matches?.('textarea, input:not([type="checkbox"]):not([type="file"]):not([type="radio"])') && input.closest(forms);
       if (!form || !surface.contains(form) || !input.closest('.phone-main')) { surface.innerHTML = markup; return; }
       const template = surface.ownerDocument.createElement('template'); template.innerHTML = markup;

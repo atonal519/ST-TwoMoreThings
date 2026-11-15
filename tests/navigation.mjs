@@ -5,5 +5,10 @@ export async function openApp(scope, label) {
   if (await unlock.isVisible()) await unlock.click();
   const desktop = scope.locator('.view-desktop');
   if (!await desktop.isVisible()) await scope.locator('.system-nav').getByRole('button', { name: '主页', exact: true }).click();
+  if (!await desktop.isVisible()) {
+    await scope.locator('.system-nav').getByRole('button', { name: '返回', exact: true }).click();
+    await scope.locator('.system-nav').getByRole('button', { name: '返回', exact: true }).click();
+  }
+  if (await desktop.locator('[data-desktop-target]').count()) await desktop.getByRole('button', { name: label === '查手机' ? '第2屏' : '第1屏', exact: true }).click();
   await desktop.getByRole('button', { name: label, exact: true }).click();
 }

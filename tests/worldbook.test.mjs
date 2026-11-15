@@ -48,3 +48,21 @@ test('every context consumer uses the same pre-load shared exclusion while retai
   }
   assert.deepEqual(loads, Array(10).fill('allowed'));
 });
+
+test('optional requiredNames retains only named allowed entries while default constant behavior is unchanged', async () => {
+  const entries = {
+    0: { constant: true, content: 'UNRELATED_CONSTANT' },
+    1: { constant: true, comment: '甲的档案', content: 'NAMED_CONSTANT' },
+    2: { key: ['乙'], content: 'KEYED_PROFILE' },
+    3: { key: ['甲'], selective: true, keysecondary: ['缺失次键'], content: 'SECONDARY_MUST_NOT_MATCH' },
+    4: { constant: true, content: '甲 DISABLED_PROFILE', disable: true },
+    5: { constant: true, content: '别名甲 RELATED_ALIAS' },
+  };
+  const loads = [], ctx = { chatId: 'test', chat: [], chatMetadata: {}, extensionSettings: { 'schedule-planner': { wiExcludeBooks: ['excluded'] } }, name1: '我', characters: [{ name: '甲' }], characterId: 0 };
+  const host = createHostAdapter({ contextProvider: () => ctx, worldInfoBindings: { getNames: () => ['excluded', 'allowed'], load: async name => { loads.push(name); assert.equal(name, 'allowed'); return { entries }; } } });
+  const target = host.captureChat(), filtered = await target.readWorldInfo({ scanText: '甲\n乙\n别名甲', requiredNames: ['甲', '乙', '别名甲'] });
+  assert.match(filtered, /NAMED_CONSTANT/); assert.match(filtered, /KEYED_PROFILE/); assert.match(filtered, /RELATED_ALIAS/);
+  assert.doesNotMatch(filtered, /UNRELATED_CONSTANT|DISABLED_PROFILE|SECONDARY_MUST_NOT_MATCH/);
+  assert.match(await target.readWorldInfo({ scanText: '甲\n乙' }), /UNRELATED_CONSTANT/);
+  assert.deepEqual(loads, ['allowed', 'allowed']); assert.equal(await target.readWorldInfo({ scanText: '甲', requiredNames: [] }), '');
+});

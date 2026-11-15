@@ -12,7 +12,7 @@ import { storySmsDisplayText } from '../story-sms.js';
 
 const inboxTime = message => [message?.storyDate, message?.timeLabel].filter(Boolean).join(' ');
 
-export function renderInbox(state, { ui, busy }) {
+export function renderInbox(state, { ui, busy, inspection = false, senderPeople = state.contacts }) {
   const entries = [...(state.groups || []).map(person => ({ kind: 'group', person })), ...state.contacts.map(person => ({ kind: 'contact', person }))]
     .map((entry, index) => {
       const thread = state.conversations[entry.person.id] || [], last = thread.at(-1), time = Date.parse(last?.createdAt);
@@ -21,11 +21,11 @@ export function renderInbox(state, { ui, busy }) {
     }).sort((a, b) => a.rank - b.rank || (a.rank === 0 ? b.time - a.time : 0) || a.index - b.index);
   const options = `<div class="inbox-options"><button type="button" class="icon-button" data-action="inbox-menu" aria-label="通讯录操作" aria-haspopup="menu" aria-expanded="${ui.inboxMenu}">${icon('plus')}</button></div>`;
   const rows = entries.map(({ kind, person, last, unread }) => {
-    const isGroup = kind === 'group', sender = isGroup && state.contacts.find(contact => contact.id === last?.speakerId);
+    const isGroup = kind === 'group', sender = isGroup && senderPeople.find(contact => contact.id === last?.speakerId);
     const preview = isGroup ? last
       ? `${last.role === 'user' ? '我' : displayName(sender || { name: '群成员' })}：${messageText(last)}`
       : `${person.memberIds.length + Number(person.userIsMember)} 位成员` : last ? messageText(last) : '';
-    return `<button type="button" class="contact-row" data-${kind}="${escape(person.id)}">
+    return `<button type="button" class="contact-row" ${inspection ? `data-inspect-thread="${escape(person.id)}"` : `data-${kind}="${escape(person.id)}"`}>
       ${avatar(person)}
       <span class="contact-copy">
         <span class="contact-title">
@@ -36,9 +36,9 @@ export function renderInbox(state, { ui, busy }) {
       </span>
     </button>`;
   }).join('');
-  return `${pageHeading('短信', options)}
+  return `${inspection ? '' : pageHeading('短信', options)}
     <div class="contact-list">${rows}</div>
-    ${!entries.length ? empty('还没有联系人') : ''}`;
+    ${!entries.length && !inspection ? empty('还没有联系人') : ''}`;
 }
 
 export function renderChatMenu(state, { ui, busy }) {
@@ -57,20 +57,22 @@ export function renderInboxMenu(busy) {
   return `${action('organize', busy.has('directory') ? '整理中…' : '整理通讯录', '', 'menu-item', busy.has('directory'))}${action('add-contact', '添加联系人', '', 'menu-item')}${action('add-group', '创建群聊', '', 'menu-item')}`;
 }
 
-function renderMessage(message, previous, next, { contact, user, selected, deleting, isGroup, busy, readOnly = false, state, ui, conversationId }) {
+export function renderMessage(message, previous, next, { contact, user, selected, deleting, isGroup, busy, readOnly = false, state, ui, conversationId, inspection = false, mirror = false }) {
   const mine = message.role === 'user';
   const party = item => item && item.type !== 'pat' && (item.speakerId || item.role);
   const hasPrev = party(previous) === party(message), hasNext = party(next) === party(message);
   const grouped = `${hasPrev ? ' grouped-top' : ''}${hasNext ? ' grouped-bottom' : ''}${previous && !hasPrev ? ' group-start' : ''}`;
   const chosen = selected === message.id;
   const ref = { app: 'messages', kind: 'message', conversationId, messageId: message.id, batchKey: message.batch?.key ?? 'legacy' };
-  const favorite = chosen ? favoriteAction(ref, favoriteFor(state, captureFavorite(state, ref, { defaultUser: ui.defaultUser })), busy.has(`favorite-add:${JSON.stringify(ref)}`), { message: true }) : '';
+  const favorite = chosen && !inspection ? favoriteAction(ref, favoriteFor(state, captureFavorite(state, ref, { defaultUser: ui.defaultUser })), busy.has(`favorite-add:${JSON.stringify(ref)}`), { message: true }) : '';
   if (message.type === 'pat') return `<div data-message-id="${escape(message.id)}" class="message-row pat-row${chosen ? ' is-selected' : ''}">
-    <div class="pat-copy"><button type="button" class="pat-message" data-message="${escape(message.id)}" aria-label="拍一拍：${escape(messageText(message))}" aria-expanded="${chosen}">${renderBilingual(message.text, message.translation, renderEmojiText)}</button>
-      ${chosen ? `<div class="message-actions" role="group" aria-label="短信操作">${favorite}</div>` : ''}
+    <div class="pat-copy"><button type="button" class="pat-message" ${inspection ? 'data-inspect-message' : 'data-message'}="${escape(message.id)}" aria-label="拍一拍：${escape(messageText(message))}" aria-expanded="${chosen}">${renderBilingual(message.text, message.translation, renderEmojiText)}</button>
+      ${chosen && !inspection ? `<div class="message-actions" role="group" aria-label="短信操作">${favorite}</div>` : ''}
     </div>
   </div>`;
-  const bubbleAttributes = message.type === 'image'
+  const bubbleAttributes = inspection
+    ? `data-inspect-message="${escape(message.id)}" aria-label="微信：${escape(messageText(message))}" aria-expanded="${chosen}"`
+    : message.type === 'image'
     ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" aria-busy="${busy.has(`image:${message.id}`)}" ${busy.has(`image:${message.id}`) ? 'disabled' : ''}`
     : `data-message="${escape(message.id)}" aria-label="短信：${escape(messageText(message))}" aria-expanded="${chosen}"`;
   const timestamp = message.timeLabel
@@ -80,15 +82,15 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
   const sender = isGroup && !mine ? state.contacts?.find(person => person.id === message.speakerId) || { name: '群成员' } : null;
   const avatarPerson = mine ? { tone: 'lilac', ...user } : isGroup ? sender : contact;
   const avatarId = mine ? '@user' : isGroup ? sender?.id : contact.id;
-  const canPat = avatarId && (!isGroup || contact.userIsMember && (avatarId === '@user' || contact.memberIds.includes(avatarId)));
-  const mentionId = isGroup && !mine ? sender?.id : '';
+  const canPat = !inspection && avatarId && (!isGroup || contact.userIsMember && (avatarId === '@user' || contact.memberIds.includes(avatarId)));
+  const mentionId = !inspection && isGroup && !mine ? sender?.id : '';
   const messageAvatar = canPat || mentionId ? `<button type="button" class="message-avatar${mentionId ? ' mention-avatar' : ''}" ${canPat ? `data-pat-target="${escape(avatarId)}"` : ''} ${mentionId ? `data-mention-id="${escape(mentionId)}"` : ''} aria-label="${mentionId ? `提及${escape(displayName(avatarPerson))}` : `双击拍一拍${mine ? '自己' : escape(displayName(avatarPerson))}`}"${canPat ? ' title="双击拍一拍"' : ''}>${avatar(avatarPerson, true)}</button>` : avatar(avatarPerson, true);
   const reply = isGroup ? replyContext(message, state.conversations?.[conversationId] || []) : undefined;
   const replyName = reply && !reply.missing ? displayName(reply.role === 'user' ? user : state.contacts.find(person => person.id === reply.speakerId) || { name: '已移除联系人' }) : '';
   const renderText = text => renderMentionText(text, groupPeople);
   const replyBlock = reply ? `<div class="message-reply${reply.missing ? ' is-missing' : ''}"><small>引用${replyName ? ` ${escape(replyName)}` : ''}</small>${reply.missing ? '<span>原消息已删除</span>' : renderBilingual(reply.messageText, reply.translation, renderText)}</div>` : '';
   const text = !message.type && message.source?.kind === 'main-story' ? storySmsDisplayText(message.text) : message.text;
-  const body = !message.type ? renderBilingual(text, message.translation, renderText) : renderCardBody(message, busy.has(`image:${message.id}`));
+  const body = !message.type ? renderBilingual(text, message.translation, renderText) : renderCardBody(message, busy.has(`image:${message.id}`), { readOnly: inspection });
   return `<div data-message-id="${escape(message.id)}" class="message-row ${mine ? 'is-mine' : 'is-theirs'}${chosen ? ' is-selected' : ''}${!hasNext && message.timeLabel ? ' has-time' : ''}${grouped}">
     ${messageAvatar}
     <div class="message-body">
@@ -96,13 +98,13 @@ function renderMessage(message, previous, next, { contact, user, selected, delet
         ${isGroup && !mine && !hasPrev ? `<span class="message-sender">${escape(displayName(sender || contact))}</span>` : ''}
         <div class="bubble-line">
           <button type="button" class="bubble ${message.type ? `${message.type}-message` : ''}" ${bubbleAttributes}>${replyBlock}${body}</button>
-          ${chosen ? `<div class="message-actions" role="group" aria-label="短信操作">
+          ${chosen && !(inspection && mirror) ? `<div class="message-actions" role="group" aria-label="短信操作">
             ${favorite}
             ${isGroup && !readOnly ? `<button type="button" class="message-action message-reply-action" data-action="reply-message" data-message-target="${escape(message.id)}">${icon('message-reply')}<span>引用</span></button>` : ''}
-            <button type="button" class="message-action message-delete danger" data-action="delete-message" data-message-target="${escape(message.id)}" aria-label="删除这条短信" ${deleting ? 'disabled' : ''}>${icon('message-delete')}<span>删除</span></button>
+            <button type="button" class="message-action message-delete danger" data-action="${inspection ? 'inspect-delete' : 'delete-message'}" data-message-target="${escape(message.id)}" aria-label="删除这条短信" ${deleting ? 'disabled' : ''}>${icon('message-delete')}<span>删除</span></button>
           </div>` : ''}
         </div>
-        ${renderCardActions(message, { readOnly, busy, selected: chosen })}
+        ${inspection ? '' : renderCardActions(message, { readOnly, busy, selected: chosen })}
         ${timestamp}
       </div>
     </div>

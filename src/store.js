@@ -12,6 +12,7 @@ import { assignIdentityOwner, isUserIdentity, assertIdentitySnapshot } from './i
 import { archiveNotifications, initializeNotificationHistory } from './notifications.js';
 import { findStorySmsPeople, storySmsBlockMatches, storySmsSourceRows } from './story-sms.js';
 import { forumScope, circleProfile, sameCircleProfile } from './forum-scope.js';
+import { readPhotoWall } from './photowall.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
 const fillDefaultAvatars = people => {
@@ -60,6 +61,55 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   }
   const store = {
     read,
+    updatePhotoWall(change) { return update(state => { assertEnabled(); return { ...state, photoWall: change(readPhotoWall(state)) }; }); },
+    saveInspectionOwner(id, draft) {
+      const ownerId = id || `inspect-owner:${createUuid()}`;
+      const profile = { name: text(draft.name), personality: text(draft.personality) };
+      return update(state => {
+        assertEnabled();
+        if (!profile.name) throw new Error('请填写手机主人的姓名。');
+        const userNames = [target.user, state.userProfile?.name, state.userProfile?.nickname, '我', '用户', 'user', ...state.contacts.filter(person => isUserIdentity(state, person.id)).flatMap(person => [person.name, person.nickname])];
+        if (userNames.filter(Boolean).includes(profile.name)) throw new Error('请选择用户以外的人物作为手机主人。');
+        const domain = state.inspectPhone || { owners: {} }, previous = domain.owners[ownerId];
+        if (id && (!previous || state.contacts.some(person => person.id === id) || !previous.profile && !id.startsWith('card:'))) throw new Error('这份手机记录已不存在，请重新选择。');
+        const owner = { people: [], conversations: [], ...previous, profile };
+        return { ...state, inspectPhone: { ...domain, owners: { ...domain.owners, [ownerId]: owner } } };
+      }).then(() => ({ id: ownerId, ...profile }));
+    },
+    appendInspection(ownerId, batch, validate) {
+      return update(state => {
+        assertEnabled(); validate?.();
+        const domain = state.inspectPhone || { owners: {} };
+        const previous = domain.owners[ownerId] || { people: [], conversations: [] };
+        const conversations = [...previous.conversations];
+        for (const thread of batch.conversations) {
+          const index = conversations.findIndex(item => item.id === thread.id);
+          if (index < 0) conversations.push(thread);
+          else conversations[index] = { ...conversations[index], messages: [...conversations[index].messages, ...thread.messages] };
+        }
+        const owner = { ...previous, people: [...previous.people, ...batch.people], conversations };
+        return { ...state, inspectPhone: { ...domain, owners: { ...domain.owners, [ownerId]: owner } } };
+      });
+    },
+    deleteInspectionConversation(ownerId, threadId) {
+      return update(state => {
+        assertEnabled();
+        const domain = state.inspectPhone, owner = domain?.owners?.[ownerId];
+        if (!owner?.conversations.some(thread => thread.id === threadId)) return state;
+        const conversations = owner.conversations.filter(thread => thread.id !== threadId);
+        return { ...state, inspectPhone: { ...domain, owners: { ...domain.owners, [ownerId]: { ...owner, conversations } } } };
+      });
+    },
+    deleteInspectionMessage(ownerId, threadId, messageId) {
+      return update(state => {
+        assertEnabled();
+        const domain = state.inspectPhone, owner = domain?.owners?.[ownerId];
+        const thread = owner?.conversations.find(item => item.id === threadId);
+        if (!thread?.messages.some(item => item.id === messageId)) return state;
+        const conversations = owner.conversations.map(item => item.id === threadId ? { ...item, messages: item.messages.filter(message => message.id !== messageId) } : item);
+        return { ...state, inspectPhone: { ...domain, owners: { ...domain.owners, [ownerId]: { ...owner, conversations } } } };
+      });
+    },
     readSaved: () => saving.then(read),
     addFavorite(ref, options) {
       const candidate = captureFavorite(read(), ref, options);
@@ -78,9 +128,10 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         return favorites.length === (state.favorites || []).length ? state : { ...state, favorites };
       });
     },
-    saveGeneratedPhoto(photo, change) {
+    saveGeneratedPhoto(photo, change, validateSave) {
       let sourceError;
       return update(state => {
+        validateSave?.();
         let next = state;
         try { next = change(state); } catch (error) { sourceError = error; }
         return rememberAlbumPhotos(next, [sourceError ? photo : findAlbumPhoto(next, photo.path) || photo]);
@@ -251,9 +302,17 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         const forum = state.forum && { ...state.forum, posts: state.forum.posts.map(row => clear(row)), ...(state.forum.circle ? { circle: { ...state.forum.circle, posts: state.forum.circle.posts.map(row => clear(row)) } } : {}) };
         const liangshi = state.liangshi && { ...state.liangshi, posts: state.liangshi.posts.map(row => clear(row)) };
         const favorites = state.favorites?.map(entry => { const snapshot = clear(entry.snapshot); return snapshot === entry.snapshot ? entry : { ...entry, snapshot }; });
+        let photoWall = state.photoWall;
+        if (photoWall) {
+          const photos = photoWall.photos.filter(photo => !photo.missing && !missing.has(imagePath(photo.path)));
+          if (photos.length !== photoWall.photos.length) {
+            changed = true;
+            photoWall = { ...photoWall, photos, desktopPhotoId: photos.some(photo => photo.id === photoWall.desktopPhotoId) ? photoWall.desktopPhotoId : '' };
+          }
+        }
         const albumPhotos = state.albumPhotos?.filter(photo => !missing.has(imagePath(photo.path)));
         if (albumPhotos?.length !== state.albumPhotos?.length) changed = true;
-        return changed ? { ...state, conversations, ...(social ? { social } : {}), ...(forum ? { forum } : {}), ...(liangshi ? { liangshi } : {}), ...(albumPhotos ? { albumPhotos } : {}), ...(favorites ? { favorites } : {}) } : state;
+        return changed ? { ...state, ...(photoWall ? { photoWall } : {}), conversations, ...(social ? { social } : {}), ...(forum ? { forum } : {}), ...(liangshi ? { liangshi } : {}), ...(albumPhotos ? { albumPhotos } : {}), ...(favorites ? { favorites } : {}) } : state;
       });
     },
     respondTransfer(id, messageId, status, actorId, batch, identityOwners, remarkForUser) {

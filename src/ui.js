@@ -1,14 +1,19 @@
+import { readPhotoWall, characterKey } from './photowall.js';
+import { renderPhotoWall, renderCharacterOptions, photoWallImage } from './ui/photowall.js';
+import { renderInspection, INSPECT_LOADING_DURATION_MS } from './ui/inspect-phone.js';
+import { inspectionThreads } from './inspect-phone.js';
 import { bindOutsideClose } from './ui/panel-window.js';
 import { createSourcePermissionView } from './ui/source-permission-view.js';
 import { forumData, forumScope, circleProfile, sameCircleProfile } from './forum-scope.js';
 import { createUuid } from './uuid.js';
 import { renderFavorites, renderFavoriteDetail } from './ui/favorites.js';
-import { avatar, icon, refKey, renderAvatarMenu, escape as escapeHtml } from './ui/shared.js';
+import { action, avatar, icon, refKey, renderAvatarMenu, escape as escapeHtml } from './ui/shared.js';
 import { renderHome } from './ui/home.js';
 import { createPhoneClock } from './ui/status.js';
 import { renderFeedback, renderShell } from './ui/shell.js';
 import { renderDesktop } from './ui/desktop.js';
 import { renderInbox, renderChat, renderChatMenu, renderInboxMenu } from './ui/messages.js';
+import { renderAttachments } from './ui/cards.js';
 import { renderForum, renderPost, renderForumMenu } from './ui/forum.js';
 import { forumComments } from './forum.js';
 import { renderSettings, renderSettingsVersion, renderStorySmsInstall } from './ui/settings.js';
@@ -61,10 +66,16 @@ const apps = [
   { id: 'album', label: '相册', view: 'album' },
   { id: 'settings', label: '设置', view: 'settings' },
   { id: 'favorites', label: '收藏夹', view: 'favorites' },
+  { id: 'inspect-phone', label: '查手机', view: 'inspect-phone' },
 ];
 const pages = {
+  'inspect-phone': renderInspection,
+  'inspect-chat': renderInspection,
+  'inspect-desktop': renderInspection,
+  'inspect-wechat': renderInspection,
   home: renderHome,
   desktop: renderDesktop,
+  photowall: renderPhotoWall,
   inbox: renderInbox,
   chat: renderChat,
   'group-chat': renderChat,
@@ -84,12 +95,15 @@ const pages = {
   'favorite-detail': renderFavoriteDetail,
 };
 
-export function mountPhone({ mount, store, messages, groups, directory, forum, social, liangshi, sourcePermissions, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenNotifications }) {
+export function mountPhone({ mount, store, messages, inspectPhone, photoWall, groups, directory, forum, social, liangshi, sourcePermissions, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onError, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenNotifications }) {
   const doc = mount.ownerDocument;
+  let openingFocus = doc.activeElement;
   const element = doc.createElement('div');
   element.id = mode === 'embedded' ? 'pocket-phone-card-host' : 'pocket-phone-host';
   element.dataset.mode = mode || 'standalone';
   element.className = 'pocket-phone';
+  // Shadow 内的外链 CSS 不阻塞绘制，主样式就绪前不显示窗口。
+  element.style.display = 'none';
   const root = element.attachShadow({ mode: 'open' });
   const fontStyle = doc.createElement('style');
   fontStyle.dataset.pocketPhoneFont = '';
@@ -101,6 +115,15 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const stylesheet = doc.createElement('link');
   stylesheet.rel = 'stylesheet';
   stylesheet.href = phoneUrl('style.css');
+  stylesheet.onload = () => {
+    element.style.removeProperty('display'); windowControls.refresh();
+    if (ui.conflict && !element.hidden && isFrontmost() && doc.activeElement === openingFocus) root.querySelector('[data-action="conflict-continue"]').focus({ preventScroll: true });
+  };
+  stylesheet.onerror = () => {
+    stylesheet.remove();
+    close({ restoreFocus: false });
+    onError?.('手机样式加载失败，请重新打开手机重试。');
+  };
   const surface = doc.createElement('div');
   surface.className = 'phone-shell';
   surface.setAttribute('role', 'region');
@@ -125,6 +148,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   const ui = {
     view: 'home', feedback: null, defaultUser, conflict: control.hasConflict?.(doc) === true,
     contactId: '', groupId: '', postId: '',
+    inspectOwnerId: '', inspectThreadId: '', inspectSelectedMessage: '', inspectLoading: false, desktopPage: 0,
     drafts: new Map(), visibleMessages: 60, batch: null,
     historyOpen: false, visibleHistory: 60,
     inboxMenu: false, chatMenu: false, selectedMessage: '',
@@ -141,6 +165,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     calendarOffset: 0, calendarDay: null,
     replyToId: '',
     albumPage: 'gallery', albumPath: '', albumScroll: 0,
+    photoWallCharacters: [], photoWallPhotoId: '',
     favoriteId: '', favoriteFilter: '', favoriteScroll: 0,
   };
   const actionMenu = createPhoneActionMenu({ root, onClose: () => {
@@ -150,10 +175,12 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   } });
   const busy = new Set();
   let clearDialog, favoriteRemoveDialog;
+  let inspectTimer;
   let renderedRoute = '', apiEditor = 0, renderedApiEditor = 0, photoReturn = null;
   if (!control.isEnabled()) ui.view = 'settings';
   let notificationShade, notificationsSuppressed = false, notificationEpoch = 0;
   const clock = createPhoneClock({ root, element, readTime, onRefresh: value => notificationShade?.updateClock(value) });
+  const inInspectedPhone = () => ['inspect-desktop', 'inspect-wechat', 'inspect-chat'].includes(ui.view);
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
   let particles = null, avatarCropper = null, lockImageNode = null, lockImageSrc = '', noticeTimer, feedbackTimer;
@@ -218,7 +245,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   });
   notificationShade = createNotificationShade({ root, surface, readState: store.read,
     initialize: () => store.initializeNotifications(),
-    canOpen: () => element.isConnected && !element.hidden && control.isEnabled() && !ui.conflict && !ui.photo && !root.querySelector('.phone-dialog-backdrop'),
+    canOpen: () => element.isConnected && !element.hidden && !inInspectedPhone() && control.isEnabled() && !ui.conflict && !ui.photo && !root.querySelector('.phone-dialog-backdrop'),
     onBeforeOpen: () => { editing.hold(); dismissMenus(); clock.refresh(); },
     onClose: ({ restoreFocus }) => editing.release(restoreFocus),
     onClear: async () => { notificationsSuppressed = true; dismissPhoneNotice(); try { await store.clearNotifications(); root.querySelector('.lock-notifications')?.replaceChildren(); } finally { notificationsSuppressed = false; } },
@@ -244,7 +271,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     doc.defaultView.clearTimeout(feedbackTimer);
     if (!element.isConnected || element.hidden && !feedback?.error) feedback = null;
     ui.feedback = feedback;
-    const current = surface.querySelector('.feedback'), markup = renderFeedback(feedback);
+    const current = surface.querySelector('.feedback'), markup = ui.view === 'inspect-desktop' && ui.inspectLoading && !ui.conflict ? '' : renderFeedback(feedback);
     if (current) current.outerHTML = markup;
     else if (markup) {
       const modal = ui.conflict && surface.querySelector(':scope > .phone-dialog-backdrop');
@@ -316,7 +343,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       const tab = kind === 'liangshi-following' ? 'following' : kind === 'liangshi-hot' ? 'hot' : 'square';
       return ui.view !== 'liangshi' || ui.liangshiPage.kind !== 'feed' || ui.liangshiPage.tab !== tab;
     });
-    if (eligible.length) pushPhoneNotice(eligible.at(-1));
+    if (eligible.length && !inInspectedPhone()) pushPhoneNotice(eligible.at(-1));
   }
 
   function syncParticles() {
@@ -346,7 +373,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (ui.notice?.key && !store.read().notifications?.items.some(item => item.key === ui.notice.key)) dismissPhoneNotice();
     if (ui.view === 'album' && ui.albumPath && !findAlbumPhoto(store.read(), ui.albumPath, { defaultUser })) { albumEditor.forgetCurrent(ui.albumPath); ui.albumPage = 'gallery'; ui.albumPath = ''; ui.photo = null; }
     if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
-    const route = JSON.stringify([ui.view, ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'favorite-detail' ? ui.favoriteId : ui.view === 'post' ? [ui.forumScope, ui.postId] : ui.view === 'forum' ? ui.forumScope : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
+    const route = JSON.stringify([ui.view, ui.view.startsWith('inspect-') ? [ui.inspectOwnerId, ui.inspectThreadId] : ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'favorite-detail' ? ui.favoriteId : ui.view === 'post' ? [ui.forumScope, ui.postId] : ui.view === 'forum' ? ui.forumScope : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
     const sameRoute = route === renderedRoute;
     if (!sameRoute || ui.view !== 'settings' || !ui.drawers.content) worldbookSettings = null;
     if (!sameRoute) { cancelClearDialog(); cancelFavoriteRemoval(); actionMenu.close(); cancelAvatarGesture(); composingDraft = false; }
@@ -361,7 +388,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       lockImageSrc = currentLockImage.getAttribute('src') || '';
     }
     const mainScroll = sameRoute ? root.querySelector('.phone-main')?.scrollTop : undefined;
-    const scrollTop = sameRoute && inChat() ? root.querySelector('.message-feed')?.scrollTop : undefined;
+    const scrollTop = sameRoute && (inChat() || ui.view === 'inspect-chat') ? root.querySelector('.message-feed')?.scrollTop : undefined;
     let state = store.read();
     const enabled = control.isEnabled();
     element.dataset.enabled = String(enabled);
@@ -376,7 +403,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     onThemeChange(element.dataset.theme);
     const page = pages[ui.view];
     if (!['contact-profile', 'user-profile', 'group-profile'].includes(ui.view)) ui.avatarMenuOpen = false;
-    const weather = ui.view === 'home' ? readWeather() : null;
+    const weather = ['home', 'desktop'].includes(ui.view) ? readWeather() : null;
     surface.classList.toggle('is-stacked-lock', ui.view === 'home' && state.lockStyle === 'stacked');
     surface.classList.toggle('is-rounded-theme', ['home', 'desktop'].includes(ui.view) && state.lockStyle === 'rounded');
     const calendarMonth = ui.view === 'calendar'
@@ -384,14 +411,14 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       : ui.view === 'desktop' ? calendar.month(0) : null;
     notificationShade.beforeRender();
     editing.render(renderShell({
-      content: page(state, { ui, busy, sourcePermissions, sourcePermissionMarkup: worldbookSettings?.outerHTML || '', apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
+      content: page(state, { ui, busy, inspectPhone, photoWall, reducedMotion: ui.inspectLoading && doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches, sourcePermissions, sourcePermissionMarkup: worldbookSettings?.outerHTML || '', apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
         profileAvatar: ui.view === 'contact-profile' ? readContactAvatarDraft(ui.profileDraft, store.read().contacts.find(person => person.id === ui.editId), qqjBridgeProvider?.()) : undefined }),
-      view: ui.view, enabled, weather,
+      view: ui.view, enabled, weather, inspectedPhone: inInspectedPhone(), inspectionLoading: ui.view === 'inspect-desktop' && ui.inspectLoading,
       feedback: ui.feedback, photo: ui.photo,
       conflict: ui.conflict, mode, conflictBusy: busy.has('conflict'),
       lockStyle: state.lockStyle,
       settingsVersion: ui.view === 'settings' ? renderSettingsVersion(mode, updates) : '',
-    }), sameEditor, worldbookSettings && { node: worldbookSettings, selector: '#qqj-settings-worldbook' });
+    }), sameEditor, worldbookSettings && { node: worldbookSettings, selector: '#qqj-settings-worldbook' }, inChat() && ['menu', 'stickers'].includes(ui.attachment) ? root.querySelector('#sms-draft') : undefined);
     const worldbookSlot = root.querySelector('[data-worldbook-settings]');
     if (worldbookSlot && sourcePermissionView) {
       if (!worldbookSettings) {
@@ -405,7 +432,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       root.querySelector('[data-update-controls]')?.append(updatesView.controls);
       root.querySelector('[data-update-notice]')?.append(updatesView.noticeButton);
     }
-    if (!ui.conflict && enabled) surface.insertAdjacentHTML('beforeend', renderPhoneNotice(state, ui.notice));
+    if (!ui.conflict && enabled && !inInspectedPhone()) surface.insertAdjacentHTML('beforeend', renderPhoneNotice(state, ui.notice));
     notificationShade.attach();
     dialog.attach();
     const nextLockImage = root.querySelector('.view-home img.home-wallpaper, .view-home img.home-art');
@@ -421,6 +448,8 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       for (const child of surface.children) child.inert = !child.classList.contains('phone-dialog-backdrop');
       root.querySelector('[data-action="conflict-continue"]').focus({ preventScroll: true });
     }
+    const desktopPages = root.querySelector('[data-desktop-pages]');
+    if (desktopPages) { desktopPages.scrollLeft = ui.desktopPage * desktopPages.clientWidth; updateDesktopPage(desktopPages); }
     clock.refresh();
     revealClassicArtwork();
     resizeDraft();
@@ -559,7 +588,109 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     // 只在打开页面时核对本页图片，捕捉图库删除后仍被浏览器缓存的旧图。
     void recoverImages([...root.querySelectorAll('img[data-phone-image]')].map(image => image.dataset.phoneImage));
   }
+  function inspectionMediaReady(event) {
+    if (!ui.inspectLoading || ui.view !== 'inspect-desktop' || inspectTimer !== undefined || !event.target.matches?.('.inspect-loading img')) return;
+    inspectTimer = doc.defaultView.setTimeout(() => {
+      inspectTimer = undefined;
+      ui.inspectLoading = false;
+      if (ui.view === 'inspect-desktop' && element.isConnected && !element.hidden) render();
+    }, INSPECT_LOADING_DURATION_MS);
+  }
+  function openPhotoWallScheme(edit = false) {
+    if (!isCurrentChat()) return;
+    const wall = readPhotoWall(store.read()), scheme = edit ? wall.schemes.find(row => row.id === wall.activeSchemeId) : null;
+    if (edit && !scheme) return;
+    const route = renderedRoute, form = doc.createElement('form'); form.className = 'photowall-scheme-form';
+    const peopleFields = edit ? '' : `<div class="photowall-fields">${['A', 'B'].map((role, index) => `<label class="photowall-field"><span>人物${role}</span><select name="person${index}" aria-label="人物${role}" required>${renderCharacterOptions(ui.photoWallCharacters, scheme?.people[index])}</select></label>`).join('')}</div>`;
+    form.innerHTML = `<label class="photowall-field"><span>方案名称</span><input name="name" aria-label="方案名称" required value="${escapeHtml(scheme?.name || '')}"></label>${peopleFields}`;
+    void dialog.custom({ title: edit ? '编辑方案' : '新建方案', content: form, confirmText: '保存', cancelText: '取消', dismissOnBackdrop: true,
+      submit: async () => {
+        if (!isCurrentChat() || renderedRoute !== route) return false;
+        if (!form.reportValidity()) return false;
+        const fields = new FormData(form), people = edit ? scheme.people : [0, 1].map(index => ui.photoWallCharacters.find(person => characterKey(person) === fields.get(`person${index}`)));
+        if (people.some(person => !person)) throw new Error('请从柏宝绘目录选择两位人物。');
+        await photoWall.saveScheme(scheme?.id, { name: fields.get('name'), people });
+        if (isCurrentChat() && renderedRoute === route) render();
+        return true;
+      } });
+    const actions = form.closest('.phone-dialog').querySelector('.form-actions');
+    actions.classList.add('photowall-dialog-actions');
+    for (const button of actions.children) { button.classList.add('photowall-button'); if (button.classList.contains('save-button')) button.classList.add('is-primary'); }
+    if (scheme) {
+      const remove = doc.createElement('button'); remove.type = 'button'; remove.className = 'quiet-button photowall-button is-danger'; remove.dataset.action = 'photowall-remove'; remove.textContent = '移除方案';
+      remove.addEventListener('click', event => {
+        event.stopPropagation();
+        if (!isCurrentChat() || renderedRoute !== route) return;
+        dialog.dispose(); void perform('photowall:scheme', () => photoWall.removeScheme(scheme.id));
+      });
+      actions.prepend(remove);
+    }
+  }
+  function openPhotoWallTemplate(edit = false) {
+    if (!isCurrentChat()) return;
+    const value = photoWall.readTemplates(), template = edit ? value.templates.find(row => row.id === value.selectedId) : null;
+    if (edit && !template) return;
+    const route = renderedRoute, form = doc.createElement('form'); form.className = 'photowall-scheme-form photowall-template-form';
+    form.innerHTML = `<label class="photowall-field"><span>方案名称</span><input name="name" aria-label="方案名称" required value="${escapeHtml(template?.name || '')}"></label><label class="photowall-field"><span>提示词</span><textarea name="prompt" aria-label="提示词" rows="7" required>${escapeHtml(template?.prompt || '')}</textarea></label>`;
+    let saveAs = false;
+    void dialog.custom({ title: edit ? '编辑提示词方案' : '新建提示词方案', content: form, confirmText: '保存', cancelText: '取消', dismissOnBackdrop: true,
+      submit: async () => {
+        const id = saveAs ? null : template?.id; saveAs = false;
+        if (!isCurrentChat() || renderedRoute !== route) return false;
+        if (!form.reportValidity()) return false;
+        const fields = new FormData(form);
+        await photoWall.saveTemplate(id, { name: fields.get('name'), prompt: fields.get('prompt') });
+        if (isCurrentChat() && renderedRoute === route) render();
+        return true;
+      } });
+    const actions = form.closest('.phone-dialog').querySelector('.form-actions');
+    actions.classList.add('photowall-dialog-actions');
+    for (const button of actions.children) { button.classList.add('photowall-button'); if (button.classList.contains('save-button')) button.classList.add('is-primary'); }
+    if (template) {
+      const copy = doc.createElement('button'); copy.type = 'button'; copy.className = 'quiet-button photowall-button'; copy.textContent = '另存';
+      copy.addEventListener('click', event => {
+        event.stopPropagation(); const confirm = actions.querySelector('.save-button');
+        if (confirm.disabled) return;
+        saveAs = true; confirm.click();
+      });
+      const remove = doc.createElement('button'); remove.type = 'button'; remove.className = 'quiet-button photowall-button is-danger'; remove.textContent = '移除';
+      remove.addEventListener('click', event => {
+        event.stopPropagation();
+        if (!isCurrentChat() || renderedRoute !== route) return;
+        dialog.dispose(); void perform('photowall:template', () => photoWall.removeTemplate(template.id));
+      });
+      actions.prepend(remove); actions.insertBefore(copy, actions.querySelector('.save-button'));
+    }
+  }
+  function openInspectionOwner(id = '') {
+    if (!isCurrentChat()) return;
+    const route = renderedRoute, owner = inspectPhone.owners().find(person => person.id === id);
+    const form = doc.createElement('form'); form.className = 'inspect-owner-form';
+    form.innerHTML = `<label class="field-label">姓名<input name="name" aria-label="姓名" required value="${escapeHtml(owner?.needsName ? '' : owner?.name || '')}"></label><label class="field-label">人物资料<textarea name="personality" aria-label="人物资料" rows="3">${escapeHtml(owner?.personality || '')}</textarea></label>`;
+    void dialog.custom({ title: id ? '指定手机主人' : '添加手机主人', content: form, confirmText: '保存', cancelText: '取消', dismissOnBackdrop: true,
+      submit: async () => {
+        if (!isCurrentChat() || renderedRoute !== route) return false;
+        if (!form.reportValidity()) return false;
+        const fields = new FormData(form);
+        const saved = await store.saveInspectionOwner(id, { name: fields.get('name'), personality: fields.get('personality') });
+        if (isCurrentChat() && renderedRoute === route) {
+          ui.inspectOwnerId = saved.id;
+          if (!id) {
+            ui.inspectThreadId = ''; ui.inspectSelectedMessage = '';
+            showPage('inspect-desktop');
+          } else render();
+        }
+        return true;
+      } });
+  }
   function imageError(event) {
+    if (ui.inspectLoading && event.target.matches?.('.inspect-loading img')) {
+      doc.defaultView.clearTimeout(inspectTimer);
+      inspectTimer = undefined;
+      ui.inspectLoading = false;
+      render();
+      return;
+    }
     if (event.target.matches?.('img[data-phone-image]')) void recoverImages([event.target.dataset.phoneImage]);
   }
   async function viewPhoto(readImage, trigger) {
@@ -584,6 +715,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (ui.liangshiPage.kind === 'compose') { ui.liangshiPage = { kind: 'feed', tab: 'mine' }; ui.liangshiTrail = []; }
   }
   function close({ restoreFocus = true } = {}) {
+    doc.defaultView.clearTimeout(inspectTimer);
+    inspectTimer = undefined;
+    ui.inspectLoading = false;
     cancelClearDialog();
     cancelFavoriteRemoval();
     cancelAvatarGesture();
@@ -637,14 +771,22 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     notificationShade.close({ immediate: true, restoreFocus: false });
     if (ui.view === 'album' && view !== 'album') albumEditor.leave();
     if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
+    doc.defaultView.clearTimeout(inspectTimer);
+    inspectTimer = undefined;
+    ui.inspectLoading = view === 'inspect-desktop' && (ui.view === 'inspect-phone' || ui.view === 'desktop');
     if (view !== 'liangshi') discardLiangshiDraft();
     if (view === 'settings' && ui.view !== 'settings') fillApiDraft();
+    let photoWallError;
+    if (view === 'photowall') {
+      try { ui.photoWallCharacters = photoWall.readCharacters(); }
+      catch (error) { ui.photoWallCharacters = []; photoWallError = error; }
+    }
     if (ui.view === 'favorites' && view !== 'favorites') ui.favoriteScroll = root.querySelector('.phone-main')?.scrollTop || 0;
     if (ui.view === 'social' && view !== 'social') ui.socialScroll = listPosition(sourceNode);
     dismissMenus();
     if (view !== 'group-chat') ui.replyToId = '';
     ui.view = view;
-    setFeedback(null);
+    setFeedback(photoWallError ? { error: true, text: photoWallError.message } : null);
     ui.attachment = '';
     ui.photo = null;
     render({ bottom });
@@ -740,6 +882,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
     let parent = 'desktop';
     switch (ui.view) {
+      case 'inspect-chat': parent = 'inspect-wechat'; break;
+      case 'inspect-wechat': parent = 'inspect-desktop'; break;
+      case 'inspect-desktop': parent = 'inspect-phone'; break;
       case 'chat':
       case 'group-chat': parent = 'inbox'; break;
       case 'post': parent = 'forum'; break;
@@ -802,6 +947,16 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     root.querySelectorAll('.is-selected').forEach(node => node.classList.remove('is-selected'));
     root.querySelectorAll('[data-message][aria-expanded="true"]').forEach(node => node.setAttribute('aria-expanded', 'false'));
   }
+  function refreshAttachmentPanel() {
+    const composer = root.querySelector('form.composer');
+    if (!composer) return;
+    const state = store.read(), isGroup = ui.view === 'group-chat';
+    const contact = (isGroup ? state.groups : state.contacts).find(person => person.id === conversationId());
+    const markup = renderAttachments(state, ui, busy, contact, isGroup), panel = root.querySelector('.attachment-panel');
+    // 切换表情目录只替换附件区域，让输入框继续持有原生光标和选区。
+    if (panel) panel.outerHTML = markup;
+    else composer.insertAdjacentHTML('afterend', markup);
+  }
   function closeLiangshiMenu() { closeActionMenu(); ui.liangshiMenu = ''; }
   function openActionMenu(title, content, triggerSelector) {
     selects.close(); closeSources(); closeModels(); closeMessageActions();
@@ -843,7 +998,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
         root.querySelector(`[data-action="social-comment-toggle"][data-social-post="${CSS.escape(postId)}"]`)?.setAttribute('aria-expanded', 'false');
       }
     }
-    if (ui.attachment && event && !event.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.attachment-panel, .attachment-button, .phone-action-popup, .phone-select-popup'))) {
+    if (ui.attachment && event && !event.composedPath().some(node => node.getRootNode?.() === root && (node.matches?.('.attachment-panel, .attachment-button, .phone-action-popup, .phone-select-popup') || ui.attachment === 'stickers' && node.id === 'sms-draft'))) {
       ui.attachment = ''; root.querySelector('.attachment-panel')?.remove();
     }
     if (ui.modelsOpen && !event?.composedPath().some(node => node.getRootNode?.() === root && node.matches?.('.api-form'))) closeModels();
@@ -869,6 +1024,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     ui.view = `${kind}-profile`; ui.chatMenu = false; ui.inboxMenu = false; setFeedback(null); render();
   }
   function keydown(event) {
+    if (event.target.matches('[data-desktop-target]') && ['Enter', ' '].includes(event.key)) event.stopPropagation();
     if (notificationShade.keydown(event)) return;
     if (actionMenu.keydown(event) || selects.keydown(event)) return;
     if (event.target.matches('[data-action="forum-menu"]') && ['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); openActionMenu('论坛范围', () => renderForumMenu(store.read(), { ui }), '[data-action="forum-menu"]'); return; }
@@ -978,6 +1134,24 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (event.target.matches('.photo-viewer')) { closePhoto(); return; }
     const button = event.target.closest('button');
     if (button?.disabled) return;
+    if (button?.hasAttribute('data-desktop-target')) {
+      ui.desktopPage = Number(button.dataset.desktopTarget);
+      const pages = root.querySelector('[data-desktop-pages]');
+      pages.scrollTo({ left: ui.desktopPage * pages.clientWidth, behavior: 'instant' });
+      updateDesktopPage(pages); return;
+    }
+    if (button?.dataset.inspectOwner) {
+      ui.inspectOwnerId = button.dataset.inspectOwner; ui.inspectThreadId = ''; ui.inspectSelectedMessage = '';
+      showPage('inspect-desktop'); return;
+    }
+    if (button?.dataset.inspectThread) { ui.inspectThreadId = button.dataset.inspectThread; ui.inspectSelectedMessage = ''; showPage('inspect-chat', { bottom: true }); return; }
+    if (button?.dataset.inspectMessage) {
+      const messageId = button.dataset.inspectMessage;
+      const thread = inspectionThreads(store.read(), ui.inspectOwnerId, defaultUser).find(item => item.id === ui.inspectThreadId);
+      const message = thread?.messages.find(item => item.id === messageId);
+      if (message?.image?.path) { ui.photo = { ...message.image, derived: true }; render(); return; }
+      ui.inspectSelectedMessage = ui.inspectSelectedMessage === messageId ? '' : messageId; render(); return;
+    }
     if (button?.dataset.albumPhoto) {
       albumEditor.leave();
       ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop || 0;
@@ -1022,7 +1196,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
       return;
     }
-    if (button.dataset.stickerPack) { ui.stickerPack = button.dataset.stickerPack; render(); return; }
+    if (button.dataset.stickerPack) { ui.stickerPack = button.dataset.stickerPack; refreshAttachmentPanel(); return; }
     if (button.dataset.sticker) {
       const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
       void perform(`send:${id}`, () => service.sendCard(id, { type: 'sticker', stickerId: button.dataset.sticker }, ui.view === 'group-chat' ? { replyToId: ui.replyToId } : undefined), () => { ui.attachment = ''; ui.replyToId = ''; onContextChange(); }); return;
@@ -1057,6 +1231,54 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     if (button.dataset.post) { ui.forumScroll = { ...listPosition(button), tag: ui.forumTag }; ui.forumPages[ui.forumScope] = { tag: ui.forumTag, scroll: ui.forumScroll }; ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
+      case 'inspect-menu': {
+        if (ui.chatMenu) closeActionMenu();
+        else {
+          ui.inspectSelectedMessage = '';
+          openActionMenu('微信操作', () => action('inspect-delete-thread', '删除会话', '', 'menu-item danger'), '[data-action="inspect-menu"]');
+          ui.chatMenu = true; button.setAttribute('aria-expanded', 'true');
+        }
+        break;
+      }
+      case 'inspect-delete-thread': {
+        const ownerId = ui.inspectOwnerId, threadId = ui.inspectThreadId, route = renderedRoute;
+        if (!isCurrentChat()) break;
+        const thread = inspectionThreads(store.read(), ownerId, defaultUser).find(item => item.id === threadId);
+        if (!thread || thread.mirror) break;
+        const content = doc.createElement('p'); content.textContent = '删除查手机里的整个会话？';
+        void dialog.custom({ title: '删除微信会话', content, confirmText: '删除', cancelText: '取消', danger: true, dismissOnBackdrop: true,
+          submit: async () => {
+            if (!isCurrentChat() || route !== renderedRoute) return false;
+            let removed = false;
+            await perform('inspect-delete-thread', () => store.deleteInspectionConversation(ownerId, threadId), () => {
+              removed = true;
+              if (isCurrentChat() && route === renderedRoute) { ui.inspectSelectedMessage = ''; showPage('inspect-wechat'); }
+            });
+            return removed;
+          } }); break;
+      }
+      case 'inspect-back-wechat': showPage('inspect-wechat'); break;
+      case 'inspect-open-wechat': showPage('inspect-wechat'); break;
+      case 'inspect-add-owner': openInspectionOwner(); break;
+      case 'inspect-name-owner': openInspectionOwner(ui.inspectOwnerId); break;
+      case 'inspect-refresh': {
+        if (!isCurrentChat()) { setFeedback({ error: true, text: '聊天已切换，请重新打开手机。' }); break; }
+        const ownerId = ui.inspectOwnerId;
+        void perform(`inspect:${ownerId}`, () => inspectPhone.refresh(ownerId)); break;
+      }
+      case 'inspect-delete': {
+        const ownerId = ui.inspectOwnerId, threadId = ui.inspectThreadId, messageId = button.dataset.messageTarget;
+        if (!isCurrentChat()) break;
+        const route = renderedRoute;
+        const content = doc.createElement('p'); content.textContent = '删除查手机里的这条记录？';
+        void dialog.custom({ title: '删除微信记录', content, confirmText: '删除', cancelText: '取消', danger: true, dismissOnBackdrop: true,
+          submit: async () => {
+            if (!isCurrentChat() || route !== renderedRoute) return false;
+            let removed = false;
+            await perform('inspect-delete', () => store.deleteInspectionMessage(ownerId, threadId, messageId), () => { removed = true; if (route === renderedRoute) ui.inspectSelectedMessage = ''; });
+            return removed;
+          } }); break;
+      }
       case 'album-back': goBack(); break;
       case 'album-view': void viewPhoto(() => findAlbumPhoto(store.read(), ui.albumPath, { defaultUser }), button); break;
       case 'album-edit': ui.albumPage = 'editor'; void albumEditor.select(ui.albumPath); break;
@@ -1074,8 +1296,25 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       case 'open-lock-notice': openPhoneNotice({ key: button.dataset.notificationKey, kind: button.dataset.noticeKind, id: button.dataset.noticeId }); break;
       case 'toggle-notification-shade': if (notificationShade.isOpen) notificationShade.close(); else if (onOpenNotifications) onOpenNotifications(); else void notificationShade.open(); break;
       case 'open-social-reply': dismissPhoneNotice(); openSocialReply(button.dataset.socialPost); break;
+      case 'photowall-open': showPage('photowall'); break;
+      case 'photowall-template-new': openPhotoWallTemplate(); break;
+      case 'photowall-template-edit': openPhotoWallTemplate(true); break;
+      case 'photowall-new': openPhotoWallScheme(); break;
+      case 'photowall-edit': openPhotoWallScheme(true); break;
+      case 'photowall-select': {
+        const id = button.dataset.photowallPhoto;
+        ui.photoWallPhotoId = id;
+        void viewPhoto(() => photoWallImage(readPhotoWall(store.read()).photos.find(photo => photo.id === id)), button);
+        render(); break;
+      }
+      case 'photowall-desktop': void perform('photowall:desktop', () => photoWall.setDesktop(button.dataset.photowallPhoto)); break;
+      case 'photowall-generate': {
+        const id = readPhotoWall(store.read()).activeSchemeId;
+        void perform('photowall:generate', () => photoWall.generate(id), photo => { ui.photoWallPhotoId = photo.id; });
+        break;
+      }
       case 'unlock': showPage('desktop'); break;
-      case 'system-home': showPage('desktop'); break;
+      case 'system-home': showPage(inInspectedPhone() ? 'inspect-desktop' : 'desktop'); break;
       case 'system-back': goBack(); break;
       case 'liangshi-back': goBack(); break;
       case 'liangshi-menu': {
@@ -1216,11 +1455,11 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
           setFeedback({ text: '酒馆助手脚本已导出。' });
         });
         break;
-      case 'attachments': ui.attachment = ui.attachment ? '' : 'menu'; ui.selectedMessage = ''; ui.chatMenu = false; render(); break;
-      case 'choose-stickers': ui.attachment = 'stickers'; render(); break;
+      case 'attachments': ui.attachment = ui.attachment ? '' : 'menu'; closeMessageActions(); closeActionMenu(); refreshAttachmentPanel(); break;
+      case 'choose-stickers': ui.attachment = 'stickers'; refreshAttachmentPanel(); break;
       case 'choose-location': ui.attachment = 'location'; ui.attachmentDraft = {}; render(); break;
       case 'choose-transfer': ui.attachment = 'transfer'; ui.attachmentDraft = { currency: 'CNY' }; render(); break;
-      case 'close-attachment': ui.attachment = ''; render(); break;
+      case 'close-attachment': ui.attachment = ''; refreshAttachmentPanel(); break;
       case 'close-photo': closePhoto(); break;
       case 'photo': {
         const message = store.read().conversations[id]?.find(item => item.id === button.dataset.photo);
@@ -1415,6 +1654,18 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
     }
   }
   function change(event) {
+    if (event.target.id === 'photowall-template') { void perform('photowall:template', () => photoWall.selectTemplate(event.target.value)); return; }
+    if (event.target.id === 'photowall-scheme') { void perform('photowall:scheme', () => photoWall.selectScheme(event.target.value)); return; }
+    if (event.target.id.startsWith('photowall-person-')) {
+      const wall = readPhotoWall(store.read()), scheme = wall.schemes.find(row => row.id === wall.activeSchemeId);
+      const person = ui.photoWallCharacters.find(row => characterKey(row) === event.target.value);
+      if (scheme && person) {
+        const people = [...scheme.people]; people[Number(event.target.id.slice(-1))] = person;
+        void perform('photowall:scheme', () => photoWall.saveScheme(scheme.id, { ...scheme, people }));
+      }
+      return;
+    }
+
     if (event.target.id === 'story-reference-floors') {
       const value = event.target.value;
       ui.storyReferenceFloorsDraft = value;
@@ -1540,6 +1791,17 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       void perform('group-profile', () => store.saveGroup(id, draft), result => { ui.groupId = result.id; ui.view = 'group-chat'; ui.groupDraft = {}; ui.selectedMessage = ''; });
     }
   }
+  function updateDesktopPage(pages) {
+    const focusedPage = root.activeElement?.closest('[data-desktop-page]');
+    ui.desktopPage = Math.round(pages.scrollLeft / pages.clientWidth);
+    for (const page of pages.querySelectorAll('[data-desktop-page]')) {
+      const active = Number(page.dataset.desktopPage) === ui.desktopPage;
+      page.inert = !active; page.setAttribute('aria-hidden', String(!active));
+    }
+    if (focusedPage?.inert) pages.querySelector(`[data-desktop-page="${ui.desktopPage}"] [data-desktop-target="${ui.desktopPage}"]`)?.focus({ preventScroll: true });
+    for (const button of root.querySelectorAll('[data-desktop-target]')) button.setAttribute('aria-current', Number(button.dataset.desktopTarget) === ui.desktopPage ? 'page' : 'false');
+  }
+  function desktopScroll(event) { if (event.target.matches?.('[data-desktop-pages]')) updateDesktopPage(event.target); }
   const refreshCalendar = () => {
     if (!element.hidden && ['calendar', 'desktop'].includes(ui.view)) render();
   };
@@ -1562,8 +1824,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
   root.addEventListener('change', change);
   root.addEventListener('submit', submit);
   root.addEventListener('toggle', rememberMembersFold, true);
+  root.addEventListener('load', inspectionMediaReady, true);
   root.addEventListener('error', imageError, true);
   root.addEventListener('scroll', readVisibleSocialReplies, true);
+  root.addEventListener('scroll', desktopScroll, true);
   doc.addEventListener('pointerdown', dismissMenus, true);
   render();
   appearanceFont.apply();
@@ -1587,6 +1851,7 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       if (ui.view === 'album') close();
     },
     open() {
+      if (!stylesheet.isConnected) { openingFocus = doc.activeElement; root.prepend(stylesheet); }
       ui.conflict = control.hasConflict?.(doc) === true;
       // 关闭后重开统一进入锁屏；已显示时调用 open 只刷新当前页。
       if (element.hidden) {
@@ -1614,6 +1879,9 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       }
     },
     dispose() {
+      stylesheet.onload = stylesheet.onerror = null;
+      doc.defaultView.clearTimeout(inspectTimer);
+      inspectTimer = undefined;
       cancelClearDialog();
       cancelFavoriteRemoval();
       cancelAvatarGesture();
@@ -1644,8 +1912,10 @@ export function mountPhone({ mount, store, messages, groups, directory, forum, s
       root.removeEventListener('change', change);
       root.removeEventListener('submit', submit);
       root.removeEventListener('toggle', rememberMembersFold, true);
+      root.removeEventListener('load', inspectionMediaReady, true);
       root.removeEventListener('error', imageError, true);
       root.removeEventListener('scroll', readVisibleSocialReplies, true);
+      root.removeEventListener('scroll', desktopScroll, true);
       element.remove(); fontStyle.remove();
     },
   };

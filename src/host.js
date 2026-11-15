@@ -93,7 +93,7 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
       const bindings = await getWorldInfoBindings();
       return listWorldInfoBookNames(context(), { bindings: { ...bindings, getSelectedWorldInfo: bindings.getSelectedWorldInfo || (() => bindings.getNames?.(host.captureChat()) || []) } });
     },
-    async readWorldInfo(target, { scanText } = {}) {
+    async readWorldInfo(target, { scanText, requiredNames } = {}) {
       // 核心可从CDN加载，宿主模块仍必须从当前酒馆页面的地址读取。
       const bindings = await getWorldInfoBindings();
       const names = [...new Set([target.character?.world, target.personaWorld, ...(bindings.getNames?.(target) || [])].filter(Boolean))];
@@ -106,6 +106,7 @@ export function createHostAdapter({ contextProvider = () => (globalThis.SillyTav
         const entries = scanText === undefined ? rows : selectWorldEntries(rows, scanText, { defaults: bindings.defaults, user: target.user, char: target.character?.name });
         for (const entry of entries) {
           if (entry.disable || entry.extensions?.twoMoreThings?.storySms === true || typeof entry.content !== 'string') continue;
+          if (requiredNames && !requiredNames.some(name => [entry.comment, entry.content, ...[entry.key ?? entry.keys ?? []].flat(), ...[entry.keysecondary ?? entry.secondary_keys ?? []].flat()].some(value => typeof value === 'string' && value.includes(name)))) continue;
           parts.push(`${entry.comment || ''}\n${entry.content}`);
         }
       }

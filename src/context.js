@@ -1,3 +1,4 @@
+import { inspectionOwners, inspectionData, inspectionHistory } from './inspect-phone.js';
 import { circleProfile } from './forum-scope.js';
 import { sanitizeStoryBody } from './shared-body-wrappers.js';
 import { parseJsonObject } from './api.js';
@@ -81,7 +82,7 @@ function timedContextMessage(message, thread) {
 
 function actorIds(people, bridge, snapshot, state) {
   const ids = new Map(people.filter(person => person.source?.kind === 'qqj').map(person => [person.id, person.source.entityId]));
-  const needsMatch = person => ['card', 'story'].includes(person.source?.kind);
+  const needsMatch = person => ['card', 'story', 'inspection'].includes(person.source?.kind);
   if (!people.some(needsMatch)) return ids;
   snapshot ||= bridge?.getPeopleSnapshot?.();
   const names = new Map();
@@ -103,9 +104,65 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       clock: batch.clock, batch, story: recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state) };
   };
   return {
+    async readForPhotoWall(people) {
+      const state = await store.readSaved();
+      const snapshot = qqjBridgeProvider?.()?.getPeopleSnapshot?.();
+      const publicPeople = snapshot?.status === 'ready' && snapshot.identity?.hostChatId === target.id && snapshot.people?.status === 'ready' ? snapshot.people.items || [] : [];
+      const profileFields = ['name', 'aliases', 'age', 'gender', 'personality', 'conduct', 'expression', 'likes', 'dislikes', 'principles', 'background', 'identityRelations', 'occupation'];
+      const cleanNames = values => values.filter(value => typeof value === 'string').map(value => value.trim()).filter(Boolean);
+      const namesOf = person => cleanNames([person?.displayName, person?.entityDisplayName, person?.profile?.name, ...(person?.aliases || [])]);
+      const userLabels = new Set(['我', '用户', 'user', '@user']);
+      const requiredNames = new Set(), userNames = cleanNames([target.user, state.userProfile?.name, state.userProfile?.nickname]), matchedUserNames = [];
+      const selected = people.map((person, index) => {
+        const contacts = state.contacts.filter(contact => cleanNames([contact.name, contact.nickname]).includes(person.name));
+        const contact = contacts.length === 1 ? contacts[0] : null;
+        const ownerId = contact && identityOwnerId(state, contact.id), owner = state.contacts.find(row => row.id === ownerId);
+        const phone = contact && identityProfile(state, contact);
+        const names = new Set(cleanNames([person.name, contact?.name, contact?.nickname, owner?.name, owner?.nickname]));
+        const matches = phone?.source?.kind === 'qqj' && phone.source.entityId
+          ? publicPeople.filter(row => row.entityId === phone.source.entityId)
+          : publicPeople.filter(row => namesOf(row).some(name => names.has(name)));
+        const known = matches.length === 1 ? matches[0] : null;
+        if (known) for (const name of namesOf(known)) names.add(name);
+        // 本人标识可确认归属，世界书检索只用实际姓名和明确别名。
+        for (const name of names) if (!userLabels.has(name.toLowerCase())) requiredNames.add(name);
+        const profile = known?.profile ? Object.fromEntries(profileFields.map(key => [key, typeof known.profile[key] === 'string' ? known.profile[key] : ''])) : null;
+        if (profile) profile.manualFields = (known.profile.manualFields || []).filter(key => profileFields.includes(key));
+        const phoneProfile = {};
+        // 人工清空仍是有效资料，不由手机旧性格重新补回。
+        for (const key of ['personality', 'expression']) if (phone?.[key]?.trim() && !profile?.[key]?.trim() && !profile?.manualFields.includes(key)) phoneProfile[key] = phone[key];
+        if (ownerId === '@user' || known?.specialRole === 'user' || userNames.some(name => names.has(name))) matchedUserNames.push(person.name);
+        return { role: index === 0 ? 'A' : 'B', name: person.name, appearance: { tag: person.tag, nl: person.nl || '' }, profile, ...(Object.keys(phoneProfile).length ? { phoneProfile } : {}) };
+      });
+      const persona = target.userPersona || '';
+      const userPersona = persona && (matchedUserNames.length || [...requiredNames].some(name => persona.includes(name)))
+        ? { source: '当前聊天选中的用户人设；仅当原文姓名明确属于所选两人时使用', userName: target.user, text: persona, ...(matchedUserNames.length ? { matchedNames: matchedUserNames } : {}) } : null;
+      const worldbook = await target.readWorldInfo({ scanText: [...requiredNames].join('\n'), requiredNames: [...requiredNames] });
+      return { people: selected, profilePolicy: 'profile.manualFields为人工指定字段，明确空值不由其他来源补回。', ...(userPersona ? { userPersona } : {}), worldbook };
+    },
     readClock: () => readTimeline(target.messages).clock,
     readUserProfile: () => ({ name: store.read().userProfile?.name || target.user || '我', nickname: store.read().userProfile?.nickname || '' }),
     assertMemorySources() { memorySources.select(); },
+    async readForInspection(ownerId) {
+      const state = await store.readSaved(), owner = inspectionOwners(state).find(person => person.id === ownerId);
+      if (!owner) throw new Error('请选择手机主人。');
+      if (owner.needsName) throw new Error('请先指定手机主人的真实姓名。');
+      const current = base(state), profile = identityProfile(state, owner), source = memorySources.select(), bridge = source.bridge;
+      const storyMemory = memorySources.readStoryMemory(source);
+      const entityId = actorIds([profile], bridge, undefined, state).get(ownerId);
+      const scanText = [...current.story.map(item => item.text), owner.name, profile.personality || ''].join('\n');
+      let related = '';
+      if (entityId && bridge?.readContext) {
+        const context = await bridge.readContext({ query: scanText, entityIds: [entityId] });
+        if (context?.status === 'ready') related = (context.actors || []).filter(actor => actor.entityId === entityId).map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n');
+      }
+      return withIdentitySource({ ...current, owner: { id: owner.id, name: owner.name, personality: profile.personality || '', expression: owner.expression || '', language: owner.language || '' },
+        userAccountIds: ['@user', ...state.contacts.filter(person => isUserIdentity(state, person.id)).map(person => person.id)],
+        contacts: inspectionOwners(state).filter(person => !person.needsName && person.id !== ownerId).map(person => ({ id: person.id, name: person.name, nickname: person.nickname || '', language: person.language || '', personality: identityProfile(state, person).personality || '', expression: person.expression || '' })),
+        phoneContext: readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, targetIds: state.contacts.some(person => person.id === ownerId) ? [ownerId] : [] }),
+        ...(storyMemory ? { storyMemory } : {}), related, worldbook: await target.readWorldInfo({ scanText }),
+        people: inspectionData(state, ownerId).people, history: inspectionHistory(state, ownerId, target.user) }, state, [ownerId, ...state.contacts.map(person => person.id)]);
+    },
     async readForContact(id) {
       const state = await store.readSaved(), contact = state.contacts.find(x => x.id === id);
       if (!contact) throw new Error('这个联系人已不存在，请返回短信重新选择。');

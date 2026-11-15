@@ -56,6 +56,7 @@ export function createImageProviders({ host, baibai = () => globalThis.STBaiBaiI
   const getSelected = () => host.readSettings()[settingsKey]?.imageProvider === 'chatu8' ? 'chatu8' : 'baibai';
   return {
     getSelected,
+    resolveBaibai: () => ({ api: baibai(), label: '柏宝绘' }),
     async select(value) {
       if (!['baibai', 'chatu8'].includes(value)) throw new Error('请选择柏宝绘或智绘姬。');
       const all = host.readSettings(), previous = all[settingsKey];

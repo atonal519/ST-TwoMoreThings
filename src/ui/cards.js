@@ -4,7 +4,7 @@ import { displayName } from '../profiles.js';
 import { imageSource } from '../image-files.js';
 import { blobEmojis } from '../emojis.js';
 
-export function renderCardBody(message, generating = false) {
+export function renderCardBody(message, generating = false, { readOnly = false } = {}) {
   if (message.type === 'sticker') {
     const sticker = findSticker(message.stickerId);
     return sticker ? `<img src="${escape(sticker.src)}" alt="${escape(sticker.label)}" draggable="false" loading="lazy">` : escape(message.text);
@@ -19,8 +19,8 @@ export function renderCardBody(message, generating = false) {
     <small>${{ pending: '待收款', accepted: '已收下', returned: '已退回' }[message.transfer.status] || '待收款'}</small>`;
   if (message.type === 'image') {
     const photo = message.image.path
-      ? `<img class="message-photo" data-phone-image="${escape(message.image.path)}" src="${escape(imageSource(message.image.path))}" alt="${escape(message.image.description)}" loading="lazy">`
-      : `<span class="photo-placeholder${generating ? ' is-generating' : ''}">${generating ? `${icon('refresh')}<span role="status">生成中…</span>` : `${icon('image')}<small>点击生成</small>`}</span>`;
+      ? `<img class="message-photo" ${readOnly ? '' : `data-phone-image="${escape(message.image.path)}"`} src="${escape(imageSource(message.image.path))}" alt="${escape(message.image.description)}" loading="lazy">`
+      : `<span class="photo-placeholder${generating ? ' is-generating' : ''}">${generating ? `${icon('refresh')}<span role="status">生成中…</span>` : `${icon('image')}<small>${readOnly ? '图片描述' : '点击生成'}</small>`}</span>`;
     return `${photo}
       <span class="photo-description">${escape(message.image.description)}</span>`;
   }

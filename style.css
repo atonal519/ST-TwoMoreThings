@@ -134,22 +134,12 @@ h3 { font-size: 14px; font-weight: 600; }
 .view-home.is-rounded .unlock-button svg { border-radius: 50%; background: var(--pp-surface); }
 .is-rounded-theme .desktop-wallpaper { opacity: 1; }
 /* 应用桌面：保留壁纸上部留白，小组件和应用集中在中下部。 */
-.view-desktop { padding: 0; overflow-y: auto; position: relative; isolation: isolate; }
+.view-desktop { padding: 0; overflow: hidden; position: relative; isolation: isolate; }
 .desktop-wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .4; pointer-events: none; }
 .desktop-wallpaper.is-custom { opacity: 1; }
 .desktop-content { position: relative; min-height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 24px; padding: 28px 20px 54px; }
-.desktop-calendar { display: flex; align-items: center; gap: 15px; width: 100%; min-height: 130px; padding: 16px; border: 1px solid var(--pp-divider-soft); border-radius: 19px; background: color-mix(in srgb, var(--pp-surface) 96%, transparent); box-shadow: var(--pp-elevation-soft); }
+.desktop-calendar { border: 1px solid var(--pp-divider-soft); background: color-mix(in srgb, var(--pp-surface) 96%, transparent); box-shadow: var(--pp-elevation-soft); }
 .desktop-calendar:hover:not(:disabled) { color: inherit; }
-.desktop-calendar-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.desktop-calendar-copy > small { font-size: 10px; color: var(--pp-muted); }
-.desktop-calendar-copy > strong { font-size: 29px; font-weight: 400; line-height: 1.2; overflow-wrap: anywhere; }
-.desktop-calendar-copy > span { font-size: 10px; line-height: 1.6; color: var(--pp-muted); overflow-wrap: anywhere; }
-.desktop-week { flex: 1.3; min-width: 0; display: grid; grid-template-columns: repeat(var(--desktop-week-columns), minmax(0, 1fr)); gap: 1px; align-items: stretch; }
-.desktop-week-day { display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0 10px; position: relative; border-radius: 7px; font-size: 11px; line-height: 1.2; }
-.desktop-week-day small { font-size: 9px; color: var(--pp-muted); }
-.desktop-week-day.is-today { background: var(--pp-active); color: var(--pp-paper); }
-.desktop-week-day.is-today small { color: inherit; }
-.desktop-week-day i { position: absolute; bottom: 4px; width: 2px; height: 2px; border-radius: 50%; background: currentColor; }
 .desktop-apps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .desktop-app[data-tab="liangshi"] { grid-column: 1; grid-row: 1; }
 .desktop-app[data-tab="social"] { grid-column: 2; grid-row: 1; }
@@ -158,7 +148,7 @@ h3 { font-size: 14px; font-weight: 600; }
 .desktop-app[data-tab="calendar"] { grid-column: 3; grid-row: 2; }
 .desktop-app[data-tab="settings"] { grid-column: 4; grid-row: 2; }
 .desktop-app { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-width: 0; font-size: 11px; line-height: 1.5; }
-.desktop-app-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; border: 1px solid var(--pp-divider-soft); background: var(--pp-surface); color: var(--pp-active); box-shadow: var(--pp-elevation-soft); }
+.desktop-app-icon { width: var(--desktop-icon-size, 48px); height: var(--desktop-icon-size, 48px); display: grid; place-items: center; border-radius: 14px; border: 1px solid var(--pp-divider-soft); background: var(--pp-surface); color: var(--pp-active); box-shadow: var(--pp-elevation-soft); }
 .desktop-app-icon > svg, .desktop-app-icon > .app-icon { width: 25px; height: 25px; }
 .desktop-app-icon { position: relative; }
 .desktop-app-forum, .desktop-app-settings, .desktop-app-social, .desktop-app-favorites { background: var(--pp-pale); }
@@ -519,13 +509,13 @@ h3 { font-size: 14px; font-weight: 600; }
 .field-refresh { display: inline-flex; align-items: center; justify-content: center; width: 1lh; height: 1.1lh; flex: 0 0 auto; }
 .field-refresh > svg { width: 100%; height: 1lh; transform: translateY(-1.5px); }
 .field-refresh > span { display: none; }
-select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-rule); border-radius: 7px; min-height: 32px; background: var(--pp-surface); padding: 5px 8px; font-size: 12px; }
+select, input, .profile-form textarea, .inspect-owner-form textarea { width: 100%; border: 1px solid var(--pp-rule); border-radius: 7px; min-height: 32px; background: var(--pp-surface); padding: 5px 8px; font-size: 12px; }
 .my-profile { display: flex; width: 100%; align-items: center; gap: 12px; }
 .my-profile > span:not(.avatar) { flex: 1; min-width: 0; }
 .my-profile strong { display: block; font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
 .my-profile small { display: block; font-size: 11px; color: var(--pp-muted); }
 .my-profile > svg { width: 15px; }
-.profile-form { padding-top: 10px; }
+.profile-form, .inspect-owner-form { padding-top: 10px; }
 .profile-readonly { display: block; font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .background-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 5px 2px; }
 .background-choice { display: inline-grid; place-items: center; position: relative; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--pp-divider-soft); background: var(--pp-surface-soft); overflow: hidden; flex: 0 0 34px; }
@@ -548,7 +538,7 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
 .avatar-controls { position: absolute; left: calc(50% + 32px); top: 50%; transform: translateY(-50%); }
 .avatar-menu-toggle > svg { transform: rotate(90deg); }
 .profile-avatar .avatar { width: 48px; height: 48px; font-size: 22px; }
-.profile-form textarea { resize: vertical; line-height: 1.7; }
+.profile-form textarea, .inspect-owner-form textarea { resize: vertical; line-height: 1.7; }
 .avatar-picker { position: relative; overflow: hidden; cursor: pointer; }
 .avatar-picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .connection-summary { display: flex; align-items: baseline; gap: 10px; margin-top: 18px; }
@@ -951,3 +941,99 @@ select, input, .profile-form textarea { width: 100%; border: 1px solid var(--pp-
 @media (min-width: 641px) {
   :host { pointer-events: none; }
 }
+
+/* 查手机沿用短信的列表与只读气泡。 */
+.view-inspect-chat { width: 100%; align-self: stretch; padding: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--pp-surface-soft); }
+.phone-main.is-inspect-loading { position: absolute; inset: 0; display: grid; place-items: center; padding: 0; overflow: hidden; background: var(--pp-paper); }
+.inspect-loading { width: 100%; display: grid; place-items: center; }
+.inspect-loading img { display: block; width: min(300px, 100%); height: auto; aspect-ratio: 300 / 232; }
+
+/* 第一屏保留五行日历与应用；第二屏用六行同尺寸网格安排照片和底部两排。 */
+.desktop-pages { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+.desktop-pages::-webkit-scrollbar { display: none; }
+.desktop-page { flex: 0 0 100%; width: 100%; min-width: 0; height: 100%; overflow-y: auto; scroll-snap-align: start; }
+.desktop-grid { --desktop-widget-radius: 14px; --desktop-icon-size: 48px; --desktop-grid-gap: 10px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(5, 71.5px); gap: var(--desktop-grid-gap); }
+.desktop-widget-frame { --desktop-widget-columns: 2; --desktop-widget-inset: calc((100% - (var(--desktop-widget-columns) - 1) * var(--desktop-grid-gap)) / var(--desktop-widget-columns) / 2 - var(--desktop-icon-size) / 2); margin-inline: var(--desktop-widget-inset); min-width: 0; min-height: 0; border-radius: var(--desktop-widget-radius); overflow: hidden; }
+.desktop-grid > .desktop-calendar { --desktop-widget-columns: 4; grid-column: 1 / 5; grid-row: 2 / 4; width: auto; height: 100%; display: grid; align-content: center; gap: 10px; padding: 12px; background: var(--pp-surface); }
+.desktop-calendar-header { min-width: 0; display: grid; gap: 4px; font-size: 11px; margin-inline: calc((100% / var(--desktop-week-columns) - 1em) / 2); }
+.desktop-calendar-primary, .desktop-calendar-secondary { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 8px; }
+.desktop-calendar-secondary { align-items: start; }
+.desktop-calendar-date, .desktop-calendar-time { min-width: 0; font-size: 26px; font-weight: 500; line-height: 1.1; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+.desktop-calendar-date { text-align: left; overflow-wrap: anywhere; text-wrap: balance; }
+.desktop-calendar-date.is-long-date { font-size: 14px; line-height: 1.2; letter-spacing: 0; }
+.desktop-calendar-time { white-space: nowrap; text-align: right; }
+.desktop-calendar-year { min-width: 0; font-size: 11px; line-height: 1.4; color: var(--pp-muted); text-align: left; overflow-wrap: anywhere; }
+.desktop-calendar-weather { min-width: 0; max-width: 120px; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 2px 4px; color: var(--pp-muted); text-align: right; }
+.desktop-calendar-weather strong, .desktop-calendar-weather small { font-size: 11px; font-weight: 400; line-height: 1.4; }
+.desktop-calendar-weather small { overflow-wrap: anywhere; }
+.desktop-calendar-weather svg { width: 13px; height: 13px; flex: 0 0 auto; color: var(--pp-active); }
+.desktop-calendar .desktop-week { display: grid; grid-template-columns: repeat(var(--desktop-week-columns), minmax(0, 1fr)); min-width: 0; height: 48px; }
+.desktop-calendar .desktop-week-day { position: relative; display: grid; grid-template-rows: 11px 24px; justify-items: center; align-content: start; row-gap: 6px; min-width: 0; color: var(--pp-ink); }
+.desktop-calendar .desktop-week-day > small { font-size: 11px; line-height: 1; color: var(--pp-muted); }
+.desktop-calendar .desktop-week-day > span { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; font-size: 14px; line-height: 1; }
+.desktop-calendar .desktop-week-day.is-today > span { background: var(--pp-active); color: var(--pp-paper); }
+.desktop-calendar .desktop-week-day > i { position: absolute; bottom: 0; justify-self: center; width: 2px; height: 2px; border-radius: 50%; background: var(--pp-active); }
+.desktop-grid > .desktop-apps { grid-column: 1 / 5; grid-row: 4 / 6; grid-template-rows: repeat(2, minmax(0, 1fr)); min-width: 0; min-height: 0; }
+.desktop-grid .desktop-app-icon { border-radius: var(--desktop-widget-radius); overflow: hidden; }
+.desktop-page[data-desktop-page="1"] .desktop-grid { grid-template-rows: repeat(6, 71.5px); }
+.photowall-widget-slot { grid-column: 3 / 5; grid-row: 5 / 7; display: grid; place-items: center; border: 1px solid var(--pp-divider-soft); background: color-mix(in srgb, var(--pp-surface) 96%, transparent); font-size: 11px; color: var(--pp-muted); }
+.photowall-app-slot { min-width: 0; min-height: 0; display: grid; }
+.photowall-app-slot[data-slot="0"] { grid-column: 1; grid-row: 5; }
+.photowall-app-slot[data-slot="1"] { grid-column: 2; grid-row: 5; }
+.photowall-app-slot[data-slot="2"] { grid-column: 1; grid-row: 6; }
+.photowall-app-slot[data-slot="3"] { grid-column: 2; grid-row: 6; }
+.photowall-app-slot > .desktop-apps { display: contents; }
+.photowall-desktop-photo { --desktop-widget-columns: 4; grid-column: 1 / 5; grid-row: 1 / 5; display: grid; place-items: center; width: auto; height: 100%; border: 0; background: var(--pp-paper); }
+.photowall-desktop-photo > span { padding: 8px; font-size: 11px; color: var(--pp-muted); }
+.photowall-desktop-photo img { display: block; width: 100%; height: 100%; min-height: 0; object-fit: cover; object-position: center; transform: scale(1.04); transform-origin: center; }
+.view-photowall { display: flex; flex-direction: column; gap: 8px; }
+.photowall-scheme-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.photowall-scheme-picker { flex: 1; min-width: 0; }
+.photowall-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.photowall-field { display: grid; gap: 4px; min-width: 0; }
+.photowall-field > span, .photowall-group-label { font-size: 11px; color: var(--pp-muted); }
+.photowall-field input, .photowall-field select, .photowall-scheme-picker { min-width: 0; width: 100%; height: 29.15px; min-height: 29.15px; padding: 2.5px 8px; font-size: 12px; line-height: 1.6; }
+.photowall-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 0 0 auto; height: 26.4px; min-height: 26.4px; padding: 0 11px; border: 1px solid var(--pp-rule); border-radius: 7px; background: var(--pp-surface-soft); font-size: 12px; line-height: 1; white-space: nowrap; }
+.photowall-button svg { width: 17px; height: 17px; }
+.photowall-button.is-primary { color: var(--pp-paper); background: var(--pp-active); border-color: var(--pp-active); }
+.photowall-button.is-primary:hover { color: var(--pp-paper); }
+.photowall-button.is-danger { color: var(--pp-error); border-color: var(--pp-error); }
+.photowall-generate-row, .photowall-photo-actions, .photowall-dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.photowall-generate-row { margin-bottom: 0; }
+.photowall-gallery-head { display: flex; justify-content: space-between; align-items: center; min-height: 26.4px; font-size: 12px; }
+.photowall-gallery-head span { font-size: 11px; color: var(--pp-muted); }
+.photowall-thumbnails { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 8px; }
+.photowall-thumbnail { min-width: 0; display: grid; gap: 4px; text-align: left; font-size: 11px; line-height: 1.5; border-radius: 7px; }
+.photowall-thumbnail-image { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 136px; border-radius: 7px; }
+.photowall-thumbnail img { display: block; max-width: 100%; max-height: 136px; width: 100%; height: auto; object-fit: contain; border-radius: 7px; }
+.photowall-thumbnail[aria-pressed="true"] .photowall-thumbnail-image { outline: 1px solid var(--pp-active); outline-offset: 2px; }
+.photowall-thumbnail small { display: block; color: var(--pp-muted); font-size: 10px; }
+.photowall-selected-copy { flex: 1; min-width: 0; font-size: 11px; line-height: 1.6; color: var(--pp-muted); overflow-wrap: anywhere; }
+.photowall-photo-actions { align-items: center; justify-content: space-between; margin-top: 4px; }
+.photowall-dialog-actions { margin-top: 8px; flex-wrap: wrap; }
+.photowall-dialog-actions .is-danger { margin-right: auto; }
+.photowall-scheme-row > .phone-select-button { flex: 1; width: 0; min-width: 0; margin: 0; }
+.photowall-fields .phone-select-button { width: 100%; min-width: 0; margin: 0; }
+.view-photowall .phone-select-button { height: 29.15px; min-height: 29.15px; padding: 2.5px 8px; line-height: 1.6; }
+.view-photowall .phone-select-button > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.photowall-thumbnails .empty-hint { grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 1.6; color: var(--pp-muted); }
+.photowall-scheme-form { display: grid; gap: 8px; }
+.photowall-scheme-form > label { display: grid; gap: 4px; }
+.photowall-scheme-form input, .photowall-scheme-form select { width: 100%; min-width: 0; border: 1px solid var(--pp-rule); border-radius: 7px; background: var(--pp-paper); color: var(--pp-ink); font: inherit; height: 29.15px; padding: 2.5px 8px; }
+.photowall-template-form textarea { width: 100%; min-width: 0; min-height: 112px; padding: 6px 8px; border: 1px solid var(--pp-rule); border-radius: 7px; background: var(--pp-paper); color: var(--pp-ink); font-size: 12px; line-height: 1.6; resize: vertical; }
+.phone-dialog .photowall-dialog-actions { gap: 8px; }
+.phone-dialog .photowall-dialog-actions > .photowall-button { height: 26.4px; min-height: 26.4px; line-height: 1; padding: 0 11px; }
+.desktop-page-dots { display: flex; align-self: center; justify-content: center; gap: 4px; height: 4px; }
+.desktop-page-dots .desktop-page-dot { position: relative; width: 24px; height: 24px; margin-block: -10px; border-radius: 4px; background: transparent; }
+.desktop-page-dot::after { content: ''; position: absolute; width: 4px; height: 4px; top: 10px; left: 10px; border-radius: 50%; background: var(--pp-ink); opacity: .35; }
+.desktop-page-dot[aria-current="page"]::after { opacity: 1; }
+.view-inspect-desktop { position: relative; isolation: isolate; padding: 0; }
+.inspect-owned-content { justify-content: space-between; gap: 24px; padding-top: 42px; }
+.inspect-phone-identity { display: flex; align-items: center; flex-direction: column; gap: 12px; }
+.inspect-phone-identity h1 { max-width: 100%; text-align: center; font-size: 16px; overflow-wrap: anywhere; }
+.inspect-owner-clock.home-clock { position: relative; inset: auto; width: max-content; height: auto; display: grid; grid-template-columns: .6em .6em .3em .6em .6em; font: 500 58px/1.1 PocketPhoneRoundClock, sans-serif; color: var(--pp-ink); }
+.inspect-phone-identity .home-date { margin: 0; font-size: 12px; letter-spacing: .02em; }
+.inspect-empty { padding: 18px 0; color: var(--pp-muted); font-size: 12px; text-align: center; }
+
+.photowall-reserved-app { color: var(--pp-muted); }
+.photowall-reserved-app .desktop-app-icon { color: var(--pp-muted); background: var(--pp-pale); }

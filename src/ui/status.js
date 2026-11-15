@@ -31,6 +31,8 @@ export function createPhoneClock({ root, element, readTime, onRefresh = () => {}
     onRefresh(clock);
     const status = root.querySelector('.status-time');
     if (status) status.textContent = clock.time;
+    const calendarTime = root.querySelector('.desktop-calendar-time');
+    if (calendarTime) calendarTime.textContent = clock.time;
     const digits = root.querySelector('[data-clock-digits]');
     if (digits) {
       const values = clock.time.replace(':', '');
