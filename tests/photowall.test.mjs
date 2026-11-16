@@ -202,6 +202,40 @@ test('each manual photo uses exactly one panel-planning call; fixed emotions are
   assert.equal(JSON.stringify(s.store.read().photoWall.photos[0]).includes('personality'), false);
 });
 
+test('planning guidance protects catalog appearance and natural individuality while explicit weighted expressions reach both BBH branches unchanged', async () => {
+  for (const supportsCharacters of [true, false]) {
+    const s = setup(), plan = await s.service.saveScheme(null, s.draft);
+    s.api.getBackendStatus = () => ({ configured: true, supportsCharacters });
+    Object.assign(s.catalog[0], { tag: ' small face, almond eyes, adult, black hair, brown eyes, fair skin ', nl: ' 小脸、杏眼、成年、黑发、棕眼、白肤。 ' });
+    const appearance = s.catalog.map(({ tag, nl }) => ({ tag, nl }));
+    await s.service.generate(plan.id);
+    const oldPhoto = structuredClone(s.store.read().photoWall.photos[0]);
+    const raw = '  单张，人物A戴舞台假发，夸张瞪眼，人物B平静回应。\n1.4::wide eyes::  ';
+    const template = await s.service.saveTemplate(null, { name: '明确表情', prompt: raw });
+    const planned = { prompt: 'single image, character A with a stage wig and 1.4::wide eyes::, character B responding calmly', nl: '单张，人物A戴舞台假发并1.4::wide eyes::，人物B平静回应。' };
+    s.modelClient.complete = async request => { s.models.push(request); return JSON.stringify(planned); };
+    const saves = s.h.metadataSaves, models = s.models.length, images = s.calls.length;
+    const photo = await s.service.generate(plan.id), request = s.models.at(-1), sent = s.calls.at(-1), input = JSON.parse(request.messages[0].content);
+    assert.match(request.system, /appearance.*程序.*原样.*柏宝绘/);
+    assert.match(request.system, /不自行改写或新增.*脸型.*眼型.*五官比例.*年龄感.*发色.*瞳色.*肤色/);
+    assert.match(request.system, /动作.*距离.*姿态.*视线.*自然神情.*各自.*性格.*主动回应/);
+    assert.match(request.system, /模板未明确要求时.*害羞.*意外.*紧张.*夸张瞪眼.*薄唇.*僵硬受惊/);
+    assert.match(request.system, /用户模板明确指定.*造型.*夸张神情.*权重.*原意保留/);
+    assert.match(request.system, /英文不额外加入/);
+    assert.deepEqual(input.people.map(person => person.appearance), appearance);
+    assert.equal(input.template.prompt, raw); assert.deepEqual(input.people.map(person => person.profile.personality), ['从容', '克制']);
+    assert.deepEqual(sent.characters, s.catalog.map(({ name, tag, nl }) => ({ name, tag, nl })));
+    const scenePrompt = `character A (甲), character B (乙), ${planned.prompt}`, sceneNl = `人物A是甲，人物B是乙。${planned.nl}`;
+    assert.equal(sent.prompt, supportsCharacters ? scenePrompt : [...s.catalog.map(person => person.tag), scenePrompt].join(', '));
+    assert.equal(sent.nl, supportsCharacters ? sceneNl : [...s.catalog.map(person => person.nl), sceneNl].join('\n'));
+    assert.equal(s.models.length - models, 1); assert.equal(s.calls.length - images, 1); assert.equal(s.h.metadataSaves - saves, 1);
+    assert.deepEqual(photo.template, template); assert.equal(photo.prompt, sent.prompt); assert.equal(photo.nl, sent.nl);
+    assert.deepEqual(s.store.read().photoWall.photos[0], oldPhoto); assert.equal(s.store.read().photoWall.photos.length, 2);
+    const album = readAlbumPhotos(s.store.read()).find(item => item.path === photo.path);
+    assert.equal(album.path, photo.path); assert.equal(album.sources[0].prompt, sent.prompt); assert.deepEqual(album.sources[0].template, template);
+  }
+});
+
 test('bad planning output or failed text call never dispatches BBH, retries or falls back to old poses', async () => {
   for (const answer of [null, 'not JSON', '{}', JSON.stringify({ panels }), JSON.stringify({ prompt: 'English', nl: '' }), JSON.stringify({ prompt: 3, nl: '中文' })]) {
     const s = setup(), plan = await s.service.saveScheme(null, s.draft); let models = 0;

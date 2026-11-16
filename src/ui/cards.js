@@ -3,8 +3,13 @@ import { findSticker, stickerPacks, stickers } from '../stickers.js';
 import { displayName } from '../profiles.js';
 import { imageSource } from '../image-files.js';
 import { blobEmojis } from '../emojis.js';
+import { voiceDuration } from '../content.js';
 
-export function renderCardBody(message, generating = false, { readOnly = false } = {}) {
+export function renderCardBody(message, generating = false, { readOnly = false, voiceExpanded = false, renderText } = {}) {
+  if (message.type === 'voice') {
+    const seconds = voiceDuration(message.text);
+    return `<span class="voice-summary" style="--voice-width:${Math.min(196, 72 + seconds * 3)}px">${icon('voice')}<span>${seconds}″</span></span>${voiceExpanded ? `<span class="voice-transcript">${renderBilingual(message.text, message.translation, renderText)}</span>` : ''}`;
+  }
   if (message.type === 'sticker') {
     const sticker = findSticker(message.stickerId);
     return sticker ? `<img src="${escape(sticker.src)}" alt="${escape(sticker.label)}" draggable="false" loading="lazy">` : escape(message.text);
@@ -27,14 +32,14 @@ export function renderCardBody(message, generating = false, { readOnly = false }
   return renderBilingual(message.text, message.translation);
 }
 
-export function renderCardActions(message, { readOnly, busy, selected = false }) {
+export function renderCardActions(message, { readOnly, busy, selected = false, inspection = false, mirror = false }) {
   const transfer = message.transfer;
   const actions = message.type === 'transfer' && !readOnly && transfer.recipientId === '@user' && transfer.status === 'pending'
     ? `<button type="button" data-transfer-id="${escape(message.id)}" data-transfer-status="accepted" ${busy.has(`transfer:${message.id}`) ? 'disabled' : ''}>收下</button>
       <button type="button" data-transfer-id="${escape(message.id)}" data-transfer-status="returned" ${busy.has(`transfer:${message.id}`) ? 'disabled' : ''}>退回</button>`
     : '';
-  const more = message.type === 'image'
-    ? `<button type="button" class="icon-button card-more" aria-expanded="${selected}" data-message="${escape(message.id)}" aria-label="图片消息操作">${icon('more')}</button>`
+  const more = (message.type === 'image' || message.type === 'voice') && !mirror
+    ? `<button type="button" class="icon-button card-more" aria-expanded="${selected}" ${inspection ? 'data-inspect-message' : 'data-message'}="${escape(message.id)}" aria-label="${message.type === 'voice' ? '语音' : '图片'}消息操作">${icon('more')}</button>`
     : '';
   return actions || more ? `<div class="card-actions">${actions}${more}</div>` : '';
 }
@@ -42,12 +47,13 @@ export function renderCardActions(message, { readOnly, busy, selected = false })
 export function renderAttachments(state, ui, busy, contact, isGroup) {
   if (!ui.attachment) return '';
   const heading = `<div class="attachment-heading">
-    <span>${({ menu: '', stickers: '表情', location: '定位', transfer: '转账' })[ui.attachment]}</span>
+    <span>${({ menu: '', stickers: '表情', voice: '语音', location: '定位', transfer: '转账' })[ui.attachment]}</span>
     ${action('close-attachment', '收起附件', 'close', 'icon-button')}
   </div>`;
   if (ui.attachment === 'menu') return `<section class="attachment-panel">
     <div class="attachment-shortcuts">
       ${action('choose-stickers', '表情', 'smile')}
+      ${action('choose-voice', '语音', 'voice')}
       ${action('choose-location', '定位', 'location')}
       ${action('choose-transfer', '转账', 'transfer')}
     </div>
@@ -73,7 +79,9 @@ export function renderAttachments(state, ui, busy, contact, isGroup) {
       ${['name', 'amount'].includes(name) ? 'required' : ''} ${name === 'amount' ? 'min="0.01" step="0.01" inputmode="decimal"' : ''}>
   </label>`;
   let fields;
-  if (ui.attachment === 'location') {
+  if (ui.attachment === 'voice') {
+    fields = `<label class="attachment-field"><span>语音文字</span><textarea id="voice-draft" name="text" aria-label="语音文字" rows="3" required>${escape(draft.text || '')}</textarea></label>`;
+  } else if (ui.attachment === 'location') {
     fields = `${field('name', '地点')}${field('address', '地址')}`;
   } else {
     const recipient = isGroup ? `<label class="attachment-field">
@@ -94,7 +102,7 @@ export function renderAttachments(state, ui, busy, contact, isGroup) {
     ${heading}
     <form class="attachment-form">
       ${fields}
-      <button type="submit" class="save-button" aria-label="发送${ui.attachment === 'location' ? '定位' : '转账'}" ${busy.has(`send:${contact.id}`) ? 'disabled' : ''}>发送</button>
+      <button type="submit" class="save-button" aria-label="发送${({ voice: '语音', location: '定位', transfer: '转账' })[ui.attachment]}" ${busy.has(`send:${contact.id}`) ? 'disabled' : ''}>发送</button>
     </form>
   </section>`;
 }

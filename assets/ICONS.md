@@ -29,6 +29,7 @@ Yesicon 标明图标数据来自 Iconify；下列 Solar 条目的 SVG 使用其 
 | `location` | [`solar:map-point-broken`](https://yesicon.app/solar/map-point-broken) |  |
 | `transfer` | [`solar:transfer-horizontal-broken`](https://yesicon.app/solar/transfer-horizontal-broken) |  |
 | `image` | [`solar:gallery-broken`](https://yesicon.app/solar/gallery-broken) |  |
+| `voice` | [`solar:volume-loud-broken`](https://yesicon.app/solar/volume-loud-broken) | 模拟语音条与＋语音入口；SVG body取官方Iconify Solar数据 |
 | `sun` | [`solar:sun-broken`](https://yesicon.app/solar/sun-broken) |  |
 | `phone` | [`solar:smartphone-broken`](https://yesicon.app/solar/smartphone-broken) | 扩展菜单与悬浮球 |
 | `more` | [`solar:menu-dots-broken`](https://yesicon.app/solar/menu-dots-broken) |  |

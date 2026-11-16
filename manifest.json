@@ -3,10 +3,10 @@
   "loading_order": 100,
   "requires": [],
   "optional": [],
-  "js": "index.js?v=20261115.release-0.7.0-c5d5bee9d07bfa9d",
+  "js": "index.js?v=20261116.release-0.7.1-274950d2ed126e66",
   "author": "两三事",
-  "version": "0.7.0",
-  "update_notice": "docs/updates-0.7.0.md",
+  "version": "0.7.1",
+  "update_notice": "docs/updates-0.7.1.md",
   "homePage": "https://github.com/atonal519/ST-TwoMoreThings",
   "auto_update": false
 }

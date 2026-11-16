@@ -27,7 +27,7 @@ for (const kind of ['native', 'luker']) test(`${kind}: observer group generates 
   assert.equal(h.modelRequests.length, 1);
   assert.ok(h.modelRequests[0].body.messages[0].content.includes('无需等用户索要'));
   assert.ok(h.modelRequests[0].body.messages[0].content.includes('两者均省略译文字段'));
-  assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"translation":'));
+  assert.match(h.modelRequests[0].body.messages[0].content, /标准汉语和纯符号省略translation/);
   assert.equal(h.metadataSaves, before + 1);
   const history = store.read().conversations[group.id];
   assert.deepEqual(history.map(x => x.speakerId), ['lin', 'zhou', 'lin']);

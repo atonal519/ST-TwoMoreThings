@@ -3,6 +3,7 @@ import { action, avatar, empty, escape, icon, pageHeading } from './shared.js';
 import { renderInbox, renderMessage } from './messages.js';
 import { renderDesktop } from './desktop.js';
 import { phoneUrl } from '../paths.js';
+import { partitionHistory } from '../timeline.js';
 
 export const INSPECT_LOADING_DURATION_MS = 2160;
 
@@ -29,11 +30,27 @@ export function renderInspection(state, { ui, busy, inspectPhone, reducedMotion 
     const others = thread.participantIds.filter(id => id !== '@owner'), isGroup = others.length > 1;
     const contact = { ...(people.find(person => person.id === others[0]) || {}), id: thread.id, name: thread.name, memberIds: others, userIsMember: false };
     const projection = { ...state, contacts: people, conversations: { [thread.id]: thread.messages } };
-    const rows = thread.messages.map((message, index) => renderMessage({ ...message, role: message.speakerId === '@owner' ? 'user' : 'assistant' }, thread.messages[index - 1], thread.messages[index + 1], {
+    const { current: history, past } = partitionHistory(thread.messages, ui.batch);
+    const visible = history.slice(-ui.visibleMessages);
+    const renderList = items => items.map((message, index) => renderMessage({ ...message, role: message.speakerId === '@owner' ? 'user' : 'assistant' }, items[index - 1], items[index + 1], {
       contact, user: owner, selected: ui.inspectSelectedMessage, deleting: busy.has('inspect-delete'), isGroup, busy, readOnly: true,
       state: projection, ui: { ...ui, defaultUser: owner.name }, conversationId: thread.id, inspection: true, mirror: thread.mirror,
     })).join('');
-    return `<header class="conversation-heading">${action('inspect-back-wechat', '返回微信', 'arrow', 'icon-button back-button')}${avatar(contact, true)}<div class="conversation-person"><h1>${escape(thread.name)}</h1><small>${escape(owner.name)}的微信${thread.mirror ? ' · 已有短信' : ''}</small></div>${thread.mirror ? '' : `<div class="chat-options"><button type="button" class="icon-button" data-action="inspect-menu" aria-label="微信会话操作" aria-haspopup="menu" aria-expanded="${ui.chatMenu}">${icon('more')}</button></div>`}</header><div class="chat-stage"><div class="message-feed" role="log" aria-label="微信记录">${rows || empty('还没有消息')}</div></div>`;
+    const historySections = [];
+    let remaining = ui.visibleHistory;
+    if (ui.historyOpen) for (let index = past.length - 1; index >= 0 && remaining > 0; index--) {
+      const group = past[index], items = group.messages.slice(-remaining);
+      remaining -= items.length;
+      historySections.unshift(`<section class="past-batch" aria-label="历史微信"><div class="message-date"><span class="history-batch-heading"><span>${escape(group.label)}</span></span></div>${renderList(items)}</section>`);
+    }
+    const pastCount = past.reduce((sum, group) => sum + group.messages.length, 0);
+    const feed = `${pastCount ? `<button type="button" class="history-fold" data-action="history" aria-expanded="${ui.historyOpen}"><span>${ui.historyOpen ? '收起过去' : '查看过去'}</span></button>` : ''}
+      ${ui.historyOpen && pastCount > ui.visibleHistory ? action('earlier-history', '查看更早的历史', '', 'earlier-button') : ''}
+      ${historySections.join('')}
+      ${history.length > visible.length ? action('earlier', '查看更早的短信', '', 'earlier-button') : ''}
+      ${visible.length ? `<div class="message-date current-batch-label"><span>${escape(ui.batch.label)}</span></div>` : ''}
+      ${renderList(visible)}${!thread.messages.length ? empty('还没有消息') : ''}`;
+    return `<header class="conversation-heading">${action('inspect-back-wechat', '返回微信', 'arrow', 'icon-button back-button')}${avatar(contact, true)}<div class="conversation-person"><h1>${escape(thread.name)}</h1><small>${escape(owner.name)}的微信${thread.mirror ? ' · 已有短信' : ''}</small></div>${thread.mirror ? '' : `<div class="chat-options"><button type="button" class="icon-button" data-action="inspect-menu" aria-label="微信会话操作" aria-haspopup="menu" aria-expanded="${ui.chatMenu}">${icon('more')}</button></div>`}</header><div class="chat-stage"><div class="message-feed" role="log" aria-label="微信记录">${feed}</div></div>`;
   }
   const generating = busy.has(`inspect:${owner.id}`);
   const heading = pageHeading('微信', `${owner.needsName ? action('inspect-name-owner', '指定主人', '', 'quiet-button') : ''}${action('inspect-refresh', generating ? '生成中…' : '刷新', 'refresh', 'quiet-button', generating || owner.needsName)}`);

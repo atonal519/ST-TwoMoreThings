@@ -40,18 +40,20 @@ function snapshotPhoto(image, source) {
 function snapshotQuote(quote) {
   return quote ? `<div class="ls-quote favorite-quote"><strong class="ls-quote-name">${escape(quote.authorName)}</strong>${renderBilingual(quote.text, quote.translation, renderEmojiText)}</div>` : '';
 }
-function snapshotMessage(s) {
+function snapshotMessage(s, ui) {
   if (s.type === 'pat') return `<div class="message-row pat-row"><div class="pat-copy"><div class="pat-message favorite-copy">${bilingual(s)}</div></div></div>`;
-  const rich = ['sticker', 'location', 'transfer'].includes(s.type);
+  const rich = ['sticker', 'location', 'transfer', 'voice'].includes(s.type);
+  const voiceKey = JSON.stringify(['favorite', ui.favoriteId]);
+  const voiceExpanded = ui.expandedVoices?.has(voiceKey) === true;
   const image = s.type === 'image' || !s.type && Boolean(s.image);
   const body = image
     ? `${!s.type ? bilingual(s) : ''}${s.image?.path ? `<img class="message-photo" data-phone-image="${escape(s.image.path)}" src="${escape(imageSource(s.image.path))}" alt="${escape(s.image.description || '')}" loading="lazy">` : `<span class="photo-placeholder">${icon('image')}<small>尚未生成图片</small></span>`}<span class="photo-description">${escape(s.image?.description || '')}</span>`
-    : rich ? renderCardBody(s) : bilingual(s);
+    : rich ? renderCardBody(s, false, { voiceExpanded }) : bilingual(s);
   const classes = `bubble favorite-copy${image ? ' image-message favorite-rich' : s.type ? ` ${escape(s.type)}-message favorite-rich` : ''}`;
-  const bubble = image && s.image?.path ? `<button type="button" class="${classes}" data-action="favorite-photo" aria-label="查看收藏图片">${body}</button>` : `<div class="${classes}">${body}</div>`;
+  const bubble = s.type === 'voice' ? `<button type="button" class="${classes}" data-action="toggle-voice" data-voice-key="${escape(voiceKey)}" aria-label="${voiceExpanded ? '收起' : '展开'}语音文字" aria-expanded="${voiceExpanded}">${body}</button>` : image && s.image?.path ? `<button type="button" class="${classes}" data-action="favorite-photo" aria-label="查看收藏图片">${body}</button>` : `<div class="${classes}">${body}</div>`;
   return `<div class="message-row"><div class="message-copy"><h2 class="message-sender">${escape(s.authorName)}</h2>${bubble}<span class="message-foot">${publication(s)}</span></div></div>`;
 }
-function snapshotContent(entry) {
+function snapshotContent(entry, ui) {
   const s = entry.snapshot, { app, kind } = entry.source;
   if (app === 'forum') {
     const content = `${s.text || s.translation ? `<p class="post-body favorite-copy">${bilingual(s)}</p>` : ''}${snapshotPhoto(s.image, app)}`;
@@ -71,10 +73,10 @@ function snapshotContent(entry) {
       ? `<article class="ls-comment"><div class="ls-comment-body">${header}<p class="favorite-copy">${bilingual(s)}</p>${snapshotPhoto(s.image, app)}${snapshotQuote(s.quote)}</div></article>`
       : `<article class="${kind === 'repost' ? 'ls-repost' : 'ls-post'}">${header}<p class="ls-copy favorite-copy">${bilingual(s)}</p>${snapshotPhoto(s.image, app)}${snapshotQuote(s.quote)}</article>`;
   }
-  return snapshotMessage(s);
+  return snapshotMessage(s, ui);
 }
 export function renderFavoriteDetail(state, { ui, busy }) {
   const entry = (state.favorites || []).find(item => item.id === ui.favoriteId);
   if (!entry) return `${pageHeading('收藏详情', action('favorite-back', '返回收藏夹', 'arrow', 'icon-button'))}${empty('这条收藏已移除')}`;
-  return `${pageHeading('收藏详情', action('favorite-back', '返回收藏夹', 'arrow', 'icon-button'))}<section class="favorite-detail" data-favorite-app="${escape(entry.source.app)}"><div class="favorite-detail-header"><p class="favorite-origin">${escape(entry.snapshot.sourceLabel)}</p>${action('favorite-remove', '取消收藏', '', 'quiet-button danger', busy.has(`favorite-remove:${entry.id}`))}</div>${snapshotContent(entry)}</section>`;
+  return `${pageHeading('收藏详情', action('favorite-back', '返回收藏夹', 'arrow', 'icon-button'))}<section class="favorite-detail" data-favorite-app="${escape(entry.source.app)}"><div class="favorite-detail-header"><p class="favorite-origin">${escape(entry.snapshot.sourceLabel)}</p>${action('favorite-remove', '取消收藏', '', 'quiet-button danger', busy.has(`favorite-remove:${entry.id}`))}</div>${snapshotContent(entry, ui)}</section>`;
 }

@@ -149,7 +149,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     view: 'home', feedback: null, defaultUser, conflict: control.hasConflict?.(doc) === true,
     contactId: '', groupId: '', postId: '',
     inspectOwnerId: '', inspectThreadId: '', inspectSelectedMessage: '', inspectLoading: false, desktopPage: 0,
-    drafts: new Map(), visibleMessages: 60, batch: null,
+    drafts: new Map(), expandedVoices: new Set(), visibleMessages: 60, batch: null,
     historyOpen: false, visibleHistory: 60,
     inboxMenu: false, chatMenu: false, selectedMessage: '',
     editor: '', editId: '', profileDraft: {},
@@ -806,11 +806,15 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     void store.markRead(id).catch(() => { setFeedback({ error: true, text: '消息的已读状态保存失败，请检查酒馆连接。' }); render(); });
   }
   function expandMessages(action) {
-    if (!inChat()) return;
+    if (!inChat() && ui.view !== 'inspect-chat') return;
     const update = () => {
       if (action === 'earlier') ui.visibleMessages += 60;
       else if (action === 'earlier-history') ui.visibleHistory += 60;
-      else if (action === 'history') { ui.historyOpen = !ui.historyOpen; ui.selectedMessage = ''; }
+      else if (action === 'history') {
+        ui.historyOpen = !ui.historyOpen;
+        if (ui.view === 'inspect-chat') ui.inspectSelectedMessage = '';
+        else ui.selectedMessage = '';
+      }
       render();
     };
     if (action === 'history' && ui.historyOpen) update();
@@ -1134,6 +1138,12 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     if (event.target.matches('.photo-viewer')) { closePhoto(); return; }
     const button = event.target.closest('button');
     if (button?.disabled) return;
+    if (button?.dataset.action === 'toggle-voice') {
+      const key = button.dataset.voiceKey;
+      if (ui.expandedVoices.has(key)) ui.expandedVoices.delete(key);
+      else ui.expandedVoices.add(key);
+      render(); return;
+    }
     if (button?.hasAttribute('data-desktop-target')) {
       ui.desktopPage = Number(button.dataset.desktopTarget);
       const pages = root.querySelector('[data-desktop-pages]');
@@ -1144,7 +1154,10 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       ui.inspectOwnerId = button.dataset.inspectOwner; ui.inspectThreadId = ''; ui.inspectSelectedMessage = '';
       showPage('inspect-desktop'); return;
     }
-    if (button?.dataset.inspectThread) { ui.inspectThreadId = button.dataset.inspectThread; ui.inspectSelectedMessage = ''; showPage('inspect-chat', { bottom: true }); return; }
+    if (button?.dataset.inspectThread) {
+      ui.inspectThreadId = button.dataset.inspectThread; ui.inspectSelectedMessage = ''; ui.visibleMessages = 60; ui.historyOpen = false; ui.visibleHistory = 60;
+      showPage('inspect-chat', { bottom: true }); return;
+    }
     if (button?.dataset.inspectMessage) {
       const messageId = button.dataset.inspectMessage;
       const thread = inspectionThreads(store.read(), ui.inspectOwnerId, defaultUser).find(item => item.id === ui.inspectThreadId);
@@ -1457,6 +1470,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
         break;
       case 'attachments': ui.attachment = ui.attachment ? '' : 'menu'; closeMessageActions(); closeActionMenu(); refreshAttachmentPanel(); break;
       case 'choose-stickers': ui.attachment = 'stickers'; refreshAttachmentPanel(); break;
+      case 'choose-voice': ui.attachment = 'voice'; ui.attachmentDraft = { text: '' }; render(); root.querySelector('#voice-draft')?.focus({ preventScroll: true }); break;
       case 'choose-location': ui.attachment = 'location'; ui.attachmentDraft = {}; render(); break;
       case 'choose-transfer': ui.attachment = 'transfer'; ui.attachmentDraft = { currency: 'CNY' }; render(); break;
       case 'close-attachment': ui.attachment = ''; refreshAttachmentPanel(); break;
@@ -1749,8 +1763,14 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     event.preventDefault();
     if (event.target.matches('.attachment-form')) {
       const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages, type = ui.attachment;
-      const draft = { type, [type]: { ...ui.attachmentDraft } };
-      void perform(`send:${id}`, () => ui.view === 'group-chat' ? service.sendCard(id, draft, { replyToId: ui.replyToId }) : service.sendCard(id, draft), () => { ui.attachment = ''; ui.attachmentDraft = {}; ui.replyToId = ''; onContextChange(); });
+      const original = ui.attachmentDraft, replyToId = ui.replyToId;
+      const draft = type === 'voice' ? { type, text: original.text || '' } : { type, [type]: { ...original } };
+      if (type === 'voice' && !draft.text.trim()) return;
+      void perform(`send:${id}`, () => ui.view === 'group-chat' ? service.sendCard(id, draft, { replyToId }) : service.sendCard(id, draft), () => {
+        if (ui.attachment === type && ui.attachmentDraft === original && (type !== 'voice' || original.text === draft.text)) { ui.attachment = ''; ui.attachmentDraft = {}; }
+        if (ui.replyToId === replyToId) ui.replyToId = '';
+        onContextChange();
+      });
     }
     if (event.target.matches('.composer')) {
       const send = root.querySelector('[data-action="send"]');

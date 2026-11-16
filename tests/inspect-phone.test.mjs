@@ -6,6 +6,7 @@ import { createContextReader, createBackflowService } from '../src/context.js';
 import { createInspectPhoneService, inspectionOwners, inspectionThreads } from '../src/inspect-phone.js';
 import { readPhoneContext } from '../src/phone-context.js';
 import { createAuthoringService } from '../src/authoring.js';
+import { readTimeline } from '../src/timeline.js';
 
 function fixture() {
   const h = createHarness({ messages: [{ mes: '正文完整材料。', is_user: false }], metadata: { pocketPhone: {
@@ -99,12 +100,75 @@ test('shared inbox and bubble renderers preserve phone styling with inspection-o
   const { renderInspection } = await import('../src/ui/inspect-phone.js');
   const f = fixture(); await f.service.refresh('lin');
   const thread = f.store.read().inspectPhone.owners.lin.conversations[0];
-  const ui = { view: 'inspect-chat', defaultUser: '我', inspectOwnerId: 'lin', inspectThreadId: thread.id, inspectSelectedMessage: thread.messages[0].id };
+  const ui = { view: 'inspect-chat', defaultUser: '我', inspectOwnerId: 'lin', inspectThreadId: thread.id, inspectSelectedMessage: thread.messages[0].id,
+    batch: readTimeline(f.target.messages), visibleMessages: 60, visibleHistory: 60, historyOpen: false };
   const html = renderInspection(f.store.read(), { ui, busy: new Set(), inspectPhone: f.service });
   assert.match(html, /message-row is-mine/); assert.match(html, /bilingual-copy/); assert.match(html, /data-action="inspect-delete"/);
   for (const forbidden of ['data-action="send"', 'favorite-add', 'data-pat-target', 'data-action="delete-message"', 'data-action="photo"']) assert.equal(html.includes(forbidden), false);
   const mirror = renderInspection(f.store.read(), { ui: { ...ui, inspectThreadId: '@user', inspectSelectedMessage: 'real' }, busy: new Set(), inspectPhone: f.service });
   assert.equal(mirror.includes('inspect-delete'), false); assert.match(mirror, /已有短信/);
+});
+
+test('inspection folds old batches using exact story keys, keeps legacy and voice readable, and never clips continuation material', async () => {
+  const { renderInspection } = await import('../src/ui/inspect-phone.js');
+  const f = fixture(), current = { key: '[7]', label: '当前日期 · 主楼 #7' };
+  const first = { key: '[2]', label: '旧日期 · 主楼 #99' }, second = { key: '[4]', label: '前一日 · 主楼 #98' };
+  const messages = [
+    { id: 'legacy', speakerId: 'zhou', role: 'assistant', type: 'voice', text: 'LEGACY_VOICE', translation: '早期语音。' },
+    { id: 'old-a', speakerId: '@owner', role: 'user', text: 'OLD_A', batch: first },
+    { id: 'old-b', speakerId: 'zhou', role: 'assistant', text: 'OLD_B', batch: first },
+    { id: 'old-c', speakerId: 'zhou', role: 'assistant', text: 'OLD_C', batch: second },
+    { id: 'now', speakerId: '@owner', role: 'user', text: 'CURRENT_ONLY', batch: current },
+  ];
+  f.store.read().inspectPhone = { owners: { lin: { people: [], conversations: [{ id: 'private', name: '周予', participantIds: ['@owner', 'zhou'], messages }] } } };
+  const before = structuredClone(f.store.read()), history = (await f.reader.readForInspection('lin')).history;
+  const ui = { view: 'inspect-chat', defaultUser: '我', inspectOwnerId: 'lin', inspectThreadId: 'private', inspectSelectedMessage: 'now', batch: current, historyOpen: false, visibleMessages: 60, visibleHistory: 60, expandedVoices: new Set() };
+  const render = () => renderInspection(f.store.read(), { ui, busy: new Set(), inspectPhone: f.service });
+  const collapsed = render();
+  assert.equal(collapsed.includes('OLD_A'), false); assert.equal(collapsed.includes('LEGACY_VOICE'), false); assert.equal(collapsed.includes('CURRENT_ONLY'), true);
+  assert.match(collapsed, /data-action="history" aria-expanded="false"/); assert.match(collapsed, /current-batch-label/); assert.match(collapsed, /data-action="inspect-delete"/);
+  ui.historyOpen = true;
+  ui.expandedVoices.add(JSON.stringify(['inspection', 'lin', 'private', 'legacy', 'legacy']));
+  const opened = render();
+  assert.equal((opened.match(/class="past-batch"/g) || []).length, 3);
+  assert.equal((opened.match(/旧日期 · 主楼 #2/g) || []).length, 1); assert.match(opened, /前一日 · 主楼 #4/); assert.match(opened, /早期记录（未按楼分组）/);
+  for (const text of ['OLD_A', 'OLD_B', 'OLD_C', 'CURRENT_ONLY', 'LEGACY_VOICE', '早期语音。']) assert.ok(opened.includes(text));
+  assert.match(opened, /voice-transcript/); assert.doesNotMatch(opened, /delete-history|data-action="send"|favorite-add/);
+  ui.historyOpen = false; assert.equal(render().includes('OLD_A'), false);
+  assert.deepEqual(f.store.read(), before); assert.deepEqual((await f.reader.readForInspection('lin')).history, history);
+  assert.equal(history.find(thread => thread.id === 'private').messages.length, 5);
+  assert.equal(f.requests.length, 0); assert.equal(f.h.metadataSaves, 0); assert.equal(f.h.settingsSaves, 0);
+});
+
+test('inspection pages current and past records in sixty-message steps without truncating saved history', async () => {
+  const { renderInspection } = await import('../src/ui/inspect-phone.js');
+  const f = fixture(), current = { key: 'current', label: '当前' }, oldA = { key: 'old-a', label: '早一批' }, oldB = { key: 'old-b', label: '晚一批' };
+  const rows = (prefix, count, batch) => Array.from({ length: count }, (_, index) => ({ id: `${prefix}_${index}`, speakerId: 'zhou', role: 'assistant', text: `${prefix}_${index}`, batch }));
+  const messages = [{ id: 'legacy', speakerId: 'zhou', role: 'assistant', text: 'LEGACY' }, ...rows('PAST_A', 70, oldA), ...rows('PAST_B', 70, oldB), ...rows('CURRENT', 65, current)];
+  f.store.read().inspectPhone = { owners: { lin: { people: [], conversations: [{ id: 'paged', name: '周予', participantIds: ['@owner', 'zhou'], messages }] } } };
+  const ui = { view: 'inspect-chat', defaultUser: '我', inspectOwnerId: 'lin', inspectThreadId: 'paged', batch: current, historyOpen: false, visibleMessages: 60, visibleHistory: 60 };
+  const render = () => renderInspection(f.store.read(), { ui, busy: new Set(), inspectPhone: f.service });
+  const count = html => (html.match(/data-message-id=/g) || []).length;
+  const initial = render(); assert.equal(count(initial), 60); assert.equal(initial.includes('data-message-id="CURRENT_4"'), false); assert.match(initial, /data-action="earlier"/);
+  ui.historyOpen = true; let html = render(); assert.equal(count(html), 120); assert.match(html, /data-message-id="PAST_B_10"/); assert.equal(html.includes('data-message-id="PAST_A_69"'), false); assert.match(html, /data-action="earlier-history"/);
+  ui.visibleHistory += 60; html = render(); assert.equal(count(html), 180); assert.match(html, /data-message-id="PAST_A_20"/); assert.equal(html.includes('data-message-id="PAST_A_19"'), false);
+  ui.visibleHistory += 60; ui.visibleMessages += 60; html = render(); assert.equal(count(html), 206); assert.doesNotMatch(html, /data-action="earlier-history"|data-action="earlier"/); assert.match(html, /data-message-id="legacy"/);
+  assert.equal(f.store.read().inspectPhone.owners.lin.conversations[0].messages.length, 206); assert.equal((await f.reader.readForInspection('lin')).history.find(t => t.id === 'paged').messages.length, 206);
+  assert.equal(f.requests.length, 0); assert.equal(f.h.metadataSaves, 0);
+});
+
+test('real SMS mirror uses the same collapsed batch display without private deletion or read writes', async () => {
+  const { renderInspection } = await import('../src/ui/inspect-phone.js');
+  const f = fixture(), current = { key: 'now', label: '当前' }, old = { key: 'past', label: '过去' };
+  f.store.read().conversations.lin = [{ id: 'old', role: 'assistant', type: 'voice', text: 'MIRROR_OLD', batch: old, read: false }, { id: 'new', role: 'user', text: 'MIRROR_CURRENT', batch: current }];
+  const before = structuredClone(f.store.read());
+  const ui = { view: 'inspect-chat', defaultUser: '我', inspectOwnerId: 'lin', inspectThreadId: '@user', inspectSelectedMessage: 'old', batch: current, visibleMessages: 60, visibleHistory: 60, historyOpen: false, expandedVoices: new Set() };
+  const render = () => renderInspection(f.store.read(), { ui, busy: new Set(), inspectPhone: f.service });
+  assert.equal(render().includes('MIRROR_OLD'), false); assert.match(render(), /MIRROR_CURRENT/);
+  ui.historyOpen = true; ui.expandedVoices.add(JSON.stringify(['inspection', 'lin', '@user', 'past', 'old']));
+  const html = render(); assert.match(html, /MIRROR_OLD/); assert.match(html, /past-batch/); assert.match(html, /voice-transcript/);
+  assert.doesNotMatch(html, /inspect-delete|delete-history|data-action="send"|favorite-add/);
+  assert.deepEqual(f.store.read(), before); assert.equal(f.h.metadataSaves, 0); assert.equal(f.requests.length, 0);
 });
 
 test('full private continuation and QQJ memory are read without clipping or new lookups', async () => {

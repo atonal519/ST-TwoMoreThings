@@ -8,7 +8,10 @@ export const blobEmojis = blobEmojiData.map(([code, label, emoji, aliases]) => (
 const byCode = new Map(blobEmojis.map(item => [item.code, item]));
 const byGlyph = new Map(blobEmojis.map(item => [item.emoji.replaceAll('\ufe0f', ''), item]));
 const byName = new Map(blobEmojis.map(item => [item.label, item]));
-for (const item of blobEmojis) for (const alias of item.aliases) if (!byName.has(alias)) byName.set(alias, item);
+for (const item of blobEmojis) {
+  byName.set(`blob.${item.code}`, item);
+  for (const alias of item.aliases) if (!byName.has(alias)) byName.set(alias, item);
+}
 const graphemes = new Intl.Segmenter('und', { granularity: 'grapheme' });
 const shortcodes = /\[(?:表情[:：]\s*)?([^\[\]\r\n]{1,24})\]|【(?:表情[:：]\s*)?([^【】\r\n]{1,24})】/gu;
 

@@ -3,7 +3,7 @@ import { favoriteAction } from './favorites.js';
 import { action, avatar, empty, escape, icon, pageHeading, renderBilingual, renderEmojiText, renderMentionText } from './shared.js';
 import { displayName } from '../profiles.js';
 import { partitionHistory } from '../timeline.js';
-import { messageText } from '../content.js';
+import { messageText, voiceDuration } from '../content.js';
 import { renderAttachments, renderCardActions, renderCardBody } from './cards.js';
 import { chatBackgroundStyle } from '../backgrounds.js';
 import { replyContext } from '../replies.js';
@@ -63,6 +63,8 @@ export function renderMessage(message, previous, next, { contact, user, selected
   const hasPrev = party(previous) === party(message), hasNext = party(next) === party(message);
   const grouped = `${hasPrev ? ' grouped-top' : ''}${hasNext ? ' grouped-bottom' : ''}${previous && !hasPrev ? ' group-start' : ''}`;
   const chosen = selected === message.id;
+  const voiceKey = JSON.stringify([...(inspection ? ['inspection', ui.inspectOwnerId] : ['messages']), conversationId, message.batch?.key ?? 'legacy', message.id]);
+  const voiceExpanded = ui.expandedVoices?.has(voiceKey) === true;
   const ref = { app: 'messages', kind: 'message', conversationId, messageId: message.id, batchKey: message.batch?.key ?? 'legacy' };
   const favorite = chosen && !inspection ? favoriteAction(ref, favoriteFor(state, captureFavorite(state, ref, { defaultUser: ui.defaultUser })), busy.has(`favorite-add:${JSON.stringify(ref)}`), { message: true }) : '';
   if (message.type === 'pat') return `<div data-message-id="${escape(message.id)}" class="message-row pat-row${chosen ? ' is-selected' : ''}">
@@ -70,7 +72,9 @@ export function renderMessage(message, previous, next, { contact, user, selected
       ${chosen && !inspection ? `<div class="message-actions" role="group" aria-label="短信操作">${favorite}</div>` : ''}
     </div>
   </div>`;
-  const bubbleAttributes = inspection
+  const bubbleAttributes = message.type === 'voice'
+    ? `data-action="toggle-voice" data-voice-key="${escape(voiceKey)}" aria-label="${voiceDuration(message.text)}秒语音，${voiceExpanded ? '收起' : '展开'}文字" aria-expanded="${voiceExpanded}"`
+    : inspection
     ? `data-inspect-message="${escape(message.id)}" aria-label="微信：${escape(messageText(message))}" aria-expanded="${chosen}"`
     : message.type === 'image'
     ? `data-action="photo" data-photo="${escape(message.id)}" aria-label="${message.image.path ? '查看图片' : '生成图片'}" aria-busy="${busy.has(`image:${message.id}`)}" ${busy.has(`image:${message.id}`) ? 'disabled' : ''}`
@@ -90,7 +94,7 @@ export function renderMessage(message, previous, next, { contact, user, selected
   const renderText = text => renderMentionText(text, groupPeople);
   const replyBlock = reply ? `<div class="message-reply${reply.missing ? ' is-missing' : ''}"><small>引用${replyName ? ` ${escape(replyName)}` : ''}</small>${reply.missing ? '<span>原消息已删除</span>' : renderBilingual(reply.messageText, reply.translation, renderText)}</div>` : '';
   const text = !message.type && message.source?.kind === 'main-story' ? storySmsDisplayText(message.text) : message.text;
-  const body = !message.type ? renderBilingual(text, message.translation, renderText) : renderCardBody(message, busy.has(`image:${message.id}`), { readOnly: inspection });
+  const body = !message.type ? renderBilingual(text, message.translation, renderText) : renderCardBody(message, busy.has(`image:${message.id}`), { readOnly: inspection, voiceExpanded, renderText });
   return `<div data-message-id="${escape(message.id)}" class="message-row ${mine ? 'is-mine' : 'is-theirs'}${chosen ? ' is-selected' : ''}${!hasNext && message.timeLabel ? ' has-time' : ''}${grouped}">
     ${messageAvatar}
     <div class="message-body">
@@ -104,7 +108,7 @@ export function renderMessage(message, previous, next, { contact, user, selected
             <button type="button" class="message-action message-delete danger" data-action="${inspection ? 'inspect-delete' : 'delete-message'}" data-message-target="${escape(message.id)}" aria-label="删除这条短信" ${deleting ? 'disabled' : ''}>${icon('message-delete')}<span>删除</span></button>
           </div>` : ''}
         </div>
-        ${inspection ? '' : renderCardActions(message, { readOnly, busy, selected: chosen })}
+        ${inspection && message.type !== 'voice' ? '' : renderCardActions(message, { readOnly, busy, selected: chosen, inspection, mirror })}
         ${timestamp}
       </div>
     </div>

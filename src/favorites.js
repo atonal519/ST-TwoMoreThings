@@ -40,7 +40,7 @@ export function captureFavorite(state, ref, { defaultUser = '我' } = {}) {
     const author = unit.role === 'user' ? state.userProfile || { name: defaultUser } : group ? state.contacts?.find(item => item.id === unit.speakerId) : person;
     authorName = displayName(author || { name: unit.role === 'user' ? defaultUser : '已移除联系人' }) || defaultUser;
     sourceLabel = `${group ? '群聊' : '私聊'} · ${displayName(person)}`;
-    snapshot.text = unit.type === 'sticker' && !findSticker(unit.stickerId) ? unit.text || '' : messageText(unit);
+    snapshot.text = unit.type === 'voice' || unit.type === 'sticker' && !findSticker(unit.stickerId) ? unit.text || '' : messageText(unit);
     if (unit.type) snapshot.type = unit.type;
     if (unit.type === 'location') snapshot.location = copyText(unit.location, ['name', 'address']);
     if (unit.type === 'transfer') snapshot.transfer = copyText(unit.transfer, ['amount', 'currency', 'note', 'status']);

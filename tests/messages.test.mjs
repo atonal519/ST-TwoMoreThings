@@ -5,6 +5,7 @@ import { createPhoneStore } from '../src/store.js';
 import { createApiSettings, createModelClient } from '../src/api.js';
 import { createContextReader } from '../src/context.js';
 import { createMessageService } from '../src/messages.js';
+import { renderChat } from '../src/ui/messages.js';
 
 export async function serviceHarness(options = {}) {
   const h = createHarness({ settings: { pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'test'}}, 'schedule-planner': { apiPresets: [{ id: 'test', url: 'https://example.invalid/v1', key: 'test-key', model: 'm' }] } }, ...options });
@@ -77,7 +78,7 @@ test('send and continue are separate and do not write any main floor', async () 
   assert.ok(JSON.stringify(h.modelRequests[0].body.messages).includes('约好今晚去书店。'));
   assert.ok(h.modelRequests[0].body.messages[0].content.includes('无需等用户索要'));
   assert.ok(h.modelRequests[0].body.messages[0].content.includes('两者均省略译文字段'));
-  assert.ok(!h.modelRequests[0].body.messages[0].content.includes('"translation":'));
+  assert.match(h.modelRequests[0].body.messages[0].content, /标准汉语和纯符号省略translation/);
   assert.equal(h.persistedMetadata.pocketPhone.conversations.lin.length, 3);
 });
 
@@ -100,16 +101,33 @@ test('continue saves originals and optional translations for several bubbles in 
   assert.equal(h.modelRequests.length, 1);
 });
 
-test('a saved Cantonese default reaches the real request and preserves its standard Chinese translation in the same save', async () => {
-  const { h, store, service } = await serviceHarness({ completion: { choices: [{ message: { content: '{"messages":[{"text":"我到咗啦。","translation":"我到了。"}]}' } }] } });
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: Cantonese translation conditions reach the final request and bilingual replies save and display in the same call`, async () => {
+  const { h, target, store, service } = await serviceHarness({ hostKind, completion: { choices: [{ message: { content: JSON.stringify({ messages: [
+    { text: '我到咗喇。', translation: '我到了。' }, { type: 'voice', text: '迟啲见。', translation: '晚点见。' }, { text: '收到。' }, { text: '👌' },
+  ] }) } }] } });
   await store.setDefaultLanguage('粤语');
+  await store.upsertContacts([{ id: 'lin', name: '林舟', language: '粤语' }]);
   const before = h.metadataSaves;
   await service.continueChat('lin');
   const request = h.modelRequests[0].body;
   assert.equal(JSON.parse(request.messages.find(message => message.role === 'user').content).defaultLanguage, '粤语');
+  assert.equal(JSON.parse(request.messages.find(message => message.role === 'user').content).contact.language, '粤语');
   assert.ok(request.messages[0].content.includes('粤语也要翻译'));
-  assert.equal(store.read().conversations.lin.at(-1).text, '我到咗啦。');
-  assert.equal(store.read().conversations.lin.at(-1).translation, '我到了。');
+  assert.doesNotMatch(request.messages[0].content, /普通消息仍用text和可选translation/);
+  assert.match(request.messages[0].content, /包括用汉字书写的粤语.*每条.*本次回答.*标准汉语.*translation/);
+  assert.match(request.messages[0].content, /标准汉语和纯符号省略translation/);
+  const example = request.messages[0].content.match(/\{"text":"[^"]*咗[^"]*","translation":"[^"]+"\}/)?.[0];
+  assert.ok(example); assert.deepEqual(JSON.parse(example), { text: '我到咗喇。', translation: '我到了。' });
+  const messages = store.read().conversations.lin;
+  assert.equal(messages[0].text, '我到咗喇。'); assert.equal(messages[0].translation, '我到了。');
+  assert.equal(messages[1].type, 'voice'); assert.equal(messages[1].text, '迟啲见。'); assert.equal(messages[1].translation, '晚点见。');
+  assert.equal(Object.hasOwn(messages[2], 'translation'), false); assert.equal(Object.hasOwn(messages[3], 'translation'), false);
+  assert.deepEqual(createPhoneStore({ target }).read().conversations.lin, messages);
+  const ui = { view: 'chat', contactId: 'lin', defaultUser: '我', batch: messages[0].batch, drafts: new Map(), visibleMessages: 60, visibleHistory: 60,
+    expandedVoices: new Set([JSON.stringify(['messages', 'lin', messages[1].batch.key, messages[1].id])]) };
+  const html = renderChat(store.read(), { ui, busy: new Set() });
+  assert.equal((html.match(/class="message-translation"/g) || []).length, 2);
+  assert.match(html, /我到咗喇。/); assert.match(html, /我到了。/); assert.match(html, /迟啲见。/); assert.match(html, /晚点见。/);
   assert.equal(h.modelRequests.length, 1); assert.equal(h.metadataSaves, before + 1);
 });
 
