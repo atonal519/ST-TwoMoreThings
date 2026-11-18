@@ -1,3 +1,4 @@
+import { cameraRole } from './camera-presets.js';
 import { inspectionOwners, inspectionData, inspectionHistory } from './inspect-phone.js';
 import { circleProfile } from './forum-scope.js';
 import { sanitizeStoryBody } from './shared-body-wrappers.js';
@@ -12,13 +13,16 @@ import { createCalendarReader } from './calendar.js';
 import { readPhoneContext, readableGroupMessages, messageAudience } from './phone-context.js';
 import { replyContext } from './replies.js';
 import { createMemorySources } from './memory-sources.js';
-import { removeAcceptedStorySms, readStorySmsProjection, storySmsBlockMatches, storySmsSourceRows } from './story-sms.js';
+import { removeAcceptedStorySms, readStorySmsProjection, storySmsBlockMatches, storySmsSourceRows, createStorySmsResolver, storySmsTransfer } from './story-sms.js';
 import { identityOwnerId, identityProfile, isUserIdentity, withIdentitySource } from './identities.js';
 
-function acceptedStorySms(state, selected, wrappers) {
+function acceptedStorySms(state, selected, wrappers, user) {
   const accepted = new Map();
   if (!selected.length) return accepted;
-  const projections = new Map(selected.map(({ message, index }) => [index, readStorySmsProjection(message.mes, wrappers)]));
+  const projections = new Map(selected.map(({ message, index }) => {
+    const projection = readStorySmsProjection(message.mes, wrappers);
+    return [index, { ...projection, resolve: createStorySmsResolver(state, projection.blocks, user) }];
+  }));
   for (const { conversationId, row } of storySmsSourceRows(state, selected[0].index)) {
     const projection = projections.get(row.source.floor);
     if (!projection) continue;
@@ -27,7 +31,7 @@ function acceptedStorySms(state, selected, wrappers) {
       if (row.source.projection !== projection.key) continue;
       block = projection.blocks[row.source.position];
     } else {
-      const matches = projection.blocks.filter(item => storySmsBlockMatches(state, conversationId, row, item));
+      const matches = projection.blocks.filter(item => storySmsBlockMatches(state, conversationId, row, item, projection.resolve));
       block = matches.find(item => item.index === row.source.block) || (matches.length === 1 ? matches[0] : undefined);
     }
     if (!block) continue;
@@ -40,7 +44,7 @@ function narrativeBody(message, index, accepted, wrappers) {
   const blocks = accepted.get(index);
   return sanitizeStoryBody(blocks?.size ? removeAcceptedStorySms(message.mes, blocks) : message.mes, wrappers);
 }
-function recentStory(messages, beforeIndex = messages.length, wrappers = {}, state) {
+function recentStory(messages, beforeIndex = messages.length, wrappers = {}, state, user) {
   const count = readStoryReferenceFloors(state), selected = [];
   if (!count) return [];
   for (let index = beforeIndex - 1; index >= 0 && selected.length < count; index--) {
@@ -49,13 +53,12 @@ function recentStory(messages, beforeIndex = messages.length, wrappers = {}, sta
     selected.push({ message, index, user: Boolean(message.is_user || message.role === 'user') });
   }
   selected.reverse();
-  const accepted = acceptedStorySms(state, selected.filter(row => !row.user), wrappers);
+  const accepted = acceptedStorySms(state, selected.filter(row => !row.user), wrappers, user);
   return selected.flatMap(({ message, index, user }) => {
     const text = user ? message.mes : narrativeBody(message, index, accepted, wrappers);
     return text ? [{ role: user ? 'user' : 'assistant', speaker: message.name || (user ? '用户' : '角色'), text }] : [];
   });
 }
-const phoneHistory = (state, id, batch) => currentMessages(state.conversations[id] || [], batch);
 
 function authorPhoneMaterial(state, { authors, anchor, excludeApps, defaultUser, shared = true }) {
   const queues = authors.map(author => state.contacts.some(person => person.id === author.id) && !isUserIdentity(state, author.id)
@@ -101,7 +104,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
     const person = state.userProfile, batch = readTimeline(target.messages);
     return { character: cardText(target.character), user: person?.name || target.user, defaultLanguage: state.defaultLanguage || '',
       userProfile: { name: person?.name || target.user, nickname: person?.nickname || '' },
-      clock: batch.clock, batch, story: recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state) };
+      clock: batch.clock, batch, story: recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state, target.user) };
   };
   return {
     async readForPhotoWall(people) {
@@ -132,11 +135,11 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         // 人工清空仍是有效资料，不由手机旧性格重新补回。
         for (const key of ['personality', 'expression']) if (phone?.[key]?.trim() && !profile?.[key]?.trim() && !profile?.manualFields.includes(key)) phoneProfile[key] = phone[key];
         if (ownerId === '@user' || known?.specialRole === 'user' || userNames.some(name => names.has(name))) matchedUserNames.push(person.name);
-        return { role: index === 0 ? 'A' : 'B', name: person.name, appearance: { tag: person.tag, nl: person.nl || '' }, profile, ...(Object.keys(phoneProfile).length ? { phoneProfile } : {}) };
+        return { role: cameraRole(index), name: person.name, appearance: { tag: person.tag, nl: person.nl || '' }, profile, ...(Object.keys(phoneProfile).length ? { phoneProfile } : {}) };
       });
       const persona = target.userPersona || '';
       const userPersona = persona && (matchedUserNames.length || [...requiredNames].some(name => persona.includes(name)))
-        ? { source: '当前聊天选中的用户人设；仅当原文姓名明确属于所选两人时使用', userName: target.user, text: persona, ...(matchedUserNames.length ? { matchedNames: matchedUserNames } : {}) } : null;
+        ? { source: '当前聊天选中的用户人设；仅当原文姓名明确属于所选人物时使用', userName: target.user, text: persona, ...(matchedUserNames.length ? { matchedNames: matchedUserNames } : {}) } : null;
       const worldbook = await target.readWorldInfo({ scanText: [...requiredNames].join('\n'), requiredNames: [...requiredNames] });
       return { people: selected, profilePolicy: 'profile.manualFields为人工指定字段，明确空值不由其他来源补回。', ...(userPersona ? { userPersona } : {}), worldbook };
     },
@@ -170,8 +173,9 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
       const ownerId = identityOwnerId(state, id), ownAccounts = state.contacts.filter(person => identityOwnerId(state, person.id) === ownerId);
       const actingPerson = ownerId !== '@user' && ownAccounts.length > 1 ? state.contacts.find(person => person.id === ownerId) : null;
       const current = base(state);
-      const history = phoneHistory(state, id, current.batch).map(message => contextMessage(message, state.conversations[id] || []));
-      const previousMessages = previousPhoneHistory(state, id, current.batch.key);
+      const thread = (state.conversations[id] || []).map(message => storySmsTransfer(message, id));
+      const history = currentMessages(thread, current.batch).map(message => contextMessage(message, thread));
+      const previousMessages = previousPhoneHistory(state, id, current.batch.key, thread);
       const phoneContext = readPhoneContext(state, { defaultUser: target.user, anchor: current.batch, targetIds: [id], excludeApps: ['forum'], excludeConversationId: id });
       const calendarReference = calendar.context([...current.story.map(item => item.text), messageText(history.at(-1) || {})].join('\n'), target.id);
       let related = '';
@@ -202,7 +206,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
     },
     async readForLiangshi({ scanText = '', includePhoneContext = false, includeStory = true, includeUserPersona = false, excludeApps = [], authorContactIds } = {}) {
       const state = await store.readSaved();
-      const story = includeStory ? recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state) : undefined;
+      const story = includeStory ? recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state, target.user) : undefined;
       const batch = readTimeline(target.messages), contacts = state.contacts.filter(person => !isUserIdentity(state, person.id)).map(({ id, name, expression, language }) => ({ id, name, expression: expression || '', language: language || '' }));
       const selected = authorContactIds ? contacts.filter(person => authorContactIds.includes(person.id)) : contacts;
       const material = authorPhoneMaterial(state, { authors: selected, anchor: batch, excludeApps: [...new Set(['liangshi', ...excludeApps])], defaultUser: target.user, shared: includePhoneContext });
@@ -215,12 +219,12 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         worldbook: await target.readWorldInfo({ scanText: ['两事 微博 热搜 推荐 话题 转发 评论', scanText, ...(story || []).map(item => item.text)].join('\n') }) }, state, selected.map(person => person.id));
     },
     async readForLiangshiHot() {
-      const state = await store.readSaved(), story = recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state);
+      const state = await store.readSaved(), story = recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state, target.user);
       return { story, clock: readTimeline(target.messages).clock, setting: cardText(target.character), defaultLanguage: state.defaultLanguage || '', worldbook: await target.readWorldInfo() };
     },
     async readForLiangshiFollowing() {
       const state = await store.readSaved(), userProfile = { name: state.userProfile?.name || target.user, nickname: state.userProfile?.nickname || '' };
-      const userPersona = target.userPersona || '', batch = readTimeline(target.messages), story = recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state);
+      const userPersona = target.userPersona || '', batch = readTimeline(target.messages), story = recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state, target.user);
       const contacts = state.contacts.filter(person => !isUserIdentity(state, person.id)).map(({ id, name, expression, language }) => ({ id, name, expression: expression || '', language: language || '' }));
       const material = authorPhoneMaterial(state, { authors: contacts, anchor: batch, excludeApps: ['liangshi'], defaultUser: target.user });
       return withIdentitySource({ clock: batch.clock, setting: cardText(target.character), userPersona, userProfile, story,
@@ -230,7 +234,7 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
         worldbook: await target.readWorldInfo({ scanText: ['两事 微博 关注 兴趣 生活', ...story.map(item => item.text), userPersona].join('\n') }) }, state, contacts.map(person => person.id));
     },
     async readForLiangshiDraft({ seed, imageSeed }) {
-      const state = await store.readSaved(), batch = readTimeline(target.messages), story = recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state), userProfile = { name: state.userProfile?.name || target.user || '我', nickname: state.userProfile?.nickname || '' };
+      const state = await store.readSaved(), batch = readTimeline(target.messages), story = recentStory(target.messages, target.messages.length, wrapperSettingsProvider(), state, target.user), userProfile = { name: state.userProfile?.name || target.user || '我', nickname: state.userProfile?.nickname || '' };
       return { clock: batch.clock, setting: cardText(target.character), userPersona: target.userPersona || '', story, seed, imageSeed, publicName: userProfile.nickname || userProfile.name,
         userProfile, defaultLanguage: state.defaultLanguage || '', emojis: emojiChoices(),
         phoneContext: readPhoneContext(state, { defaultUser: target.user, anchor: batch, targetIds: ['@user'], excludeApps: ['liangshi'] }),
@@ -357,7 +361,7 @@ export function createBackflowService({ target, store, modelClient, isEnabled = 
       const maxCharacters = 100;
       const reply = await modelClient.complete({ system: SUMMARY_PROMPT, messages: [{ role: 'user', content: JSON.stringify({
         time: batch.label, conversations,
-        story: recentStory(target.messages, beforeIndex, wrapperSettingsProvider(), state),
+        story: recentStory(target.messages, beforeIndex, wrapperSettingsProvider(), state, target.user),
         maxCharacters,
       }) }] });
       const answer = parseJsonObject(reply);

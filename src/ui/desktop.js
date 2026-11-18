@@ -1,7 +1,10 @@
 import { homeImage } from './home.js';
 import { escape, icon } from './shared.js';
-import { readPhotoWall } from '../photowall.js';
+import { readPhotoWallImage } from '../photowall.js';
+import { cleanWallCrop } from '../wall-crop.js';
 import { imageSource } from '../image-files.js';
+
+const secondaryAppIds = ['inspect-phone', 'favorites'];
 
 function realDateCalendar(now = new Date()) {
   const year = now.getFullYear(), month = now.getMonth(), date = now.getDate(), weekdays = ['一', '二', '三', '四', '五', '六', '日'];
@@ -55,9 +58,9 @@ export function renderDesktop(state, { apps, calendar, now, weather, owner, ui =
     </section>${renderAppGrid(apps)}</div>`;
   const page = ui.desktopPage || 0;
   const dots = `<nav class="desktop-page-dots" aria-label="桌面分页">${[0, 1].map(index => `<button type="button" class="desktop-page-dot" data-desktop-target="${index}" aria-label="第${index + 1}屏" aria-current="${index === page ? 'page' : 'false'}"></button>`).join('')}</nav>`;
-  const wall = readPhotoWall(state), photo = wall.photos.find(row => row.id === wall.desktopPhotoId);
-  const second = `<button type="button" class="photowall-desktop-photo desktop-widget-frame" data-action="photowall-open" aria-label="管理照片墙">${photo ? `<img src="${escape(imageSource(photo.path))}" data-phone-image="${escape(photo.path)}" alt="${escape(photo.people.map(person => person.name).join('与'))}的合照" draggable="false">` : '<span>照片墙</span>'}</button>
-    ${[0, 1, 2, 3].map((slot) => `<div class="photowall-app-slot" data-slot="${slot}">${slot === 0 ? renderAppGrid(apps.filter(app => app.id === 'inspect-phone')) : `<div class="desktop-app photowall-reserved-app" aria-label="应用预留"><span class="desktop-app-icon">${icon('plus')}</span><span>预留</span></div>`}</div>`).join('')}
+  const photo = readPhotoWallImage(state);
+  const second = `<button type="button" class="photowall-desktop-photo desktop-widget-frame" data-action="album-open" aria-label="管理照片墙" ${photo ? `data-wall-crop="${escape(JSON.stringify(cleanWallCrop(photo.crop)))}"` : ''}>${photo ? `<img class="wall-crop-image" src="${escape(imageSource(photo.path))}" data-phone-image="${escape(photo.path)}" alt="${escape(photo.description)}" draggable="false">` : '<span>照片墙</span>'}</button>
+    ${[0, 1, 2, 3].map((slot) => `<div class="photowall-app-slot" data-slot="${slot}">${slot < secondaryAppIds.length ? renderAppGrid(apps.filter(app => app.id === secondaryAppIds[slot])) : `<div class="desktop-app photowall-reserved-app" aria-label="应用预留"><span class="desktop-app-icon">${icon('plus')}</span><span>预留</span></div>`}</div>`).join('')}
     <div class="photowall-widget-slot desktop-widget-frame">小组件预留</div>`;
-  return `${wallpaper}<div class="desktop-pages" data-desktop-pages>${[0, 1].map(index => `<section class="desktop-page" data-desktop-page="${index}" aria-label="桌面第${index + 1}屏"><div class="desktop-content"><div class="desktop-grid">${index === 0 ? renderCalendarWidget(calendar, now, weather) + renderAppGrid(apps.filter(app => app.id !== 'inspect-phone')) : second}</div>${dots}</div></section>`).join('')}</div>`;
+  return `${wallpaper}<div class="desktop-pages" data-desktop-pages>${[0, 1].map(index => `<section class="desktop-page" data-desktop-page="${index}" aria-label="桌面第${index + 1}屏"><div class="desktop-content"><div class="desktop-grid">${index === 0 ? renderCalendarWidget(calendar, now, weather) + renderAppGrid(apps.filter(app => !secondaryAppIds.includes(app.id))) : second}</div>${dots}</div></section>`).join('')}</div>`;
 }

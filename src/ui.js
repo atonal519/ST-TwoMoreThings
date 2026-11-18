@@ -1,5 +1,6 @@
-import { readPhotoWall, characterKey } from './photowall.js';
-import { renderPhotoWall, renderCharacterOptions, photoWallImage } from './ui/photowall.js';
+import { renderCamera } from './ui/camera.js';
+import { createCameraPresetEditor } from './ui/camera-editor.js';
+import { newCameraPreset } from './camera-presets.js';
 import { renderInspection, INSPECT_LOADING_DURATION_MS } from './ui/inspect-phone.js';
 import { inspectionThreads } from './inspect-phone.js';
 import { bindOutsideClose } from './ui/panel-window.js';
@@ -53,6 +54,8 @@ import { MEMORY_CONFLICT_CODE } from './memory-sources.js';
 import { phoneUrl } from './paths.js';
 import { renderAlbum } from './ui/album.js';
 import { findAlbumPhoto } from './album.js';
+import { readPhotoWallImage } from './photowall.js';
+import { createWallCropEditor } from './ui/wall-crop.js';
 import { createAlbumEditor } from './ui/album-editor.js';
 import { createNotificationShade } from './ui/notification-shade.js';
 
@@ -65,8 +68,9 @@ const apps = [
   { id: 'calendar', label: '日历', view: 'calendar' },
   { id: 'album', label: '相册', view: 'album' },
   { id: 'settings', label: '设置', view: 'settings' },
-  { id: 'favorites', label: '收藏夹', view: 'favorites' },
+  { id: 'camera', label: '相机', view: 'camera' },
   { id: 'inspect-phone', label: '查手机', view: 'inspect-phone' },
+  { id: 'favorites', label: '收藏夹', view: 'favorites' },
 ];
 const pages = {
   'inspect-phone': renderInspection,
@@ -75,7 +79,7 @@ const pages = {
   'inspect-wechat': renderInspection,
   home: renderHome,
   desktop: renderDesktop,
-  photowall: renderPhotoWall,
+  camera: renderCamera,
   inbox: renderInbox,
   chat: renderChat,
   'group-chat': renderChat,
@@ -95,7 +99,7 @@ const pages = {
   'favorite-detail': renderFavoriteDetail,
 };
 
-export function mountPhone({ mount, store, messages, inspectPhone, photoWall, groups, directory, forum, social, liangshi, sourcePermissions, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onError, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenNotifications }) {
+export function mountPhone({ mount, store, messages, inspectPhone, camera, groups, directory, forum, social, liangshi, sourcePermissions, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onError, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenCamera, onOpenNotifications }) {
   const doc = mount.ownerDocument;
   let openingFocus = doc.activeElement;
   const element = doc.createElement('div');
@@ -115,8 +119,11 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
   const stylesheet = doc.createElement('link');
   stylesheet.rel = 'stylesheet';
   stylesheet.href = phoneUrl('style.css');
+  let stylesheetReady = false;
   stylesheet.onload = () => {
+    stylesheetReady = true;
     element.style.removeProperty('display'); windowControls.refresh();
+    checkStorySmsNotice();
     if (ui.conflict && !element.hidden && isFrontmost() && doc.activeElement === openingFocus) root.querySelector('[data-action="conflict-continue"]').focus({ preventScroll: true });
   };
   stylesheet.onerror = () => {
@@ -165,7 +172,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     calendarOffset: 0, calendarDay: null,
     replyToId: '',
     albumPage: 'gallery', albumPath: '', albumScroll: 0,
-    photoWallCharacters: [], photoWallPhotoId: '',
+    cameraPhoto: null,
     favoriteId: '', favoriteFilter: '', favoriteScroll: 0,
   };
   const actionMenu = createPhoneActionMenu({ root, onClose: () => {
@@ -175,6 +182,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
   } });
   const busy = new Set();
   let clearDialog, favoriteRemoveDialog;
+  let storySmsRead, storySmsFirstCheck, storySmsNoticeShown = false, storySmsReadErrorShown = false;
   let inspectTimer;
   let renderedRoute = '', apiEditor = 0, renderedApiEditor = 0, photoReturn = null;
   if (!control.isEnabled()) ui.view = 'settings';
@@ -243,6 +251,10 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     onChange: () => render(), onFeedback: text => setFeedback({ error: true, text }), onMissing: path => void recoverImages([path]),
     onView: (photo, trigger) => { photoReturn = { route: renderedRoute, position: listPosition(trigger), selector: '[data-action="album-zoom"]' }; ui.photo = photo; render(); },
   });
+  const wallCrop = createWallCropEditor({ root, documentRef: doc, readPhoto: path => findAlbumPhoto(store.read(), path, { defaultUser }), readWall: () => readPhotoWallImage(store.read()),
+    isActive: () => element.isConnected && !element.hidden && isCurrentChat() && ui.view === 'album' && ui.albumPage === 'wall',
+    onChange: () => render(), onMissing: path => void recoverImages([path]),
+  });
   notificationShade = createNotificationShade({ root, surface, readState: store.read,
     initialize: () => store.initializeNotifications(),
     canOpen: () => element.isConnected && !element.hidden && !inInspectedPhone() && control.isEnabled() && !ui.conflict && !ui.photo && !root.querySelector('.phone-dialog-backdrop'),
@@ -278,7 +290,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       if (modal) modal.insertAdjacentHTML('beforeend', markup);
       else surface.querySelector(':scope > .phone-main')?.insertAdjacentHTML('afterend', markup);
     }
-    if (feedback) feedbackTimer = doc.defaultView.setTimeout(() => {
+    if (feedback && !feedback.persistent) feedbackTimer = doc.defaultView.setTimeout(() => {
       if (ui.feedback !== feedback) return;
       ui.feedback = null;
       surface.querySelector('.feedback')?.remove();
@@ -371,7 +383,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
   function render({ bottom = false } = {}) {
     if (!element.isConnected) return;
     if (ui.notice?.key && !store.read().notifications?.items.some(item => item.key === ui.notice.key)) dismissPhoneNotice();
-    if (ui.view === 'album' && ui.albumPath && !findAlbumPhoto(store.read(), ui.albumPath, { defaultUser })) { albumEditor.forgetCurrent(ui.albumPath); ui.albumPage = 'gallery'; ui.albumPath = ''; ui.photo = null; }
+    if (ui.view === 'album' && ui.albumPath && !findAlbumPhoto(store.read(), ui.albumPath, { defaultUser })) { albumEditor.forgetCurrent(ui.albumPath); wallCrop.leave(); ui.albumPage = 'gallery'; ui.albumPath = ''; ui.photo = null; }
     if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
     const route = JSON.stringify([ui.view, ui.view.startsWith('inspect-') ? [ui.inspectOwnerId, ui.inspectThreadId] : ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'favorite-detail' ? ui.favoriteId : ui.view === 'post' ? [ui.forumScope, ui.postId] : ui.view === 'forum' ? ui.forumScope : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
     const sameRoute = route === renderedRoute;
@@ -411,7 +423,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       : ui.view === 'desktop' ? calendar.month(0) : null;
     notificationShade.beforeRender();
     editing.render(renderShell({
-      content: page(state, { ui, busy, inspectPhone, photoWall, reducedMotion: ui.inspectLoading && doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches, sourcePermissions, sourcePermissionMarkup: worldbookSettings?.outerHTML || '', apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
+      content: page(state, { ui, busy, inspectPhone, camera, reducedMotion: ui.inspectLoading && doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches, sourcePermissions, sourcePermissionMarkup: worldbookSettings?.outerHTML || '', apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, wallCrop: ui.albumPage === 'wall' ? wallCrop.model() : undefined, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
         profileAvatar: ui.view === 'contact-profile' ? readContactAvatarDraft(ui.profileDraft, store.read().contacts.find(person => person.id === ui.editId), qqjBridgeProvider?.()) : undefined }),
       view: ui.view, enabled, weather, inspectedPhone: inInspectedPhone(), inspectionLoading: ui.view === 'inspect-desktop' && ui.inspectLoading,
       feedback: ui.feedback, photo: ui.photo,
@@ -465,6 +477,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     syncParticles();
     avatarCropper?.attach();
     albumEditor.attach();
+    wallCrop.attach();
     if (ui.photo) {
       const viewer = root.querySelector('.photo-viewer');
       for (const child of surface.children) child.inert = child !== viewer;
@@ -554,6 +567,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       const missing = await images.recoverMissing(paths);
       if (missing.length) {
         if (ui.photo && missing.includes(imagePath(ui.photo.path))) ui.photo = null;
+        if (ui.cameraPhoto && missing.includes(imagePath(ui.cameraPhoto.path))) ui.cameraPhoto = null;
         render();
       }
       return missing;
@@ -564,6 +578,30 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     }
   }
   const defaultAvatarError = '默认头像未能保存，请检查酒馆连接后重新打开手机。';
+  function readStorySmsStatus() {
+    if (!storySmsRead) storySmsRead = Promise.resolve().then(() => storySmsInstaller.readStatus()).finally(() => { storySmsRead = null; });
+    return storySmsRead;
+  }
+  function canShowStorySmsNotice() {
+    return stylesheetReady && element.isConnected && !element.hidden && isCurrentChat() && isFrontmost() && !ui.conflict && !ui.inspectLoading && !busy.has('story-sms-install');
+  }
+  function checkStorySmsNotice() {
+    if (!storySmsInstaller?.readStatus || storySmsNoticeShown || !canShowStorySmsNotice()) return;
+    // 每个窗口首次可见时只读一次；关闭时晚到的结果保留到重新打开，不算已提醒。
+    storySmsFirstCheck ||= readStorySmsStatus();
+    void storySmsFirstCheck.then(status => {
+      if (!canShowStorySmsNotice() || ui.feedback || storySmsNoticeShown) return;
+      ui.storySmsStatus = status;
+      if (!status.contentMismatch) return;
+      storySmsNoticeShown = true;
+      setFeedback({ text: '楼内短信注入词与当前版本不同。', persistent: true,
+        action: { name: 'story-sms-update-settings', label: '去更新' } });
+    }, error => {
+      if (!canShowStorySmsNotice() || ui.feedback || storySmsReadErrorShown) return;
+      storySmsReadErrorShown = true;
+      setFeedback({ error: true, text: error.message || '楼内信息注入状态读取失败，请重新打开内容设置。' });
+    });
+  }
   async function refreshStorySmsStatus() {
     if (!storySmsInstaller?.readStatus) return;
     const updateRow = () => {
@@ -571,10 +609,10 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       if (row) row.outerHTML = renderStorySmsInstall(ui, busy, control);
     };
     busy.add('story-sms-status'); updateRow();
-    try { ui.storySmsStatus = await storySmsInstaller.readStatus(); }
+    try { ui.storySmsStatus = await readStorySmsStatus(); }
     catch (error) {
       ui.storySmsStatus = null;
-      setFeedback({ error: true, text: error.message || '楼内信息注入状态读取失败，请重新打开内容设置。' });
+      if (element.isConnected && !element.hidden && isCurrentChat()) setFeedback({ error: true, text: error.message || '楼内信息注入状态读取失败，请重新打开内容设置。' });
     } finally { busy.delete('story-sms-status'); updateRow(); }
   }
   function fillDefaultAvatars() {
@@ -593,73 +631,31 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     inspectTimer = doc.defaultView.setTimeout(() => {
       inspectTimer = undefined;
       ui.inspectLoading = false;
-      if (ui.view === 'inspect-desktop' && element.isConnected && !element.hidden) render();
+      if (ui.view === 'inspect-desktop' && element.isConnected && !element.hidden) { render(); checkStorySmsNotice(); }
     }, INSPECT_LOADING_DURATION_MS);
   }
-  function openPhotoWallScheme(edit = false) {
+  function openCameraPreset(edit = false) {
     if (!isCurrentChat()) return;
-    const wall = readPhotoWall(store.read()), scheme = edit ? wall.schemes.find(row => row.id === wall.activeSchemeId) : null;
-    if (edit && !scheme) return;
-    const route = renderedRoute, form = doc.createElement('form'); form.className = 'photowall-scheme-form';
-    const peopleFields = edit ? '' : `<div class="photowall-fields">${['A', 'B'].map((role, index) => `<label class="photowall-field"><span>人物${role}</span><select name="person${index}" aria-label="人物${role}" required>${renderCharacterOptions(ui.photoWallCharacters, scheme?.people[index])}</select></label>`).join('')}</div>`;
-    form.innerHTML = `<label class="photowall-field"><span>方案名称</span><input name="name" aria-label="方案名称" required value="${escapeHtml(scheme?.name || '')}"></label>${peopleFields}`;
-    void dialog.custom({ title: edit ? '编辑方案' : '新建方案', content: form, confirmText: '保存', cancelText: '取消', dismissOnBackdrop: true,
+    const value = camera.readPresets(), preset = edit ? value.presets.find(row => row.id === value.selectedId) : null;
+    if (edit && !preset) return;
+    const route = renderedRoute, editor = createCameraPresetEditor({ documentRef: doc, draft: preset ? structuredClone(preset) : newCameraPreset(), readCharacters: () => camera.readCharacters() });
+    void dialog.custom({ title: edit ? '编辑照片预设' : '新建照片预设', content: editor.form, confirmText: '保存', cancelText: '取消', dismissOnBackdrop: true, initialFocus: edit ? 'panel' : undefined,
       submit: async () => {
-        if (!isCurrentChat() || renderedRoute !== route) return false;
-        if (!form.reportValidity()) return false;
-        const fields = new FormData(form), people = edit ? scheme.people : [0, 1].map(index => ui.photoWallCharacters.find(person => characterKey(person) === fields.get(`person${index}`)));
-        if (people.some(person => !person)) throw new Error('请从柏宝绘目录选择两位人物。');
-        await photoWall.saveScheme(scheme?.id, { name: fields.get('name'), people });
-        if (isCurrentChat() && renderedRoute === route) render();
+        if (!isCurrentChat() || route !== renderedRoute) return false;
+        if (!editor.form.reportValidity()) return false;
+        await camera.savePreset(preset?.id, editor.draft);
+        if (isCurrentChat() && route === renderedRoute) render();
         return true;
       } });
-    const actions = form.closest('.phone-dialog').querySelector('.form-actions');
-    actions.classList.add('photowall-dialog-actions');
-    for (const button of actions.children) { button.classList.add('photowall-button'); if (button.classList.contains('save-button')) button.classList.add('is-primary'); }
-    if (scheme) {
-      const remove = doc.createElement('button'); remove.type = 'button'; remove.className = 'quiet-button photowall-button is-danger'; remove.dataset.action = 'photowall-remove'; remove.textContent = '移除方案';
+    const panel = editor.form.closest('.phone-dialog'); panel.classList.add('phone-camera-dialog');
+    if (preset) {
+      const remove = doc.createElement('button'); remove.type = 'button'; remove.className = 'camera-button is-danger'; remove.textContent = '删除预设';
       remove.addEventListener('click', event => {
-        event.stopPropagation();
-        if (!isCurrentChat() || renderedRoute !== route) return;
-        dialog.dispose(); void perform('photowall:scheme', () => photoWall.removeScheme(scheme.id));
+        event.stopPropagation(); const content = doc.createElement('p'); content.textContent = `删除「${preset.name}」？`;
+        void dialog.custom({ title: '删除照片预设', content, confirmText: '删除', cancelText: '取消', danger: true, dismissOnBackdrop: true,
+          submit: async () => { if (!isCurrentChat()) return false; await camera.removePreset(preset.id); if (route === renderedRoute) render(); return true; } });
       });
-      actions.prepend(remove);
-    }
-  }
-  function openPhotoWallTemplate(edit = false) {
-    if (!isCurrentChat()) return;
-    const value = photoWall.readTemplates(), template = edit ? value.templates.find(row => row.id === value.selectedId) : null;
-    if (edit && !template) return;
-    const route = renderedRoute, form = doc.createElement('form'); form.className = 'photowall-scheme-form photowall-template-form';
-    form.innerHTML = `<label class="photowall-field"><span>方案名称</span><input name="name" aria-label="方案名称" required value="${escapeHtml(template?.name || '')}"></label><label class="photowall-field"><span>提示词</span><textarea name="prompt" aria-label="提示词" rows="7" required>${escapeHtml(template?.prompt || '')}</textarea></label>`;
-    let saveAs = false;
-    void dialog.custom({ title: edit ? '编辑提示词方案' : '新建提示词方案', content: form, confirmText: '保存', cancelText: '取消', dismissOnBackdrop: true,
-      submit: async () => {
-        const id = saveAs ? null : template?.id; saveAs = false;
-        if (!isCurrentChat() || renderedRoute !== route) return false;
-        if (!form.reportValidity()) return false;
-        const fields = new FormData(form);
-        await photoWall.saveTemplate(id, { name: fields.get('name'), prompt: fields.get('prompt') });
-        if (isCurrentChat() && renderedRoute === route) render();
-        return true;
-      } });
-    const actions = form.closest('.phone-dialog').querySelector('.form-actions');
-    actions.classList.add('photowall-dialog-actions');
-    for (const button of actions.children) { button.classList.add('photowall-button'); if (button.classList.contains('save-button')) button.classList.add('is-primary'); }
-    if (template) {
-      const copy = doc.createElement('button'); copy.type = 'button'; copy.className = 'quiet-button photowall-button'; copy.textContent = '另存';
-      copy.addEventListener('click', event => {
-        event.stopPropagation(); const confirm = actions.querySelector('.save-button');
-        if (confirm.disabled) return;
-        saveAs = true; confirm.click();
-      });
-      const remove = doc.createElement('button'); remove.type = 'button'; remove.className = 'quiet-button photowall-button is-danger'; remove.textContent = '移除';
-      remove.addEventListener('click', event => {
-        event.stopPropagation();
-        if (!isCurrentChat() || renderedRoute !== route) return;
-        dialog.dispose(); void perform('photowall:template', () => photoWall.removeTemplate(template.id));
-      });
-      actions.prepend(remove); actions.insertBefore(copy, actions.querySelector('.save-button'));
+      panel.querySelector('.form-actions').prepend(remove);
     }
   }
   function openInspectionOwner(id = '') {
@@ -722,7 +718,8 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     cancelFavoriteRemoval();
     cancelAvatarGesture();
     notificationShade.close({ immediate: true, restoreFocus: false });
-    albumEditor.leave();
+    albumEditor.leave(); wallCrop.leave();
+    if (ui.albumPage === 'wall') ui.albumPage = 'detail';
     discardLiangshiDraft();
     setFeedback(null);
     avatarCropper?.close();
@@ -769,24 +766,19 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
   function showPage(view, { bottom = false, sourceNode } = {}) {
     cancelAvatarGesture();
     notificationShade.close({ immediate: true, restoreFocus: false });
-    if (ui.view === 'album' && view !== 'album') albumEditor.leave();
+    if (ui.view === 'album' && view !== 'album') { albumEditor.leave(); wallCrop.leave(); }
     if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
     doc.defaultView.clearTimeout(inspectTimer);
     inspectTimer = undefined;
     ui.inspectLoading = view === 'inspect-desktop' && (ui.view === 'inspect-phone' || ui.view === 'desktop');
     if (view !== 'liangshi') discardLiangshiDraft();
     if (view === 'settings' && ui.view !== 'settings') fillApiDraft();
-    let photoWallError;
-    if (view === 'photowall') {
-      try { ui.photoWallCharacters = photoWall.readCharacters(); }
-      catch (error) { ui.photoWallCharacters = []; photoWallError = error; }
-    }
     if (ui.view === 'favorites' && view !== 'favorites') ui.favoriteScroll = root.querySelector('.phone-main')?.scrollTop || 0;
     if (ui.view === 'social' && view !== 'social') ui.socialScroll = listPosition(sourceNode);
     dismissMenus();
     if (view !== 'group-chat') ui.replyToId = '';
     ui.view = view;
-    setFeedback(photoWallError ? { error: true, text: photoWallError.message } : null);
+    setFeedback(null);
     ui.attachment = '';
     ui.photo = null;
     render({ bottom });
@@ -877,7 +869,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
   // 返回按页面父级走，不另存应用历史栈。
   function goBack() {
     if (ui.view === 'favorite-detail') { returnFavorites(); return; }
-    if (ui.view === 'album' && ui.albumPage !== 'gallery') { albumEditor.leave(); ui.albumPage = ui.albumPage === 'editor' ? 'detail' : 'gallery'; render(); return; }
+    if (ui.view === 'album' && ui.albumPage !== 'gallery') { albumEditor.leave(); wallCrop.leave(); ui.albumPage = ['editor', 'wall'].includes(ui.albumPage) ? 'detail' : 'gallery'; render(); return; }
     if (ui.view === 'liangshi' && (ui.liangshiTrail.length || ui.liangshiPage.kind !== 'feed')) {
       if (ui.liangshiPage.kind === 'compose') ui.liangshiDraft = null;
       const previous = ui.liangshiTrail.pop();
@@ -1127,7 +1119,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     if (ui.conflict) {
       const button = event.target.closest('button');
       if (!button || button.disabled) return;
-      if (button.dataset.action === 'conflict-continue') { ui.conflict = false; setFeedback(null); render(); }
+      if (button.dataset.action === 'conflict-continue') { ui.conflict = false; setFeedback(null); render(); checkStorySmsNotice(); }
       if (button.dataset.action === 'conflict-disable') void perform('conflict', () => control.setEnabled(false), () => { ui.conflict = false; ui.view = 'settings'; entries.refreshVisibility?.(); onContextChange(); });
       return;
     }
@@ -1228,6 +1220,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     if (button.dataset.drawer) { const key = button.dataset.drawer; closeSources(); closeModels(); ui.drawers[key] = !ui.drawers[key]; render(); if (key === 'content' && ui.drawers.content) void refreshStorySmsStatus(); return; }
     if (button.dataset.tab) {
       if (button.dataset.tab === 'album' && onOpenAlbum) { onOpenAlbum(); return; }
+      if (button.dataset.tab === 'camera' && onOpenCamera) { onOpenCamera(); return; }
       showPage(apps.find(app => app.id === button.dataset.tab)?.view || button.dataset.tab);
       return;
     }
@@ -1309,21 +1302,20 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       case 'open-lock-notice': openPhoneNotice({ key: button.dataset.notificationKey, kind: button.dataset.noticeKind, id: button.dataset.noticeId }); break;
       case 'toggle-notification-shade': if (notificationShade.isOpen) notificationShade.close(); else if (onOpenNotifications) onOpenNotifications(); else void notificationShade.open(); break;
       case 'open-social-reply': dismissPhoneNotice(); openSocialReply(button.dataset.socialPost); break;
-      case 'photowall-open': showPage('photowall'); break;
-      case 'photowall-template-new': openPhotoWallTemplate(); break;
-      case 'photowall-template-edit': openPhotoWallTemplate(true); break;
-      case 'photowall-new': openPhotoWallScheme(); break;
-      case 'photowall-edit': openPhotoWallScheme(true); break;
-      case 'photowall-select': {
-        const id = button.dataset.photowallPhoto;
-        ui.photoWallPhotoId = id;
-        void viewPhoto(() => photoWallImage(readPhotoWall(store.read()).photos.find(photo => photo.id === id)), button);
-        render(); break;
+      case 'album-open': if (onOpenAlbum) onOpenAlbum(); else { ui.albumPage = 'gallery'; ui.albumPath = ''; showPage('album'); } break;
+      case 'album-wall': ui.albumPage = 'wall'; void wallCrop.select(ui.albumPath); break;
+      case 'wall-crop-reset': wallCrop.reset(); break;
+      case 'wall-crop-save': {
+        const route = renderedRoute, session = wallCrop.session;
+        void perform('camera:wall', () => { const selected = wallCrop.value(); return camera.setWall(selected.path, selected.crop); }, () => { if (isCurrentChat() && route === renderedRoute && session === wallCrop.session) { wallCrop.leave(); ui.albumPage = 'detail'; } });
+        break;
       }
-      case 'photowall-desktop': void perform('photowall:desktop', () => photoWall.setDesktop(button.dataset.photowallPhoto)); break;
-      case 'photowall-generate': {
-        const id = readPhotoWall(store.read()).activeSchemeId;
-        void perform('photowall:generate', () => photoWall.generate(id), photo => { ui.photoWallPhotoId = photo.id; });
+      case 'camera-new': openCameraPreset(); break;
+      case 'camera-edit': openCameraPreset(true); break;
+      case 'camera-view': void viewPhoto(() => ui.cameraPhoto, button); break;
+      case 'camera-generate': {
+        const id = camera.readPresets().selectedId, route = renderedRoute;
+        void perform('camera:generate', () => camera.generate(id), photo => { if (route === renderedRoute && ui.view === 'camera' && isCurrentChat()) ui.cameraPhoto = { path: photo.path, description: photo.description }; });
         break;
       }
       case 'unlock': showPage('desktop'); break;
@@ -1586,7 +1578,8 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       }
       case 'cancel-reply': ui.replyToId = ''; render(); root.querySelector('#sms-draft')?.focus({ preventScroll: true }); break;
       case 'earlier': case 'history': case 'earlier-history': expandMessages(button.dataset.action); break;
-      case 'install-story-sms': void perform('story-sms-install', () => storySmsInstaller.install(), result => { ui.storySmsStatus = { state: 'installed', bookName: result.bookName }; }); break;
+      case 'story-sms-update-settings': ui.drawers.content = true; showPage('settings'); break;
+      case 'install-story-sms': void perform('story-sms-install', () => storySmsInstaller.install(), result => { ui.storySmsStatus = { state: 'installed', bookName: result.bookName }; storySmsNoticeShown = true; }); break;
       case 'close': close(); break;
       case 'send': {
         const text = (ui.drafts.get(id) || '').trim();
@@ -1633,6 +1626,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
   }
   function input(event) {
     if (event.target.id === 'story-reference-floors') { ui.storyReferenceFloorsDraft = event.target.value; return; }
+    if (event.target.id === 'wall-crop-zoom') { wallCrop.setZoom(event.target.value); return; }
     if (event.target.id === 'album-hole-size') { albumEditor.setSize(event.target.value); return; }
     if (event.target.closest('.attachment-form') && event.target.name) ui.attachmentDraft[event.target.name] = event.target.value;
     if (event.target.id === 'sms-draft') {
@@ -1668,18 +1662,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     }
   }
   function change(event) {
-    if (event.target.id === 'photowall-template') { void perform('photowall:template', () => photoWall.selectTemplate(event.target.value)); return; }
-    if (event.target.id === 'photowall-scheme') { void perform('photowall:scheme', () => photoWall.selectScheme(event.target.value)); return; }
-    if (event.target.id.startsWith('photowall-person-')) {
-      const wall = readPhotoWall(store.read()), scheme = wall.schemes.find(row => row.id === wall.activeSchemeId);
-      const person = ui.photoWallCharacters.find(row => characterKey(row) === event.target.value);
-      if (scheme && person) {
-        const people = [...scheme.people]; people[Number(event.target.id.slice(-1))] = person;
-        void perform('photowall:scheme', () => photoWall.saveScheme(scheme.id, { ...scheme, people }));
-      }
-      return;
-    }
-
+    if (event.target.id === 'camera-preset') { void perform('camera:preset', () => camera.selectPreset(event.target.value)); return; }
     if (event.target.id === 'story-reference-floors') {
       const value = event.target.value;
       ui.storyReferenceFloorsDraft = value;
@@ -1864,8 +1847,9 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
     cancelAvatarGesture,
     close,
     openAlbum() { ui.albumPage = 'gallery'; ui.albumPath = ''; showPage('album'); },
+    openCamera() { showPage('camera'); },
     invalidateAlbum() {
-      albumEditor.invalidate();
+      albumEditor.invalidate(); wallCrop.leave();
       ui.albumPage = 'gallery'; ui.albumPath = ''; ui.albumScroll = 0;
       if (ui.photo?.derived) { ui.photo = null; photoReturn = null; }
       if (ui.view === 'album') close();
@@ -1887,6 +1871,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       fillDefaultAvatars();
       recoverVisibleImages();
       windowControls.refresh();
+      checkStorySmsNotice();
     },
     refreshTime() {
       clock.refresh();
@@ -1907,7 +1892,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, photoWall, gr
       cancelAvatarGesture();
       notificationEpoch++;
       notificationShade.dispose();
-      albumEditor.dispose();
+      albumEditor.dispose(); wallCrop.dispose();
       setFeedback(null);
       selects.close(); actionMenu.close(); dialog.dispose(); updatesView?.dispose();
       dismissPhoneNotice();

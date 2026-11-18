@@ -6,12 +6,13 @@ import { createCameoAvatar, isCameoAvatar } from './cameo-avatar.js';
 import { messageText } from './content.js';
 import { cleanBackground } from './backgrounds.js';
 import { imagePath } from './image-files.js';
-import { findAlbumPhoto, preserveAlbumPhotos, rememberAlbumPhotos } from './album.js';
+import { albumPhotoKey, findAlbumPhoto, preserveAlbumPhotos, rememberAlbumPhotos } from './album.js';
 import { groupAudience } from './phone-context.js';
 import { assignIdentityOwner, isUserIdentity, assertIdentitySnapshot } from './identities.js';
 import { archiveNotifications, initializeNotificationHistory } from './notifications.js';
-import { findStorySmsPeople, storySmsBlockMatches, storySmsSourceRows } from './story-sms.js';
+import { findStorySmsPeople, storySmsBlockMatches, storySmsSourceRows, createStorySmsResolver, storySmsTransfer } from './story-sms.js';
 import { forumScope, circleProfile, sameCircleProfile } from './forum-scope.js';
+import { cleanWallCrop } from './wall-crop.js';
 import { readPhotoWall } from './photowall.js';
 
 const emptyState = () => ({ schemaVersion: 1, contacts: [], groups: [], conversations: {}, forum: { posts: [] }, injectEnabled: false });
@@ -61,7 +62,12 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   }
   const store = {
     read,
-    updatePhotoWall(change) { return update(state => { assertEnabled(); return { ...state, photoWall: change(readPhotoWall(state)) }; }); },
+    updateCamera(change) { return update(state => { assertEnabled(); return { ...state, camera: change(state) }; }); },
+    setPhotoWall(value, crop, validate = () => {}) { return update(state => {
+      assertEnabled(); validate(); const path = albumPhotoKey(value), photo = findAlbumPhoto(state, path);
+      if (!photo) throw new Error('这张照片已不在相册中。');
+      return { ...state, photoWall: { ...readPhotoWall(state), desktopPhotoPath: path, desktopPhotoDescription: photo.description, desktopPhotoId: '', desktopPhotoCrop: cleanWallCrop(crop) } };
+    }); },
     saveInspectionOwner(id, draft) {
       const ownerId = id || `inspect-owner:${createUuid()}`;
       const profile = { name: text(draft.name), personality: text(draft.personality) };
@@ -156,10 +162,11 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         const previous = state.storySmsImports, processed = previous?.floor === floor ? previous.processed : [];
         if (processed.includes(projection)) return state;
         const storySmsImports = { floor, processed: [...processed, projection] };
+        const resolve = createStorySmsResolver(state, blocks, target.user);
         if (!previous && state.storySmsImportedFloor === floor) {
           // 旧档只凭存活且无法对应当前投影的短信认定换稿；无证据则登记基线，尊重手删。
           let different = false;
-          for (const { conversationId, row } of storySmsSourceRows(state, floor)) if (row.source.floor === floor && !blocks.some(block => storySmsBlockMatches(state, conversationId, row, block))) { different = true; break; }
+          for (const { conversationId, row } of storySmsSourceRows(state, floor)) if (row.source.floor === floor && !blocks.some(block => storySmsBlockMatches(state, conversationId, row, block, resolve))) { different = true; break; }
           if (!different) return { ...state, storySmsImports };
         }
         const contacts = [...state.contacts], groups = [...(state.groups || [])], conversations = { ...state.conversations };
@@ -171,7 +178,9 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
           const person = { id: `story:${createUuid()}`, name, avatar: createCameoAvatar(), source: { kind: 'story' } };
           contacts.push(person); return person;
         };
-        for (const [position, block] of blocks.entries()) {
+        for (const [position, rawBlock] of blocks.entries()) {
+          const block = resolve(rawBlock);
+          if (!block) continue;
           let conversationId, speakerId;
           if (block.group) {
             const matches = groups.filter(group => group.name === block.name);
@@ -194,10 +203,10 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
             conversationId = person.id; speakerId = block.sender === '我' ? '@user' : person.id;
           }
           const clock = batch.clock;
-          const message = { id: `story:${floor}:${block.index}:${createUuid()}`, role: speakerId === '@user' ? 'user' : 'assistant', speakerId,
+          const message = storySmsTransfer({ id: `story:${floor}:${block.index}:${createUuid()}`, role: speakerId === '@user' ? 'user' : 'assistant', speakerId,
             text: block.text, createdAt: new Date().toISOString(), timeLabel: clock.time, read: speakerId === '@user' || Boolean(isReading(conversationId)),
             ...(clock.source === 'story' ? { storyDate: clock.date, storyWeekday: clock.weekday } : {}),
-            batch: { key: batch.key, label: batch.label }, source: { kind: 'main-story', floor, block: block.index, projection, position } };
+            batch: { key: batch.key, label: batch.label }, source: { kind: 'main-story', floor, block: block.index, projection, position } }, conversationId, block.group);
           const group = groups.find(item => item.id === conversationId);
           conversations[conversationId] = [...(conversations[conversationId] || []), { ...message, ...(group ? { knownToIds: groupAudience(group) } : {}) }];
         }
@@ -304,10 +313,13 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         const favorites = state.favorites?.map(entry => { const snapshot = clear(entry.snapshot); return snapshot === entry.snapshot ? entry : { ...entry, snapshot }; });
         let photoWall = state.photoWall;
         if (photoWall) {
-          const photos = photoWall.photos.filter(photo => !photo.missing && !missing.has(imagePath(photo.path)));
-          if (photos.length !== photoWall.photos.length) {
+          if (missing.has(imagePath(photoWall.desktopPhotoPath))) { changed = true; const { desktopPhotoCrop, ...wall } = photoWall; photoWall = { ...wall, desktopPhotoPath: '', desktopPhotoDescription: '', desktopPhotoId: '' }; }
+          const photos = (photoWall.photos || []).filter(photo => !photo.missing && !missing.has(imagePath(photo.path)));
+          if (photos.length !== (photoWall.photos || []).length) {
             changed = true;
-            photoWall = { ...photoWall, photos, desktopPhotoId: photos.some(photo => photo.id === photoWall.desktopPhotoId) ? photoWall.desktopPhotoId : '' };
+            const selected = photos.some(photo => photo.id === photoWall.desktopPhotoId);
+            photoWall = { ...photoWall, photos, desktopPhotoId: selected ? photoWall.desktopPhotoId : '' };
+            if (!selected && !photoWall.desktopPhotoPath) { const { desktopPhotoCrop, ...wall } = photoWall; photoWall = wall; }
           }
         }
         const albumPhotos = state.albumPhotos?.filter(photo => !missing.has(imagePath(photo.path)));
@@ -320,16 +332,16 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
         assertEnabled();
         assertIdentitySnapshot(state, identityOwners);
         if (actorId !== '@user' && isUserIdentity(state, actorId)) throw new Error('本人账号不能由AI处理转账。');
-        const messages = state.conversations[id] || [], message = messages.find(item => item.id === messageId);
+        const group = state.groups?.find(item => item.id === id);
+        const messages = state.conversations[id] || [], message = storySmsTransfer(messages.find(item => item.id === messageId), id, Boolean(group));
         if (!message || message.type !== 'transfer') throw new Error('这条转账已不存在。');
         if (message.batch?.key !== batch.key) throw new Error('过去的转账只能查看。');
         if (message.transfer.status !== 'pending') throw new Error('这条转账已经处理。');
         if (message.transfer.recipientId !== actorId || !['accepted', 'returned'].includes(status)) throw new Error('只有收款人可以收下或退回转账。');
-        const group = state.groups?.find(item => item.id === id);
         if (group && actorId !== '@user' && !group.memberIds.includes(actorId)) throw new Error('收款人已不在群中，无法处理这条转账。');
         if (actorId === '@user' && group && !group.userIsMember) throw new Error('你不在这个群，无法处理转账。');
         const next = { ...message, transfer: { ...message.transfer, status, handledAt: new Date().toISOString() } };
-        next.text = messageText(next);
+        if (message.source?.kind !== 'main-story') next.text = messageText(next);
         return withContactRemark({ ...state, conversations: { ...state.conversations, [id]: messages.map(item => item.id === messageId ? next : item) } }, id, group ? undefined : remarkForUser);
       });
     },

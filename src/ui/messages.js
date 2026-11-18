@@ -8,7 +8,7 @@ import { renderAttachments, renderCardActions, renderCardBody } from './cards.js
 import { chatBackgroundStyle } from '../backgrounds.js';
 import { replyContext } from '../replies.js';
 import { isUserIdentity } from '../identities.js';
-import { storySmsDisplayText } from '../story-sms.js';
+import { storySmsDisplayText, storySmsTransfer } from '../story-sms.js';
 
 const inboxTime = message => [message?.storyDate, message?.timeLabel].filter(Boolean).join(' ');
 
@@ -58,6 +58,7 @@ export function renderInboxMenu(busy) {
 }
 
 export function renderMessage(message, previous, next, { contact, user, selected, deleting, isGroup, busy, readOnly = false, state, ui, conversationId, inspection = false, mirror = false }) {
+  message = storySmsTransfer(message, conversationId, isGroup || inspection);
   const mine = message.role === 'user';
   const party = item => item && item.type !== 'pat' && (item.speakerId || item.role);
   const hasPrev = party(previous) === party(message), hasNext = party(next) === party(message);

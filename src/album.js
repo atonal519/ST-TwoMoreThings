@@ -62,6 +62,11 @@ function liveAlbumPhotos(state, { defaultUser = '我', includeUnavailable = fals
       if (author || includeUnavailable) add(row.image, source(`liangshi-${collection}`, row, `两事${collection === 'comments' ? '评论' : '转发'}${author ? ` · ${accountName(author)}` : ''}`, { postId: post.id, authorId: row.authorId }));
     }
   }
+  for (const photo of state.photoWall?.photos || []) {
+    if (photo.missing) continue;
+    const label = photo.people?.length ? `${photo.people.map(person => person.name).join(' 与 ')} · 合照` : photo.description || photo.schemeName || '照片';
+    add({ path: photo.path, description: label }, { ...photo, kind: 'photowall', label: `照片墙 · ${photo.schemeName || '合照'}`, publishedAt: [photo.storyDate, photo.timeLabel].filter(Boolean).join(' '), dateLabel: photo.storyDate || '' });
+  }
   const created = photo => photo.sources.reduce((latest, row) => row.createdAt > latest ? row.createdAt : latest, '');
   return [...photos.values()].sort((a, b) => created(b).localeCompare(created(a)));
 }

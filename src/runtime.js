@@ -1,4 +1,4 @@
-import { createPhotoWallService } from './photowall.js';
+import { createCameraService } from './camera.js';
 import { createPhotoWallTemplateSettings } from './photowall-templates.js';
 import { createInspectPhoneService } from './inspect-phone.js';
 import { createSourcePermissionController } from './source-permission.js';
@@ -106,7 +106,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
     const contextReader = createContextReader({ target, store, qqjBridgeProvider, calendar, wrapperSettingsProvider, memorySources });
     currentPhone = mountPhone({ mount: documentRef.documentElement, store, qqjBridgeProvider, defaultUser: target.user, readTime: () => readPhoneTime(target.messages), readTimeline: () => readTimeline(target.messages),
       messages: createMessageService({ target, store, contextReader, modelClient }),
-      photoWall: createPhotoWallService({ store, contextReader, modelClient, templateSettings: createPhotoWallTemplateSettings({ host }), providers: imageProviders, assertEnabled: control.assertEnabled, isCurrentChat: () => { const current = host.captureChat(); return current.id === target.id && current.metadata === target.metadata; }, onBusyChange, readTime: () => readPhoneTime(target.messages) }),
+      camera: createCameraService({ store, contextReader, modelClient, legacyTemplates: { read: () => ({ ...createPhotoWallTemplateSettings({ host }).read(), explicit: Object.hasOwn(host.readSettings().pocketPhone || {}, 'photoWallTemplates') }) }, providers: imageProviders, assertEnabled: control.assertEnabled, isCurrentChat: () => { const current = host.captureChat(); return current.id === target.id && current.metadata === target.metadata; }, onBusyChange, readTime: () => readPhoneTime(target.messages) }),
       inspectPhone: createInspectPhoneService({ target, store, contextReader, modelClient }),
       groups: createGroupService({ target, store, contextReader, modelClient }),
       directory: createDirectoryService({ store, contextReader, modelClient }),
@@ -126,6 +126,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
       onClose: () => entries.focus(),
       onError: message => host.reportError(message),
       onOpenAlbum: () => { if (!boundTo(host.captureChat())) open(); phone.openAlbum(); },
+      onOpenCamera: () => { if (!boundTo(host.captureChat())) open(); phone.openCamera(); },
       onOpenNotifications: () => { if (!boundTo(host.captureChat())) open(); phone.openNotifications(); },
     });
     phone = currentPhone;

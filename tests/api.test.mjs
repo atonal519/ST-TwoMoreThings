@@ -216,3 +216,45 @@ for(const hostKind of ['native','luker']) for(const settingsKey of ['pocketPhone
   settings[settingsKey].apiModel='gpt-4o-mini';await client.complete({system:'offline',messages:[]});const body=h.modelRequests.at(-1).body;
   assert.deepEqual([body.reverse_proxy,body.proxy_password,body.model],['https://second.invalid/v1','second-key','gpt-4o-mini']);assert.equal(Object.hasOwn(body,'temperature'),false);assert.equal(h.settingsSaves,0);
 });
+
+test('adjacent translation-only objects stay at their raw indexes and attach to text or voice once', () => {
+  const rows = [{ text: '听日见。' }, { translation: '明天见。' }, { type: 'voice', text: '行先喇。' }, { translatedText: '先走了。' }, { text: '收到。' }, { text: '👌' }];
+  const before = structuredClone(rows), parsed = parsePayload(JSON.stringify({ messages: rows }), 'messages', { indexed: true, preserveStyle: true });
+  assert.deepEqual(parsed, [{ text: '听日见。', translation: '明天见。' }, null, { type: 'voice', text: '行先喇。', translation: '先走了。' }, null, { text: '收到。' }, { text: '👌' }]);
+  assert.deepEqual(parsePayload(JSON.stringify({ messages: rows }), 'messages', { preserveStyle: true }), parsed.filter(Boolean));
+  assert.deepEqual(rows, before);
+});
+
+test('translation compatibility never overwrites existing fields or crosses unrelated neighbors or JSON documents', () => {
+  const pairs = [
+    [{ text: '甲', translation: '已有译文' }, { translation: '不能覆盖' }, '已有译文'],
+    [{ text: '甲', translatedText: '已有别名译文' }, { translation: '不能覆盖' }, '已有别名译文'],
+    [{ text: '甲' }, { translation: '别人的', speakerId: 'other' }, undefined],
+    [{ text: '甲' }, { translation: '带元数据', key: 'another' }, undefined],
+    [{ text: '甲' }, { translation: '另一身份', role: 'user' }, undefined],
+    [{ text: '甲' }, { translation: '不是仅译文', text: '' }, undefined],
+  ];
+  for (const [first, next, expected] of pairs) assert.equal(parsePayload(JSON.stringify({ messages: [first, next] }), 'messages', { preserveStyle: true })[0].translation, expected);
+  for (const rows of [
+    [{ translation: '开头孤立' }, { text: '甲' }],
+    [{ text: '甲' }, {}, { translation: '不跨空项' }],
+    [{ text: '甲' }, { text: '乙' }, { translation: '只配乙' }],
+  ]) assert.equal(parsePayload(JSON.stringify({ messages: rows }), 'messages')[0].translation, undefined);
+  const consecutive = parsePayload(JSON.stringify({ messages: [{ text: '甲' }, { translation: '紧邻这一条' }, { translation: '后续不回找' }] }), 'messages', { indexed: true, preserveStyle: true });
+  assert.deepEqual(consecutive, [{ text: '甲', translation: '紧邻这一条' }, null, null]);
+  const separate = '```json\n{"messages":[{"text":"甲"}]}\n```\n```json\n{"translation":"另一文档"}\n```';
+  assert.equal(parsePayload(separate, 'messages')[0].translation, undefined);
+});
+
+test('shared translation attachment preserves message ownership, references and raw positions without pairing cards or user rows', async () => {
+  const { attachMessageTranslations } = await import('../src/content.js');
+  assert.equal(typeof attachMessageTranslations, 'function');
+  const original = { speakerId: 'lin', role: 'assistant', key: 'first', replyToId: 'old', type: 'voice', text: '听日见。' };
+  const rows = [original, { translation: '明天见。' }, { text: '后续' }], before = structuredClone(rows);
+  const attached = attachMessageTranslations(rows);
+  assert.equal(attached.length, rows.length); assert.deepEqual(attached[0], { ...original, translation: '明天见。' }); assert.equal(attached[1], undefined); assert.equal(attached[2], rows[2]); assert.deepEqual(rows, before);
+  for (const first of [{ role: 'user', text: '用户原文' }, ...['image', 'sticker', 'location', 'transfer', 'pat', 'unknown'].map(type => ({ type, text: '卡片文字' }))]) {
+    const result = attachMessageTranslations([first, { translation: '不配卡片或用户' }]);
+    assert.deepEqual(result[0], first); assert.equal(result[1], undefined);
+  }
+});

@@ -1,3 +1,4 @@
+import { storySmsTransfer } from './story-sms.js';
 import { displayName } from './profiles.js';
 import { getSocialAuthor } from './social.js';
 import { messageText } from './content.js';
@@ -18,7 +19,8 @@ export function favoriteFor(state, candidate) {
 function readUnit(state, ref) {
   if (ref.app === 'messages') {
     const group = state.groups?.find(item => item.id === ref.conversationId), person = group || state.contacts?.find(item => item.id === ref.conversationId);
-    const unit = state.conversations?.[ref.conversationId]?.find(item => item.id === ref.messageId && (ref.batchKey === undefined || (item.batch?.key ?? 'legacy') === ref.batchKey));
+    const saved = state.conversations?.[ref.conversationId]?.find(item => item.id === ref.messageId && (ref.batchKey === undefined || (item.batch?.key ?? 'legacy') === ref.batchKey));
+    const unit = storySmsTransfer(saved, ref.conversationId, Boolean(group));
     return person && unit ? { unit, person, group } : null;
   }
   const post = (ref.app === 'forum' ? forumData(state, ref.scope) : state[ref.app])?.posts?.find(item => item.id === ref.postId);

@@ -14,7 +14,7 @@ function renderNavigation(view, enabled) {
 // 窗口结构和导航只在这里生成；页面模块不接管关闭、状态栏或底栏。
 export function renderFeedback(feedback) {
   return feedback ? `<div class="feedback ${feedback.error ? 'is-error' : feedback.compact ? 'is-compact' : ''}" role="${feedback.error ? 'alert' : 'status'}">
-    <span>${escape(feedback.text)}</span>${action('dismiss', '关闭提示', 'close', 'icon-button')}
+    <span>${escape(feedback.text)}</span>${feedback.action ? action(escape(feedback.action.name), escape(feedback.action.label), '', 'quiet-button') : ''}${action('dismiss', '关闭提示', 'close', 'icon-button')}
   </div>` : '';
 }
 

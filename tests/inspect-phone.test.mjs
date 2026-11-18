@@ -322,7 +322,7 @@ test('manual owner validation and a failed save preserve existing records and or
 
 test('main phone desktop puts inspection on a separate page and owner desktop exposes only WeChat', async () => {
   const { renderDesktop } = await import('../src/ui/desktop.js');
-  const apps = ['liangshi', 'social', 'messages', 'forum', 'calendar', 'album', 'settings', 'favorites', 'inspect-phone'].map(id => ({ id, label: id }));
+  const apps = ['liangshi', 'social', 'messages', 'forum', 'calendar', 'album', 'settings', 'camera', 'inspect-phone', 'favorites'].map(id => ({ id, label: id }));
   const main = renderDesktop({}, { apps });
   assert.match(main, /data-desktop-page="0"/); assert.match(main, /data-desktop-page="1"/);
   const first = main.slice(main.indexOf('data-desktop-page="0"'), main.indexOf('data-desktop-page="1"'));

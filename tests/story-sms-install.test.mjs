@@ -6,15 +6,15 @@ import { createHostAdapter } from '../src/host.js';
 function fixture() {
   const book = { entries: { 5: { uid: 5, comment: '用户内容', content: '保留', custom: { keep: true } } }, custom: { keep: true } };
   const other = { id: 'other', scriptName: '其他正则' }, scripts = [other];
-  let saves = 0, rulesSaved = 0;
+  let saves = 0, rulesSaved = 0, loads = 0;
   const target = { character: { avatar: 'one.png', world: '当前主书' } };
   const host = { captureChat: () => target, readSettings: () => ({ disabledExtensions: [] }), async readStorySmsBindings() {
-    return { load: async name => name === '当前主书' ? structuredClone(book) : null,
+    return { load: async name => { loads++; return name === '当前主书' ? structuredClone(book) : null; },
       create(_name, data) { const entry = { uid: Math.max(...Object.keys(data.entries).map(Number)) + 1 }; data.entries[entry.uid] = entry; return entry; },
       async save(name, next, immediately) { assert.equal(name, '当前主书'); assert.equal(immediately, true); saves++; Object.assign(book, structuredClone(next)); },
       getRules: () => scripts, async saveRules(next) { rulesSaved++; scripts.splice(0, scripts.length, ...next); }, htmlEncoded: () => false };
   } };
-  return { host, book, target, scripts, other, counts: () => [saves, rulesSaved] };
+  return { host, book, target, scripts, other, counts: () => [saves, rulesSaved], reads: () => loads };
 }
 
 test('installation preserves the bound book and other rules, and restricts its owned constant to installed card avatars', async () => {
@@ -111,4 +111,49 @@ test('the previous cross-opener display pattern is outdated and updates through 
   assert.equal((await installer.readStatus()).state, 'installed'); assert.equal(f.scripts[0], f.other);
   assert.deepEqual(f.counts(), counts.map(count => count + 1));
   assert.equal(Object.values(f.book.entries).find(entry => entry.extensions?.twoMoreThings?.storySms).content, prompt, 'format instructions do not change');
+});
+
+test('prompt mismatch reports only actual owned content differences and stays read-only', async () => {
+  const f = fixture(), installer = createStorySmsInstaller({ host: f.host });
+  assert.equal((await installer.readStatus()).contentMismatch, false);
+  await installer.install(); const before = f.counts();
+  const owned = Object.values(f.book.entries).find(entry => entry.extensions?.twoMoreThings?.storySms);
+  assert.equal((await installer.readStatus()).contentMismatch, false);
+  f.scripts.at(-1).replaceString = 'different rule';
+  assert.equal((await installer.readStatus()).contentMismatch, false);
+  owned.content = '人工自定义或旧版词';
+  assert.equal((await installer.readStatus()).contentMismatch, true);
+  delete f.book.entries[owned.uid];
+  assert.equal((await installer.readStatus()).contentMismatch, false);
+  assert.deepEqual(f.counts(), before);
+  f.target.character.world = ''; assert.equal((await installer.readStatus()).contentMismatch, false);
+  assert.equal(f.reads(), 6, 'one bound-book load per status check plus the manual install, none without a binding');
+  f.target.character.world = '当前主书'; f.host.readStorySmsBindings = async () => { throw new Error('无法读取'); };
+  await assert.rejects(installer.readStatus(), /无法读取/);
+});
+
+for (const [avatar, isExclude, names, expected] of [
+    ['card-b.png', false, ['card-a'], false],
+    ['card-a.png', false, ['card-a'], true],
+    ['card-a.png', true, ['card-a'], false],
+    ['card-b.png', true, ['card-a'], true],
+]) {
+  test(`shared-book prompt applicability: ${avatar}, exclude=${isExclude}, expected=${expected}`, async () => {
+    const f = fixture(); f.target.character.avatar = avatar;
+    f.book.entries[6] = { uid: 6, content: '已注入的旧格式词', extensions: { twoMoreThings: { storySms: true } }, characterFilter: { isExclude, names, tags: [] } };
+    const status = await createStorySmsInstaller({ host: f.host }).readStatus();
+    assert.equal(status.state, 'outdated', 'the existing manual update state is unchanged');
+    assert.equal(status.contentMismatch, expected, `${avatar}: ${JSON.stringify({ isExclude, names })}`);
+    assert.equal(f.reads(), 1); assert.deepEqual(f.counts(), [0, 0]);
+  });
+}
+
+test('empty or absent character name filters keep applicable old prompts eligible for reminders', async () => {
+  for (const characterFilter of [undefined, {}, { isExclude: false, names: [], tags: [] }, { isExclude: true, names: [], tags: [] }]) {
+    const f = fixture();
+    f.book.entries[6] = { uid: 6, content: '已注入的旧格式词', extensions: { twoMoreThings: { storySms: true } }, ...(characterFilter && { characterFilter }) };
+    const status = await createStorySmsInstaller({ host: f.host }).readStatus();
+    assert.equal(status.state, 'outdated'); assert.equal(status.contentMismatch, true);
+    assert.equal(f.reads(), 1); assert.deepEqual(f.counts(), [0, 0]);
+  }
 });

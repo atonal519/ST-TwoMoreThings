@@ -74,3 +74,35 @@ test('group permits silence, rejects unanchored outsiders, and does not save rej
   assert.equal(store.read().conversations[group.id]?.length || 0, 0);
 });
 
+
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: group split translations retain speakers and voice while saving in one request`, async () => {
+  const { h, store, service } = await setup({ anchor: { memberIds: ['lin', 'zhou'], speakerIds: ['lin', 'zhou'] }, messages: [
+    { speakerId: 'lin', text: '听日见。' }, { translation: '明天见。' },
+    { speakerId: 'zhou', type: 'voice', text: '行先喇。' }, { translatedText: '先走了。' },
+    { speakerId: 'lin', text: '收到。' }, { speakerId: 'zhou', text: '👌' },
+  ] }, hostKind);
+  const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: false }); const before = h.metadataSaves;
+  await service.continueChat(group.id);
+  const system = h.modelRequests[0].body.messages[0].content;
+  const shape = JSON.parse(system.match(/只输出JSON：(\{"anchor":.*?\})。messages每轮/)[1]); assert.ok(shape.messages[0].translation); assert.match(system, /translation与text放在同一条message对象内/);
+  const rows = store.read().conversations[group.id]; assert.equal(rows.length, 4);
+  assert.deepEqual(rows.map(row => row.speakerId), ['lin', 'zhou', 'lin', 'zhou']); assert.deepEqual(rows.map(row => row.translation), ['明天见。', '先走了。', undefined, undefined]); assert.equal(rows[1].type, 'voice');
+  const cold = createPhoneStore({ target: h.host.captureChat() }); assert.deepEqual(cold.read().conversations[group.id], rows);
+  const { renderChat } = await import('../src/ui/messages.js');
+  const html = renderChat(cold.read(), { ui: { view: 'group-chat', groupId: group.id, batch: rows[0].batch, visibleMessages: 60, drafts: new Map(), expandedVoices: { has: () => true } }, busy: new Set() });
+  assert.equal((html.match(/class="message-translation"/g) || []).length, 2);
+  assert.equal(h.modelRequests.length, 1); assert.equal(h.metadataSaves, before + 1); assert.equal(h.settingsSaves, 0);
+});
+
+test('group translation placeholders do not mask invalid message or speaker entries', async () => {
+  const { h, store, service } = await setup({ anchor: { memberIds: ['lin', 'zhou'], speakerIds: ['lin'] }, messages: [
+    { translation: '开头孤立' }, { speakerId: 'lin', text: '听日见。', translation: '原译文' }, { translation: '不覆盖' }, { translation: '不回找' },
+  ] });
+  const group = await store.saveGroup('', { name: '朋友', memberIds: ['lin', 'zhou'], userIsMember: false });
+  await service.continueChat(group.id); assert.equal(store.read().conversations[group.id].length, 1); assert.equal(store.read().conversations[group.id][0].translation, '原译文');
+  const before = h.metadataSaves;
+  for (const invalid of [null, { translation: '另一身份', speakerId: 'outsider' }]) {
+    h.completion = { choices: [{ message: { content: JSON.stringify({ anchor: { memberIds: ['lin', 'zhou'], speakerIds: ['lin'] }, messages: [{ speakerId: 'lin', text: '听日见。' }, invalid] }) } }] };
+    await assert.rejects(service.continueChat(group.id), /发言者/); assert.equal(h.metadataSaves, before); assert.equal(store.read().conversations[group.id].length, 1);
+  }
+});

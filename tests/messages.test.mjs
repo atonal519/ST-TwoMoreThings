@@ -146,3 +146,19 @@ test('new SMS use story time while createdAt still records actual save order', a
   assert.equal(h.modelRequests.length, 1, '读取时间不请求模型');
 });
 
+
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: adjacent split translations save as three bilingual messages in the original private request`, async () => {
+  const reply = { messages: [{ text: '听日见。' }, { translation: '明天见。' }, { type: 'voice', text: '行先喇。' }, { translation: '先走了。' }, { text: '👌' }] };
+  const { h, target, store, service } = await serviceHarness({ hostKind, completion: { choices: [{ message: { content: JSON.stringify(reply) } }] } });
+  await store.upsertContacts([{ id: 'lin', name: '林舟', language: '粤语' }]); const before = h.metadataSaves;
+  await service.continueChat('lin');
+  const system = h.modelRequests[0].body.messages[0].content;
+  const shape = JSON.parse(system.match(/只输出JSON：(\{"messages":.*?\})。remarkForUser/)[1]);
+  assert.ok(shape.messages[0].translation); assert.match(system, /translation与text放在同一条message对象内/);
+  const messages = store.read().conversations.lin; assert.equal(messages.length, 3);
+  assert.deepEqual(messages.map(row => row.translation), ['明天见。', '先走了。', undefined]); assert.equal(messages[1].type, 'voice');
+  assert.deepEqual(createPhoneStore({ target }).read().conversations.lin, messages);
+  const html = renderChat(store.read(), { ui: { view: 'chat', contactId: 'lin', batch: messages[0].batch, visibleMessages: 60, drafts: new Map(), expandedVoices: { has: () => true } }, busy: new Set() });
+  assert.equal((html.match(/class="message-translation"/g) || []).length, 2);
+  assert.equal(h.modelRequests.length, 1); assert.equal(h.metadataSaves, before + 1); assert.equal(h.settingsSaves, 0);
+});

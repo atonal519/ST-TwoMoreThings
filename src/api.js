@@ -1,6 +1,6 @@
 import { createUuid } from './uuid.js';
 import { readForumTags } from './forum-tags.js';
-import { normalizeContent, generatedImage } from './content.js';
+import { normalizeContent, generatedImage, attachMessageTranslations } from './content.js';
 import { getSharedProcessingPrompt, prependProcessingPrompt } from './shared-processing-prompt.js';
 import { finishGeneratedText } from './generated-text.js';
 import { modelJsonValues } from './model-json.js';
@@ -220,7 +220,8 @@ export function parsePayload(text, kind, { allowEmpty = false, indexed = false, 
     items = extract(candidate, kind);
     if (items) break;
   }
-  const valid = (items || []).flatMap(item => {
+  const rows = kind === 'messages' ? attachMessageTranslations(items || []) : items || [];
+  const valid = rows.flatMap(item => {
     if (kind === 'messages') {
       if (item?.role && !['assistant', 'char'].includes(item.role)) return indexed ? [null] : [];
       const content = normalizeContent(item);

@@ -17,6 +17,22 @@ export function messageText(message) {
   }
 }
 
+const translationOnly = item => item && typeof item === 'object' && !Array.isArray(item)
+  && Object.keys(item).length > 0 && Object.keys(item).every(key => ['translation', 'translatedText'].includes(key));
+
+// 承接同一列表内紧邻的独立译文对象，保留占位以维持原始消息索引。
+export function attachMessageTranslations(items) {
+  return items.map((item, index) => {
+    if (translationOnly(item)) return undefined;
+    const next = items[index + 1];
+    if (!translationOnly(next) || !item || typeof item !== 'object' || Array.isArray(item)
+      || item.type && item.type !== 'voice' || item.role && !['assistant', 'char'].includes(item.role)
+      || text(item.translation) || text(item.translatedText)) return item;
+    const original = text(item.text ?? item.content ?? item.message), translation = text(next.translation ?? next.translatedText);
+    return original && translation ? { ...item, translation } : item;
+  });
+}
+
 export function normalizeContent(item) {
   if (typeof item === 'string') return item.trim() ? { text: item.trim() } : null;
   if (!item || typeof item !== 'object') return null;

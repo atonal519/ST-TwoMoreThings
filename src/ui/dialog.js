@@ -9,7 +9,7 @@ export function createPhoneDialog({ mount, documentRef, isComposing = () => fals
   };
   return {
     attach,
-    custom({ title, content, confirmText, cancelText, submit, danger = false, dismissOnBackdrop = false, onClose }) {
+    custom({ title, content, confirmText, cancelText, submit, danger = false, dismissOnBackdrop = false, initialFocus, onClose }) {
       active?.finish(false);
       return new Promise(resolve => {
         const previous = mount.getRootNode().activeElement;
@@ -50,10 +50,12 @@ export function createPhoneDialog({ mount, documentRef, isComposing = () => fals
           if (event.key === 'Escape') { event.preventDefault(); finish(false); }
           if (event.key === 'Tab') {
             const buttons = [...panel.querySelectorAll('button, a[href], input, textarea, select')].filter(node => !node.disabled && node.getClientRects().length), index = buttons.indexOf(mount.getRootNode().activeElement);
-            event.preventDefault(); buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
+            const next = index < 0 ? (event.shiftKey ? buttons.length - 1 : 0) : (index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
+            event.preventDefault(); buttons[next]?.focus();
           }
         });
-        active = { overlay, finish }; attach(); (panel.querySelector('input, textarea, select') || (danger && cancel ? cancel : confirm)).focus({ preventScroll: true });
+        if (initialFocus === 'panel') panel.tabIndex = -1;
+        active = { overlay, finish }; attach(); (initialFocus === 'panel' ? panel : panel.querySelector('input, textarea, select') || (danger && cancel ? cancel : confirm)).focus({ preventScroll: true });
       });
     },
     dispose() { active?.finish(false); },

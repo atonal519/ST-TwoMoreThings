@@ -157,9 +157,9 @@ for (const newline of ['\n', '\r\n', '\r']) test(`TMT wrapper blank lines are ex
   const raw = `\n\n${block}\n\n`;
   const rule = storySmsRegex(), pattern = new RegExp(rule.findRegex.slice(1, -2), 'g');
   const match = [...raw.matchAll(pattern)][0];
-  assert.equal(match.length, 4);
+  assert.equal(match.length, 5);
   assert.equal(match[0], block);
-  assert.deepEqual(match.slice(1), ['甲', '甲', text]);
+  assert.deepEqual(match.slice(1, 4), ['甲', '甲', text]); assert.equal(match[4], undefined);
   assert.deepEqual(parseStorySms(raw), [{ index: 0, name: '甲', sender: '甲', text, group: false }]);
   assert.equal(raw.replace(pattern, rule.replaceString).match(/class="tmt-main-sms-bubble">([\s\S]*?)<\/div>/)[1], text);
   assert.equal(removeAcceptedStorySms(raw, new Set([0])), '\n\n\n\n');
@@ -177,7 +177,7 @@ test('empty and unclosed TMT wrappers keep full matching and raw block indexes w
   const raw = `${empty}[tmt|草稿|草稿]\n未闭合示例。${first}\n${second}`;
   const rule = storySmsRegex(), matches = [...raw.matchAll(new RegExp(rule.findRegex.slice(1, -2), 'g'))];
   assert.deepEqual(matches.map(match => match[0]), [empty, first, second]);
-  assert.ok(matches.every(match => match.length === 4));
+  assert.ok(matches.every(match => match.length === 5 && match[4] === undefined));
   assert.deepEqual(parseStorySms(raw).map(({ index, text }) => [index, text]), [[1, '第一条。'], [2, '  第二条。  ']]);
   assert.equal(removeAcceptedStorySms(raw, new Set([1])), `${empty}[tmt|草稿|草稿]\n未闭合示例。\n${second}`);
   assert.deepEqual(parseStorySms(empty), []);
@@ -367,7 +367,7 @@ test('an unclosed draft SMS opener cannot swallow the formal SMS in parse, displ
   const rule = storySmsRegex(), end = rule.findRegex.lastIndexOf('/');
   const pattern = new RegExp(rule.findRegex.slice(1, end), rule.findRegex.slice(end + 1));
   const matches = [...raw.matchAll(pattern)];
-  assert.deepEqual(matches.map(row => row.slice(1)), [['甲', '甲', '晚上见。']], 'display keeps exactly the original three capture groups');
+  assert.deepEqual(matches.map(row => row.slice(1, 4)), [['甲', '甲', '晚上见。']], 'display keeps the original first three capture groups');
   const rendered = raw.replace(pattern, rule.replaceString), formal = rendered.split('</draft>')[1];
   assert.ok(formal.includes('class="tmt-main-sms-bubble">晚上见。</div>')); assert.equal(formal.includes('[tmt|'), false);
   assert.equal(removeAcceptedStorySms(raw, new Set([0])), '<content><draft>复查：短信保留[tmt|甲|甲]结构，内容完整。</draft>正式正文。</content>');
@@ -571,4 +571,95 @@ test('unread story SMS stays list-only when notification history is first initia
   assert.deepEqual(lockNotifications(s.store.read()), []);
   assert.equal(unreadConversations(s.store.read()).reduce((count, item) => count + item.count, 0), 3);
   assert.ok(Object.values(s.store.read().conversations).flat().filter(row => row.source?.kind === 'main-story' && row.role === 'assistant').every(row => row.read === false));
+});
+
+for (const hostKind of ['native', 'luker']) test(`${hostKind}: reversed owner headers route both directions to the existing peer while raw projection positions and reroll receipts remain intact`, async () => {
+  const raw = '<draft>[tmt|甲|甲]草稿。[/tmt]</draft>[tmt|甲|甲]  [/tmt]<content>叙事。[tmt|小满|小满]先发。[/tmt][tmt|小满|满月]再发。[/tmt][tmt|小满|甲]回信。[/tmt][tmt|未对应|其他]仍是正文。[/tmt]</content>';
+  const h = createHarness({ hostKind, messages: [{ is_user: false, mes: raw }], metadata: { pocketPhone: { userProfile: { name: '小满', nickname: '满月' }, contacts: [{ id: 'a', name: '甲', nickname: '阿甲' }], groups: [], conversations: {} } } });
+  h.context.name1 = '持有者';
+  const target = h.host.captureChat(), store = createPhoneStore({ target }), args = { target, store }, beforeContacts = structuredClone(store.read().contacts);
+  const { readStorySmsProjection } = await import('../src/story-sms.js');
+  const projection = readStorySmsProjection(raw);
+  await syncStorySms(args);
+  assert.deepEqual(store.read().contacts, beforeContacts);
+  assert.deepEqual(store.read().conversations.a.map(row => [row.role, row.speakerId, row.text]), [['user', '@user', '先发。'], ['user', '@user', '再发。'], ['assistant', 'a', '回信。']]);
+  assert.deepEqual(store.read().conversations.a.map(row => [row.source.block, row.source.position, row.source.projection]), [[2, 0, projection.key], [3, 1, projection.key], [4, 2, projection.key]]);
+  assert.equal(target.messages[0].mes, raw); assert.equal(h.metadataSaves, 1); assert.equal(h.modelRequests.length, 0);
+  const reader = createContextReader({ target, store, qqjBridgeProvider: () => null });
+  const story = (await reader.readForContact('a')).story.map(row => row.text).join('');
+  assert.ok(story.includes('仍是正文。')); assert.equal(story.includes('先发。'), false); assert.equal(story.includes('回信。'), false);
+  assert.equal(await syncStorySms({ target, store: createPhoneStore({ target }) }), false);
+  const original = structuredClone(store.read().conversations.a);
+  target.messages[0].mes = raw.replace('先发。', '新候选。'); await syncStorySms(args);
+  assert.deepEqual(store.read().conversations.a.slice(0, 3), original); assert.equal(store.read().conversations.a.length, 6);
+  await store.deleteMessage('a', original[0].id);
+  target.messages[0].mes = raw; const saves = h.metadataSaves;
+  assert.equal(await syncStorySms({ target, store: createPhoneStore({ target }) }), false); assert.equal(h.metadataSaves, saves);
+});
+
+test('exact owner names, host name and manually linked account aliases stay user senders in normal private and group headers', async () => {
+  const aliases = ['我', '小满', '满月', '持有者', '另号', '影子'];
+  const h = createHarness({ messages: [{ is_user: false, mes: aliases.map(name => `[tmt|甲|${name}]私聊${name}。[/tmt][tmt|群:同好|${name}]群聊${name}。[/tmt]`).join('') }], metadata: { pocketPhone: { userProfile: { name: '小满', nickname: '满月' }, contacts: [{ id: 'a', name: '甲' }, { id: 'mine', name: '另号', nickname: '影子', identityOwnerId: '@user' }], groups: [{ id: 'g', name: '同好', memberIds: ['a'], userIsMember: true }], conversations: {} } } });
+  h.context.name1 = '持有者'; const target = h.host.captureChat(), store = createPhoneStore({ target }), before = structuredClone(store.read().contacts);
+  await syncStorySms({ target, store });
+  assert.deepEqual(store.read().contacts, before); assert.deepEqual(store.read().groups[0].memberIds, ['a']);
+  for (const id of ['a', 'g']) assert.deepEqual(store.read().conversations[id].map(row => [row.role, row.speakerId]), aliases.map(() => ['user', '@user']));
+  assert.equal(h.metadataSaves, 1); assert.equal(h.modelRequests.length, 0);
+});
+
+test('reverse header pairs only a unique external account in that exact private header, including its known nickname', async () => {
+  for (const [extra, expected] of [
+    ['[tmt|小满|甲]回信。[/tmt][tmt|小满|阿甲]同人回信。[/tmt]', ['外发。', '回信。', '同人回信。']],
+    ['[tmt|满月|甲]另一头。[/tmt][tmt|群:小满|甲]群消息。[/tmt]', ['另一头。']],
+    ['[tmt|小满|甲]甲回信。[/tmt][tmt|小满|乙]乙回信。[/tmt]', ['甲回信。']],
+    ['', []],
+  ]) {
+    const h = createHarness({ messages: [{ mes: `[tmt|小满|小满]外发。[/tmt]${extra}` }], metadata: { pocketPhone: { userProfile: { name: '小满', nickname: '满月' }, contacts: [{ id: 'a', name: '甲', nickname: '阿甲' }, { id: 'b', name: '乙' }], groups: [], conversations: {} } } });
+    const target = h.host.captureChat(), store = createPhoneStore({ target }); await syncStorySms({ target, store });
+    assert.deepEqual((store.read().conversations.a || []).map(row => row.text), expected);
+    assert.equal(store.read().contacts.some(person => person.name === '小满' || person.name === '满月'), false);
+    const reader = createContextReader({ target, store, qqjBridgeProvider: () => null });
+    if (!expected.includes('外发。')) assert.ok((await reader.readForContact('a')).story.some(row => row.text.includes('外发。')));
+  }
+});
+
+test('legacy source matching recognizes owner aliases and reversed headers without reimporting or dropping unmatched story blocks', async () => {
+  const raw = '[tmt|持有者|持有者]外发。[/tmt][tmt|持有者|甲]回信。[/tmt][tmt|甲|不明人]未导入。[/tmt]';
+  const h = createHarness({ messages: [{ mes: raw }], metadata: { pocketPhone: { contacts: [{ id: 'a', name: '甲' }], groups: [], conversations: {}, storySmsImportedFloor: 0 } } });
+  h.context.name1 = '持有者'; const target = h.host.captureChat(), store = createPhoneStore({ target }), batch = readTimeline(target.messages);
+  store.read().conversations.a = [{ id: 'old-user', role: 'user', speakerId: '@user', text: '外发。', batch, source: { kind: 'main-story', floor: 0, block: 0 } }, { id: 'old-peer', role: 'assistant', speakerId: 'a', text: '回信。', batch, source: { kind: 'main-story', floor: 0, block: 1 } }];
+  const before = structuredClone(store.read().conversations);
+  await syncStorySms({ target, store }); assert.deepEqual(store.read().conversations, before);
+  const story = (await createContextReader({ target, store, qqjBridgeProvider: () => null }).readForContact('a')).story.map(row => row.text).join('');
+  assert.equal(story.includes('外发。'), false); assert.equal(story.includes('回信。'), false); assert.equal(story.includes('未导入。'), true);
+});
+
+test('ambiguous external names do not become a unique reverse-header peer by ignoring the ambiguous sender', async () => {
+  const raw = '[tmt|小满|小满]不能猜收件人。[/tmt][tmt|小满|甲]重名回信。[/tmt][tmt|小满|乙]明确回信。[/tmt]';
+  const h = createHarness({ messages: [{ mes: raw }], metadata: { pocketPhone: { userProfile: { name: '小满' }, contacts: [{ id: 'a', name: '甲' }, { id: 'other-a', name: '甲' }, { id: 'b', name: '乙' }], groups: [], conversations: {} } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target }); await syncStorySms({ target, store });
+  assert.equal(store.read().contacts.length, 3); assert.equal(store.read().conversations.a, undefined); assert.equal(store.read().conversations['other-a'], undefined);
+  assert.deepEqual(store.read().conversations.b.map(row => row.text), ['明确回信。']);
+  const story = (await createContextReader({ target, store, qqjBridgeProvider: () => null }).readForContact('b')).story.map(row => row.text).join('');
+  assert.ok(story.includes('不能猜收件人。')); assert.ok(story.includes('重名回信。')); assert.equal(story.includes('明确回信。'), false);
+});
+
+for (const hostKind of ['native', 'luker']) for (const group of [false, true]) test(`${hostKind}: legacy ${group ? 'group' : 'private'} owner-as-assistant receipt preserves old literal acceptance without replaying unchanged text`, async () => {
+  const name = group ? '群:同好' : '小满', raw = `[tmt|${name}|小满]外发。[/tmt][tmt|${name}|甲]未接纳回信。[/tmt]`;
+  const h = createHarness({ hostKind, messages: [{ mes: raw }], metadata: { pocketPhone: { userProfile: { name: '小满' }, contacts: [{ id: 'a', name: '甲' }, { id: 'self-story', name: '小满', source: { kind: 'story' } }], groups: group ? [{ id: 'g', name: '同好', memberIds: ['self-story', 'a'], userIsMember: true }] : [], conversations: {}, storySmsImportedFloor: 0 } } });
+  const target = h.host.captureChat(), store = createPhoneStore({ target }), id = group ? 'g' : 'self-story', batch = readTimeline(target.messages);
+  store.read().conversations[id] = [{ id: 'legacy-row', role: 'assistant', speakerId: 'self-story', text: '外发。', batch, source: { kind: 'main-story', floor: 0, block: 0 } }];
+  const before = structuredClone(store.read());
+  await syncStorySms({ target, store });
+  const { storySmsImports, ...unchanged } = store.read();
+  assert.deepEqual(unchanged, before); assert.equal(storySmsImports.processed.length, 1); assert.equal(h.metadataSaves, 1);
+  const reader = createContextReader({ target, store, qqjBridgeProvider: () => null });
+  const story = (await reader.readForContact('a')).story.map(row => row.text).join('');
+  assert.equal(story.includes('外发。'), false); assert.ok(story.includes('未接纳回信。'));
+  const cold = createPhoneStore({ target }); assert.equal(await syncStorySms({ target, store: cold }), false); assert.deepEqual(cold.read().conversations, before.conversations); assert.equal(h.metadataSaves, 1);
+  target.messages[0].mes = raw.replace('外发。', '真正改稿。'); await syncStorySms({ target, store });
+  const imported = store.read().conversations[group ? 'g' : 'a'].filter(row => row.source.projection);
+  assert.deepEqual(imported.map(row => [row.role, row.speakerId, row.text]), [['user', '@user', '真正改稿。'], ['assistant', 'a', '未接纳回信。']]);
+  assert.deepEqual(store.read().conversations[id][0], before.conversations[id][0]); assert.deepEqual(store.read().contacts, before.contacts);
+  assert.equal(h.modelRequests.length, 0);
 });

@@ -992,43 +992,39 @@ select, input, .profile-form textarea, .inspect-owner-form textarea { width: 100
 .photowall-desktop-photo { --desktop-widget-columns: 4; grid-column: 1 / 5; grid-row: 1 / 5; display: grid; place-items: center; width: auto; height: 100%; border: 0; background: var(--pp-paper); }
 .photowall-desktop-photo > span { padding: 8px; font-size: 11px; color: var(--pp-muted); }
 .photowall-desktop-photo img { display: block; width: 100%; height: 100%; min-height: 0; object-fit: cover; object-position: center; transform: scale(1.04); transform-origin: center; }
-.view-photowall { display: flex; flex-direction: column; gap: 8px; }
-.photowall-scheme-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.photowall-scheme-picker { flex: 1; min-width: 0; }
-.photowall-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.photowall-field { display: grid; gap: 4px; min-width: 0; }
-.photowall-field > span, .photowall-group-label { font-size: 11px; color: var(--pp-muted); }
-.photowall-field input, .photowall-field select, .photowall-scheme-picker { min-width: 0; width: 100%; height: 29.15px; min-height: 29.15px; padding: 2.5px 8px; font-size: 12px; line-height: 1.6; }
-.photowall-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 0 0 auto; height: 26.4px; min-height: 26.4px; padding: 0 11px; border: 1px solid var(--pp-rule); border-radius: 7px; background: var(--pp-surface-soft); font-size: 12px; line-height: 1; white-space: nowrap; }
-.photowall-button svg { width: 17px; height: 17px; }
-.photowall-button.is-primary { color: var(--pp-paper); background: var(--pp-active); border-color: var(--pp-active); }
-.photowall-button.is-primary:hover { color: var(--pp-paper); }
-.photowall-button.is-danger { color: var(--pp-error); border-color: var(--pp-error); }
-.photowall-generate-row, .photowall-photo-actions, .photowall-dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.photowall-generate-row { margin-bottom: 0; }
-.photowall-gallery-head { display: flex; justify-content: space-between; align-items: center; min-height: 26.4px; font-size: 12px; }
-.photowall-gallery-head span { font-size: 11px; color: var(--pp-muted); }
-.photowall-thumbnails { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 8px; }
-.photowall-thumbnail { min-width: 0; display: grid; gap: 4px; text-align: left; font-size: 11px; line-height: 1.5; border-radius: 7px; }
-.photowall-thumbnail-image { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 136px; border-radius: 7px; }
-.photowall-thumbnail img { display: block; max-width: 100%; max-height: 136px; width: 100%; height: auto; object-fit: contain; border-radius: 7px; }
-.photowall-thumbnail[aria-pressed="true"] .photowall-thumbnail-image { outline: 1px solid var(--pp-active); outline-offset: 2px; }
-.photowall-thumbnail small { display: block; color: var(--pp-muted); font-size: 10px; }
-.photowall-selected-copy { flex: 1; min-width: 0; font-size: 11px; line-height: 1.6; color: var(--pp-muted); overflow-wrap: anywhere; }
-.photowall-photo-actions { align-items: center; justify-content: space-between; margin-top: 4px; }
-.photowall-dialog-actions { margin-top: 8px; flex-wrap: wrap; }
-.photowall-dialog-actions .is-danger { margin-right: auto; }
-.photowall-scheme-row > .phone-select-button { flex: 1; width: 0; min-width: 0; margin: 0; }
-.photowall-fields .phone-select-button { width: 100%; min-width: 0; margin: 0; }
-.view-photowall .phone-select-button { height: 29.15px; min-height: 29.15px; padding: 2.5px 8px; line-height: 1.6; }
-.view-photowall .phone-select-button > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.photowall-thumbnails .empty-hint { grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 1.6; color: var(--pp-muted); }
-.photowall-scheme-form { display: grid; gap: 8px; }
-.photowall-scheme-form > label { display: grid; gap: 4px; }
-.photowall-scheme-form input, .photowall-scheme-form select { width: 100%; min-width: 0; border: 1px solid var(--pp-rule); border-radius: 7px; background: var(--pp-paper); color: var(--pp-ink); font: inherit; height: 29.15px; padding: 2.5px 8px; }
-.photowall-template-form textarea { width: 100%; min-width: 0; min-height: 112px; padding: 6px 8px; border: 1px solid var(--pp-rule); border-radius: 7px; background: var(--pp-paper); color: var(--pp-ink); font-size: 12px; line-height: 1.6; resize: vertical; }
-.phone-dialog .photowall-dialog-actions { gap: 8px; }
-.phone-dialog .photowall-dialog-actions > .photowall-button { height: 26.4px; min-height: 26.4px; line-height: 1; padding: 0 11px; }
+.view-camera { display: flex; flex-direction: column; overflow: hidden; }
+.camera-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.camera-label, .camera-field > span { display: block; margin-bottom: 4px; font-size: 11px; color: var(--pp-muted); }
+.camera-preset-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.camera-preset-row > select, .camera-preset-row > .phone-select-button { flex: 1; width: 0; min-width: 0; margin: 0; height: 29.15px; min-height: 29.15px; padding: 2.5px 8px; font-size: 12px; }
+.camera-preset-row > .phone-select-button > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.camera-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto; height: 26.4px; min-height: 26.4px; padding: 0 10px; border: 1px solid var(--pp-divider-soft); border-radius: 7px; background: var(--pp-surface-soft); color: var(--pp-ink); font-size: 12px; line-height: 1.1; white-space: nowrap; }
+.camera-button svg { width: 16px; height: 16px; }
+.camera-button.is-primary { color: var(--pp-paper); background: var(--pp-active); border-color: var(--pp-active); }
+.camera-button.is-danger { margin-right: auto; color: var(--pp-error); border-color: var(--pp-error); }
+.camera-result { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 0; margin-top: 11px; }
+.camera-result > button { display: block; width: 100%; height: 100%; min-height: 0; }
+.camera-result img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
+.phone-camera-dialog { display: flex; flex-direction: column; overflow: hidden; }
+.phone-camera-dialog > h2, .phone-camera-dialog > .form-actions, .phone-camera-dialog > .phone-dialog-error { flex: 0 0 auto; }
+.camera-preset-form { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.camera-field { display: grid; gap: 3px; min-width: 0; }
+.camera-field > span { margin: 0; }
+.camera-preset-form input:not([type="checkbox"]), .camera-preset-form select { width: 100%; min-width: 0; height: 29.15px; padding: 2.5px 8px; border: 1px solid var(--pp-divider-soft); border-radius: 7px; background: var(--pp-paper); color: var(--pp-ink); font: inherit; font-size: 12px; }
+.camera-preset-form textarea { display: block; width: 100%; min-width: 0; min-height: 90px; padding: 7px 8px; border: 1px solid var(--pp-divider-soft); border-radius: 7px; background: var(--pp-paper); color: var(--pp-ink); font: inherit; font-size: 12px; line-height: 1.55; resize: vertical; }
+.camera-editor-section { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--pp-divider-soft); }
+.camera-group-editor, .camera-prompt-editor { display: grid; gap: 6px; margin-top: 7px; }
+.camera-character-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 10px; }
+.camera-character-checks label { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; min-height: 29px; padding-inline: 2px; border-bottom: 1px solid var(--pp-divider-soft); font-size: 12px; overflow-wrap: anywhere; }
+.camera-character-checks input { width: 14px; height: 14px; flex: 0 0 auto; margin: 0; accent-color: var(--pp-active); }
+.camera-group-summary { margin: 5px 1px 0; font-size: 12px; overflow-wrap: anywhere; }
+.camera-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.camera-editor-mode { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--pp-divider-soft); }
+.camera-editor-mode > div { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--pp-divider-soft); border-radius: 7px; background: var(--pp-surface-soft); }
+.camera-editor-mode .camera-button { height: 23px; min-height: 23px; padding: 0 7px; border-color: transparent; background: transparent; font-size: 11px; }
+.camera-editor-mode .camera-button[aria-pressed="true"] { border-color: var(--pp-divider-soft); background: var(--pp-surface); }
+.camera-editor-error { color: var(--pp-error); font-size: 12px; }
+.camera-editor-error:empty, .camera-preset-form [hidden] { display: none; }
 .desktop-page-dots { display: flex; align-self: center; justify-content: center; gap: 4px; height: 4px; }
 .desktop-page-dots .desktop-page-dot { position: relative; width: 24px; height: 24px; margin-block: -10px; border-radius: 4px; background: transparent; }
 .desktop-page-dot::after { content: ''; position: absolute; width: 4px; height: 4px; top: 10px; left: 10px; border-radius: 50%; background: var(--pp-ink); opacity: .35; }
@@ -1043,3 +1039,19 @@ select, input, .profile-form textarea, .inspect-owner-form textarea { width: 100
 
 .photowall-reserved-app { color: var(--pp-muted); }
 .photowall-reserved-app .desktop-app-icon { color: var(--pp-muted); background: var(--pp-pale); }
+
+/* 取景与桌面共享等比几何；预览的隐藏网格沿桌面滚动和图标边缘内缩量尺寸。 */
+.photowall-desktop-photo[data-wall-crop], .wall-crop-frame { position: relative; overflow: hidden; background: var(--pp-paper); }
+.photowall-desktop-photo .wall-crop-image, .wall-crop-frame .wall-crop-image { position: absolute; display: block; max-width: none; max-height: none; min-width: 0; min-height: 0; object-fit: fill; transform: none; pointer-events: none; visibility: hidden; }
+.wall-crop-image[data-wall-ready] { visibility: visible; }
+.album-wall-page { position: relative; display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.album-wall-measure { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
+.album-wall-scroll { min-height: 0; flex: 1; overflow-y: auto; }
+.album-wall-scroll > [role] { padding: 16px; font-size: 12px; }
+.album-wall-preview-wrap { display: flex; align-items: center; justify-content: center; height: 100%; min-height: 0; padding: 12px; }
+.wall-crop-frame { flex: 0 0 auto; width: 100%; height: 316px; border-radius: 14px; cursor: grab; touch-action: none; }
+.wall-crop-frame:active { cursor: grabbing; }
+.wall-crop-frame:focus-visible { outline: 2px solid var(--pp-active); outline-offset: -2px; }
+.album-wall-zoom { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 6px 16px; font-size: 12px; }
+.album-wall-zoom input { min-width: 0; flex: 1; accent-color: var(--pp-active); }
+.phone-camera-dialog :is(input, textarea, select):focus-visible { outline: none; border-color: var(--pp-active); box-shadow: inset 0 0 0 1px var(--pp-active); }

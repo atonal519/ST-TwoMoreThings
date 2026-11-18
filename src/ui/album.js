@@ -1,5 +1,6 @@
 import { action, empty, escape } from './shared.js';
 import { imageSource } from '../image-files.js';
+import { readPhotoWallImage } from '../photowall.js';
 import { readAlbumPhotos, findAlbumPhoto } from '../album.js';
 
 const heading = (title, extra = '', back = false) => `<header class="album-heading">${back ? action('album-back', '返回上页', 'arrow', 'icon-button') : ''}<h1>${title}</h1>${extra}</header>`;
@@ -13,15 +14,24 @@ function renderEditor(model = {}) {
     <div class="album-editor-tabs" role="tablist" aria-label="打孔页面"><button type="button" role="tab" data-album-tab="positions" aria-selected="${positions}">选孔位</button><button type="button" role="tab" data-album-tab="result" aria-selected="${!positions}">看成品</button></div>`;
 }
 
-export function renderAlbum(state, { ui, albumEditor }) {
+function renderWallCrop(photo, model = {}, busy = new Set()) {
+  const disabled = model.loading || model.error || busy.has('camera:wall');
+  return `<div class="album-wall-page">${heading('照片墙取景', `<button type="button" class="quiet-button" data-action="wall-crop-reset" ${disabled ? 'disabled' : ''}>重置</button>`, true)}
+    <div class="album-wall-measure" aria-hidden="true"><div class="desktop-pages"><section class="desktop-page" data-desktop-page="1"><div class="desktop-content"><div class="desktop-grid"><div class="photowall-desktop-photo desktop-widget-frame" data-wall-crop-measure></div></div><div class="desktop-page-dots"></div></div></section></div></div>
+    <div class="album-wall-scroll">${model.loading ? '<p role="status">正在读取照片…</p>' : model.error ? `<p role="alert">${escape(model.error)}</p>` : `<div class="album-wall-preview-wrap"><div class="wall-crop-frame" data-wall-crop-preview tabindex="0" role="img" aria-label="照片墙取景，可拖动或用方向键调整"><img class="wall-crop-image" data-phone-image="${escape(photo.path)}" src="${escape(imageSource(photo.path))}" alt="${escape(photo.description)}" draggable="false"></div></div>`}</div>
+      <label class="album-wall-zoom" for="wall-crop-zoom"><span>缩放</span><input id="wall-crop-zoom" type="range" min="0" max="4" step="0.01" value="${model.crop?.zoom ?? 1.04}" ${disabled ? 'disabled' : ''}></label><div class="album-actionbar"><button type="button" class="quiet-button" data-action="album-back">取消</button><button type="button" class="save-button" data-action="wall-crop-save" ${disabled ? 'disabled' : ''}>${busy.has('camera:wall') ? '保存中…' : '设为照片墙'}</button></div></div>`;
+}
+
+export function renderAlbum(state, { ui, albumEditor, wallCrop, busy }) {
   const options = { defaultUser: ui.defaultUser }, photos = readAlbumPhotos(state, options);
-  const photo = ui.albumPath && findAlbumPhoto(state, ui.albumPath, options);
+  const photo = ui.albumPath && findAlbumPhoto(state, ui.albumPath, options), selectedWall = readPhotoWallImage(state)?.path;
+  if (ui.albumPage === 'wall' && photo) return renderWallCrop(photo, wallCrop, busy);
   if (ui.albumPage === 'editor' && photo) return renderEditor(albumEditor);
   if (ui.albumPage !== 'gallery' && photo) {
     return `${heading('照片', '', true)}<div class="album-scroll album-detail-scroll">
       <button type="button" class="album-detail-photo" data-action="album-view" aria-label="放大照片"><img data-phone-image="${escape(photo.path)}" src="${escape(imageSource(photo.path))}" alt="${escape(photo.description)}"></button>
       <div class="album-detail-meta">${photo.description ? `<p>${escape(photo.description)}</p>` : ''}${photo.sources.map(source => `<div><span>${escape(source.label)}</span><small>${escape(source.publishedAt || '未标日期')}</small></div>`).join('')}</div>
-    </div><div class="album-actionbar"><button type="button" class="save-button" data-action="album-edit">打孔拼贴</button></div>`;
+    </div><div class="album-actionbar"><button type="button" class="save-button" data-action="album-edit">打孔拼贴</button><button type="button" class="quiet-button" data-action="album-wall">${selectedWall === photo.path ? '调整照片墙' : '设为照片墙'}</button></div>`;
   }
   const groups = new Map();
   for (const photo of photos) {
