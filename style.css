@@ -1055,3 +1055,16 @@ select, input, .profile-form textarea, .inspect-owner-form textarea { width: 100
 .album-wall-zoom { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 6px 16px; font-size: 12px; }
 .album-wall-zoom input { min-width: 0; flex: 1; accent-color: var(--pp-active); }
 .phone-camera-dialog :is(input, textarea, select):focus-visible { outline: none; border-color: var(--pp-active); box-shadow: inset 0 0 0 1px var(--pp-active); }
+
+.phone-api-dialog :is(input, textarea, select):focus-visible { outline: none; border-color: var(--pp-active); box-shadow: inset 0 0 0 1px var(--pp-active); }
+.api-editor-advanced { border-top: 1px solid var(--pp-divider-soft); padding-top: 6px; }
+.api-editor-advanced-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 29.15px; padding: 2px 0; font-size: 12px; color: var(--pp-ink); }
+.api-editor-advanced-arrow { display: inline-flex; transform: rotate(90deg); transition: transform .15s ease; }
+.api-editor-advanced-toggle[aria-expanded="true"] .api-editor-advanced-arrow { transform: rotate(-90deg); }
+.api-editor-advanced-body { display: grid; gap: 8px; padding-top: 6px; }
+.api-editor-advanced-body[hidden] { display: none; }
+.api-editor-advanced-body :is(input:not([type="checkbox"]), textarea) { width: 100%; min-width: 0; font-size: 12px; }
+.api-editor-stream { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.api-editor-stream input { width: 14px; height: 14px; margin: 0; accent-color: var(--pp-active); }
+
+.api-editor-advanced-toggle:focus-visible { outline: 2px solid var(--pp-active); outline-offset: -2px; }

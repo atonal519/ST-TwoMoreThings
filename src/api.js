@@ -1,3 +1,5 @@
+import { apiOptions, applyApiOptions } from './api-options.js';
+import { requestCompletion } from './api-transport.js';
 import { createUuid } from './uuid.js';
 import { readForumTags } from './forum-tags.js';
 import { normalizeContent, generatedImage, attachMessageTranslations } from './content.js';
@@ -6,7 +8,6 @@ import { finishGeneratedText } from './generated-text.js';
 import { modelJsonValues } from './model-json.js';
 
 const pool = settings => settings['schedule-planner']?.apiPresets || [];
-const REASONING_MODEL = /^(?:openai\/)?(?:gpt-[56]|o[134])(?:$|[.-])/iu;
 const refKey = ref => ref ? `${ref.kind}:${ref.presetId || ''}` : '';
 const normalizeUrl = value => {
   const url = String(value || '').trim().replace(/\/+$/, '').replace(/\/chat\/completions$/i, '');
@@ -24,11 +25,11 @@ export function resolveApiConfig(settings, ref, localModel) {
   if (!/^https?:\/\//i.test(url) || !config?.key) throw new Error('请在手机设置中选择共享预设，或新增 API 连接。');
   const model = String(localModel || config.model || '').trim();
   if (!model) throw new Error('请在手机连接设置中填写模型并保存。');
-  return { url, key: config.key, model, excludeParams: config.excludeParams || [], timeoutSec: config.timeoutSec };
+  return { url, key: config.key, model, ...apiOptions(config) };
 }
 
 export async function saveManualPreset(settings, draft, saveSettings) {
-  const preset = { id: createUuid(), name: draft.name?.trim() || draft.model?.trim(), url: normalizeUrl(draft.url), key: draft.key?.trim(), model: draft.model?.trim(), excludeParams: [], timeoutSec: 180, stream: false };
+  const preset = applyApiOptions({ id: createUuid(), name: draft.name?.trim() || draft.model?.trim(), url: normalizeUrl(draft.url), key: draft.key?.trim(), model: draft.model?.trim() }, apiOptions(draft));
   resolveApiConfig({ 'schedule-planner': { apiPresets: [preset] } }, { kind: 'shared-preset', presetId: preset.id });
   const container = settings['schedule-planner'] ||= {};
   const previous = container.apiPresets;
@@ -83,7 +84,8 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
   }
   function draftConfig(draft, ref) {
     const base = sharedConfig(host.readSettings(), ref);
-    const config = { url: normalizeUrl(draft.url), key: String(draft.key || '').trim() || String(base?.key || '').trim(), model: String(draft.model || '').trim() };
+    apiOptions({ ...base, ...draft });
+    const config = { url: normalizeUrl(draft.url ?? base?.url), key: String(draft.key || '').trim() || String(base?.key || '').trim(), model: String(draft.model ?? base?.model ?? '').trim(), ...apiOptions(draft, true) };
     resolveApiConfig({ 'schedule-planner': { apiPresets: [{ id: 'draft', ...config }] } }, { kind: 'shared-preset', presetId: 'draft' });
     return config;
   }
@@ -116,7 +118,7 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
     },
     readDraft(ref = api.getSelected()) {
       const settings = host.readSettings(), config = sharedConfig(settings, ref);
-      return { url: normalizeUrl(config?.url), key: '', model: String(settings[settingsKey]?.apiModel || config?.model || '').trim() };
+      return { url: normalizeUrl(config?.url), key: '', model: String(settings[settingsKey]?.apiModel || config?.model || '').trim(), stream: config?.stream === true, timeoutSec: config?.timeoutSec ?? 180, excludeParams: config?.excludeParams || [], tmtTemperature: config?.tmtTemperature ?? '', tmtAdditionalParams: config?.tmtAdditionalParams ?? '', tmtRetryCount: config?.tmtRetryCount ?? 0 };
     },
     async saveModel(value) {
       const model = String(value || '').trim();
@@ -147,14 +149,14 @@ export function createApiSettings({ host, onBusyChange = () => {} }) {
       if (!current) throw new Error('这条连接已不存在，请重新选择或另存为。');
       if (name !== undefined && !String(name).trim()) throw new Error('请输入预设名称。');
       const config = draftConfig(draft, ref);
-      const presets = pool(settings).map(preset => preset.id === ref.presetId ? { ...preset, url: config.url, key: config.key, ...(name !== undefined ? { name: String(name).trim() } : {}) } : preset);
-      const patch = refKey(api.getSelected()) === refKey(ref) ? { ...(!captured ? { apiSourceRef: { ...ref } } : {}), apiModel: config.model } : {};
+      const presets = pool(settings).map(preset => preset.id === ref.presetId ? applyApiOptions({ ...preset, ...(Object.hasOwn(draft, 'url') ? { url: config.url } : {}), ...(String(draft.key || '').trim() ? { key: config.key } : {}), ...(name !== undefined ? { name: String(name).trim() } : {}) }, apiOptions(draft, true)) : preset);
+      const patch = refKey(api.getSelected()) === refKey(ref) ? { ...(!captured ? { apiSourceRef: { ...ref } } : {}), ...(Object.hasOwn(draft, 'model') ? { apiModel: config.model } : {}) } : {};
       await persistPresets(presets, patch, '连接保存失败，请重试。');
     },
     async saveAs(draft, name, ref = api.getSelected(), { select = true } = {}) {
       const label = String(name || '').trim(); if (!label) throw new Error('请输入预设名称。');
       const settings = host.readSettings(), config = draftConfig(draft, ref), current = sharedConfig(settings, ref);
-      const preset = { excludeParams: [], timeoutSec: 180, stream: false, ...current, ...config, id: createUuid(), name: label };
+      const preset = applyApiOptions({ excludeParams: [], timeoutSec: 180, stream: false, ...current, ...config, id: createUuid(), name: label }, apiOptions(draft, true));
       const selected = { kind: 'shared-preset', presetId: preset.id };
       await persistPresets([...pool(settings), preset], select ? { apiSourceRef: selected, apiModel: config.model } : {}, '连接保存失败，请重试。');
       return selected;
@@ -184,20 +186,7 @@ export function createModelClient({ host, sourceProvider, onBusyChange = () => {
       onBusyChange(true);
       try {
         const config = sourceProvider.resolve();
-        const body = { chat_completion_source: 'openai', reverse_proxy: config.url, proxy_password: config.key, model: config.model, messages: [{ role: 'system', content: prependProcessingPrompt(system, getSharedProcessingPrompt(host.readSettings())) }, ...messages], stream: false, temperature: 0.8 };
-        if (config.excludeParams.includes('temperature')) delete body.temperature;
-        if (REASONING_MODEL.test(String(config.model).trim())) delete body.temperature;
-        let response;
-        try { response = await host.request('/api/backends/chat-completions/generate', { method: 'POST', body: JSON.stringify(body), signal: AbortSignal.timeout(Math.max(1, Number(config.timeoutSec) || 180) * 1000) }); }
-        catch (error) { throw new Error(error.name === 'TimeoutError' ? '生成等待超时，请稍后重试。' : '生成请求未能连接，请检查酒馆和接口连接后重试。'); }
-        if (!response.ok) throw new Error(`生成失败（${response.status}），请检查所选连接的地址、密钥和模型。`);
-        let data;
-        try { data = await response.json(); }
-        catch { throw new Error('接口没有返回可读取的回答，请检查所选模型后重试。'); }
-        const content = data.choices?.[0]?.message?.content;
-        const text = typeof content === 'string' ? content : Array.isArray(content) ? content.filter(x => x.type === 'text').map(x => x.text).join('\n') : '';
-        if (!text.trim()) throw new Error('模型没有返回正文，请检查连接或稍后重试。');
-        return text;
+        return await requestCompletion(host, config, [{ role: 'system', content: prependProcessingPrompt(system, getSharedProcessingPrompt(host.readSettings())) }, ...messages]);
       } finally { onBusyChange(false); }
     },
   };

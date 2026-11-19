@@ -107,3 +107,25 @@ test('model search Enter preserves a composition tracked by the shared editor', 
   assert.equal(prevented, false);
   assert.equal(t.h.settingsSaves, 0);
 });
+
+test('advanced editor starts on panel, keeps incomplete JSON local during model discovery and saves only edited options',async()=>{
+ const settings={pocketPhone:{apiSourceRef:{kind:'shared-preset',presetId:'p'}},'schedule-planner':{apiPresets:[{id:'p',name:'原名',url:'https://p.invalid/v1',key:'key',model:'m',stream:true,timeoutSec:90,qqjTemperature:0.3}]}},t=editorSetup(settings);t.open(false);
+ assert.equal(t.config().initialFocus,'panel');
+ assert.equal(t.config().content.querySelector('.api-editor-advanced').open,false);
+ assert.equal(t.field('stream').checked,true);t.field('additional').value='{';t.h.completion={models:['m']};
+ await t.config().content.querySelectorAll('button').find(n=>n.textContent==='拉取模型').fire('click');assert.equal(t.h.modelRequests.length,1);assert.equal(t.h.settingsSaves,0);
+ await assert.rejects(t.config().submit(),/JSON/);assert.equal(t.h.settingsSaves,0);
+ t.field('additional').value='{"top_p":0.7}';t.field('temperature').value='0';t.field('retry').value='0';
+ Object.assign(settings['schedule-planner'].apiPresets[0],{name:'外部名',url:'https://later.invalid/v1',timeoutSec:120,qqjTemperature:0.9});
+ await t.config().submit();const saved=settings['schedule-planner'].apiPresets[0];assert.equal(saved.name,'外部名');assert.equal(saved.url,'https://later.invalid/v1');assert.equal(saved.timeoutSec,120);assert.equal(saved.qqjTemperature,0.9);assert.equal(saved.tmtTemperature,0);assert.equal(saved.tmtAdditionalParams,'{"top_p":0.7}');
+});
+
+
+test('real API modal focuses its panel and advanced expansion preserves normal Tab access and cancellation',async()=>{
+ const h=createApiHarness(),api=createApiSettings({host:h.host}),dom=harness();
+ const result=openApiEditor({documentRef:dom.doc,dialog:dom.dialog,apiSettings:api,isNew:true});
+ assert.equal(dom.doc.activeElement.className,'phone-dialog phone-api-dialog');
+ const toggle=dom.mount.querySelector('.api-editor-advanced-toggle');await toggle.fire('click');assert.equal(toggle.attributes['aria-expanded'],'true');assert.equal(dom.mount.querySelector('.api-editor-advanced-body').hidden,false);
+ await dom.overlay().fire('keydown',{key:'Tab',target:dom.doc.activeElement});assert.equal(dom.doc.activeElement.id,'api-editor-name');
+ await dom.mount.querySelector('.text-button').fire('click');assert.equal(await result,false);assert.equal(h.settingsSaves,0);
+});

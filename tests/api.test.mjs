@@ -140,7 +140,7 @@ test('saved local model overrides the shared model while shared URL and key are 
 test('draft fill and model-list selection do not save until the local model is explicitly saved', async () => {
   const h = createHarness({ settings: { pocketPhone: { fabShow: false }, 'schedule-planner': { apiPresets: [{ id: 'p', url: 'https://shared.invalid', key: 'secret', model: 'shared-default' }, { id: 'p2', url: 'https://other.invalid', key: 'other', model: 'other-default' }] } } });
   const api = createApiSettings({ host: h.host }); await api.select({ kind: 'shared-preset', presetId: 'p' }); const poolBefore = structuredClone(h.context.extensionSettings['schedule-planner']);
-  assert.equal(typeof api.readDraft, 'function'); const draft = api.readDraft(); assert.deepEqual(draft, { url: 'https://shared.invalid/v1', key: '', model: 'shared-default' }); draft.model = 'not-saved'; assert.equal(api.resolve().model, 'shared-default');
+  assert.equal(typeof api.readDraft, 'function'); const draft = api.readDraft(); assert.deepEqual(draft, { url: 'https://shared.invalid/v1', key: '', model: 'shared-default', stream: false, timeoutSec: 180, excludeParams: [], tmtTemperature: '', tmtAdditionalParams: '', tmtRetryCount: 0 }); draft.model = 'not-saved'; assert.equal(api.resolve().model, 'shared-default');
   assert.equal(typeof api.saveModel, 'function'); await api.saveModel(draft.model); assert.equal(api.resolve().model, 'not-saved'); await api.select({ kind: 'shared-preset', presetId: 'p2' }); assert.equal(api.readDraft().model, 'other-default'); assert.equal(api.resolve().model, 'other-default');
   await assert.rejects(api.saveModel('   '), /模型/); assert.equal(api.resolve().model, 'other-default'); assert.deepEqual(h.context.extensionSettings['schedule-planner'], poolBefore); assert.equal(h.context.extensionSettings.pocketPhone.fabShow, false);
 });
@@ -208,7 +208,7 @@ for(const hostKind of ['native','luker']) for(const settingsKey of ['pocketPhone
     settings[settingsKey].apiModel=model;const before=structuredClone(settings),start=h.modelRequests.length;
     await client.complete({system:'offline',messages:[{role:'user',content:'complete input'}]});
     assert.equal(h.modelRequests.length,start+1);const body=h.modelRequests.at(-1).body;
-    assert.equal(body.model,model);assert.equal(body.stream,false);assert.equal(Object.hasOwn(body,'temperature'),!known.includes(model));if(!known.includes(model))assert.equal(body.temperature,0.8);
+    assert.equal(body.model,model);assert.equal(body.stream,true);assert.equal(Object.hasOwn(body,'temperature'),!known.includes(model));if(!known.includes(model))assert.equal(body.temperature,0.8);
     for(const field of ['max_tokens','max_completion_tokens','reasoning_effort','custom_include_body'])assert.equal(Object.hasOwn(body,field),false);
     assert.deepEqual(settings,before);assert.equal(h.settingsSaves,0);
   }
