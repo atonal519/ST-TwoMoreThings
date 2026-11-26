@@ -1,3 +1,5 @@
+import { diaryActorId } from './diary/material.js';
+import { assertDiaryOwner } from './diary/store.js';
 import { cameraRole } from './camera-presets.js';
 import { inspectionOwners, inspectionData, inspectionHistory } from './inspect-phone.js';
 import { circleProfile } from './forum-scope.js';
@@ -146,6 +148,22 @@ export function createContextReader({ target, store, qqjBridgeProvider = () => g
     readClock: () => readTimeline(target.messages).clock,
     readUserProfile: () => ({ name: store.read().userProfile?.name || target.user || '我', nickname: store.read().userProfile?.nickname || '' }),
     assertMemorySources() { memorySources.select(); },
+    async readForDiary(ownerId) {
+      const state = await store.readSaved(), owner = assertDiaryOwner(state, ownerId);
+      const current = base(state), profile = identityProfile(state, owner), source = memorySources.select(), bridge = source.bridge;
+      const storyMemory = memorySources.readStoryMemory(source);
+      const entityId = diaryActorId(state, owner, bridge);
+      const scanText = [...current.story.map(item => item.text), owner.name, profile.personality || ''].join('\n');
+      let related = '';
+      if (entityId && bridge?.readContext) {
+        const context = await bridge.readContext({ query: scanText, entityIds: [entityId] });
+        if (context?.status === 'ready') related = (context.actors || []).filter(actor => actor.entityId === entityId).map(actor => [actor.stateText, actor.memoryText].filter(Boolean).join('\n')).join('\n');
+      }
+      return withIdentitySource({ character: current.character, user: current.user, userProfile: current.userProfile, defaultLanguage: current.defaultLanguage,
+        story: current.story, storyTime: current.clock.source === 'story' ? { date: current.clock.date, time: current.clock.time } : null,
+        owner: { id: owner.id, name: owner.name, personality: profile.personality || '', expression: owner.expression || '', language: owner.language || '' },
+        ...(storyMemory ? { storyMemory } : {}), related, worldbook: await target.readWorldInfo({ scanText }) }, state, [ownerId]);
+    },
     async readForInspection(ownerId) {
       const state = await store.readSaved(), owner = inspectionOwners(state).find(person => person.id === ownerId);
       if (!owner) throw new Error('请选择手机主人。');

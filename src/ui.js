@@ -1,3 +1,4 @@
+import { renderDiary, createDiaryController } from './ui/diary.js';
 import { renderCamera } from './ui/camera.js';
 import { createCameraPresetEditor } from './ui/camera-editor.js';
 import { newCameraPreset } from './camera-presets.js';
@@ -71,8 +72,11 @@ const apps = [
   { id: 'camera', label: '相机', view: 'camera' },
   { id: 'inspect-phone', label: '查手机', view: 'inspect-phone' },
   { id: 'favorites', label: '收藏夹', view: 'favorites' },
+  { id: 'diary', label: '日记', view: 'diary' },
 ];
 const pages = {
+  diary: renderDiary,
+  'inspect-diary': renderDiary,
   'inspect-phone': renderInspection,
   'inspect-chat': renderInspection,
   'inspect-desktop': renderInspection,
@@ -99,7 +103,7 @@ const pages = {
   'favorite-detail': renderFavoriteDetail,
 };
 
-export function mountPhone({ mount, store, messages, inspectPhone, camera, groups, directory, forum, social, liangshi, sourcePermissions, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onError, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenCamera, onOpenNotifications }) {
+export function mountPhone({ mount, store, messages, inspectPhone, diary, camera, groups, directory, forum, social, liangshi, sourcePermissions, apiSettings, imageProviders, wallpaper, entries, appearance, images, authoring, mode, updates, renderUpdateMarkdown, notifyUpdate, storySmsInstaller, qqjBridgeProvider = () => globalThis.qqj_v3_public_bridge_v1, calendar = createCalendarReader(), control = { isEnabled: () => true }, isCurrentChat = () => true, readWeather = readLockWeather, readTime, readTimeline, defaultUser = '我', onClose, onError, onEnable = () => {}, onContextChange = () => {}, onThemeChange = () => {}, onOpenAlbum, onOpenCamera, onOpenNotifications }) {
   const doc = mount.ownerDocument;
   let openingFocus = doc.activeElement;
   const element = doc.createElement('div');
@@ -118,7 +122,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, camera, group
   doc.head.append(fontStyle);
   const stylesheet = doc.createElement('link');
   stylesheet.rel = 'stylesheet';
-  stylesheet.href = phoneUrl('style.css');
+  stylesheet.href = phoneUrl('style.css?v=release-0.7.4');
   let stylesheetReady = false;
   stylesheet.onload = () => {
     stylesheetReady = true;
@@ -188,7 +192,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, camera, group
   if (!control.isEnabled()) ui.view = 'settings';
   let notificationShade, notificationsSuppressed = false, notificationEpoch = 0;
   const clock = createPhoneClock({ root, element, readTime, onRefresh: value => notificationShade?.updateClock(value) });
-  const inInspectedPhone = () => ['inspect-desktop', 'inspect-wechat', 'inspect-chat'].includes(ui.view);
+  const inInspectedPhone = () => ['inspect-desktop', 'inspect-wechat', 'inspect-chat', 'inspect-diary'].includes(ui.view);
   const inChat = () => ['chat', 'group-chat'].includes(ui.view);
   const conversationId = () => ui.view === 'group-chat' ? ui.groupId : ui.contactId;
   let particles = null, avatarCropper = null, lockImageNode = null, lockImageSrc = '', noticeTimer, feedbackTimer;
@@ -382,10 +386,11 @@ export function mountPhone({ mount, store, messages, inspectPhone, camera, group
   // 导航、草稿、事件与服务调用由控制器统一持有，页面只负责展示。
   function render({ bottom = false } = {}) {
     if (!element.isConnected) return;
+    diaryView.capture();
     if (ui.notice?.key && !store.read().notifications?.items.some(item => item.key === ui.notice.key)) dismissPhoneNotice();
     if (ui.view === 'album' && ui.albumPath && !findAlbumPhoto(store.read(), ui.albumPath, { defaultUser })) { albumEditor.forgetCurrent(ui.albumPath); wallCrop.leave(); ui.albumPage = 'gallery'; ui.albumPath = ''; ui.photo = null; }
     if (ui.view === 'album' && ui.albumPage === 'gallery') ui.albumScroll = root.querySelector('.album-gallery')?.scrollTop ?? ui.albumScroll;
-    const route = JSON.stringify([ui.view, ui.view.startsWith('inspect-') ? [ui.inspectOwnerId, ui.inspectThreadId] : ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'favorite-detail' ? ui.favoriteId : ui.view === 'post' ? [ui.forumScope, ui.postId] : ui.view === 'forum' ? ui.forumScope : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
+    const route = JSON.stringify([ui.view, ui.view.startsWith('inspect-') ? [ui.inspectOwnerId, ui.inspectThreadId, ui.view === 'inspect-diary' ? ui.diaryMode : ''] : ui.view === 'diary' ? ui.diaryOwnerId : ui.view === 'album' ? [ui.albumPage, ui.albumPath] : ui.view === 'liangshi' ? [ui.liangshiPage, ui.liangshiPage.kind === 'compose' ? ui.liangshiDraft?.postId : ''] : ui.view === 'favorite-detail' ? ui.favoriteId : ui.view === 'post' ? [ui.forumScope, ui.postId] : ui.view === 'forum' ? ui.forumScope : ui.view === 'social-profile' ? ui.socialAuthorId : ui.view === 'contact-profile' ? [ui.editor, ui.editId] : ui.view === 'group-profile' ? ui.groupEditId : inChat() ? conversationId() : '']);
     const sameRoute = route === renderedRoute;
     if (!sameRoute || ui.view !== 'settings' || !ui.drawers.content) worldbookSettings = null;
     if (!sameRoute) { cancelClearDialog(); cancelFavoriteRemoval(); actionMenu.close(); cancelAvatarGesture(); composingDraft = false; }
@@ -423,7 +428,7 @@ export function mountPhone({ mount, store, messages, inspectPhone, camera, group
       : ui.view === 'desktop' ? calendar.month(0) : null;
     notificationShade.beforeRender();
     editing.render(renderShell({
-      content: page(state, { ui, busy, inspectPhone, camera, reducedMotion: ui.inspectLoading && doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches, sourcePermissions, sourcePermissionMarkup: worldbookSettings?.outerHTML || '', apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, wallCrop: ui.albumPage === 'wall' ? wallCrop.model() : undefined, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
+      content: page(state, { ui, busy, inspectPhone, diary, camera, reducedMotion: ui.inspectLoading && doc.defaultView.matchMedia('(prefers-reduced-motion: reduce)').matches, sourcePermissions, sourcePermissionMarkup: worldbookSettings?.outerHTML || '', apiSettings, imageProviders, entries, appearance, control, mode, apps, calendar: calendarMonth, weather, updates, wallCrop: ui.albumPage === 'wall' ? wallCrop.model() : undefined, albumEditor: ui.view === 'album' && ui.albumPage === 'editor' ? albumEditor.model() : undefined,
         profileAvatar: ui.view === 'contact-profile' ? readContactAvatarDraft(ui.profileDraft, store.read().contacts.find(person => person.id === ui.editId), qqjBridgeProvider?.()) : undefined }),
       view: ui.view, enabled, weather, inspectedPhone: inInspectedPhone(), inspectionLoading: ui.view === 'inspect-desktop' && ui.inspectLoading,
       feedback: ui.feedback, photo: ui.photo,
@@ -879,7 +884,8 @@ export function mountPhone({ mount, store, messages, inspectPhone, camera, group
     let parent = 'desktop';
     switch (ui.view) {
       case 'inspect-chat': parent = 'inspect-wechat'; break;
-      case 'inspect-wechat': parent = 'inspect-desktop'; break;
+      case 'inspect-wechat':
+      case 'inspect-diary': parent = 'inspect-desktop'; break;
       case 'inspect-desktop': parent = 'inspect-phone'; break;
       case 'chat':
       case 'group-chat': parent = 'inbox'; break;
@@ -1237,6 +1243,9 @@ export function mountPhone({ mount, store, messages, inspectPhone, camera, group
     if (button.dataset.post) { ui.forumScroll = { ...listPosition(button), tag: ui.forumTag }; ui.forumPages[ui.forumScope] = { tag: ui.forumTag, scroll: ui.forumScroll }; ui.postId = button.dataset.post; ui.view = 'post'; setFeedback(null); render(); return; }
     const id = conversationId(), service = ui.view === 'group-chat' ? groups : messages;
     switch (button.dataset.action) {
+      case 'inspect-open-diary':
+      case 'diary-mode':
+      case 'diary-generate': diaryView.click(button); break;
       case 'inspect-menu': {
         if (ui.chatMenu) closeActionMenu();
         else {
@@ -1661,7 +1670,10 @@ export function mountPhone({ mount, store, messages, inspectPhone, camera, group
       if (event.target.name === 'avatar' || ['name', 'nickname'].includes(event.target.name) && !root.querySelector('.profile-avatar img')) root.querySelector('.profile-avatar').innerHTML = avatar(draft);
     }
   }
+  const diaryView = createDiaryController({ ui, diary, root, showPage, render, perform, isCurrentChat });
+
   function change(event) {
+    if (diaryView.change(event)) return;
     if (event.target.id === 'camera-preset') { void perform('camera:preset', () => camera.selectPreset(event.target.value)); return; }
     if (event.target.id === 'story-reference-floors') {
       const value = event.target.value;

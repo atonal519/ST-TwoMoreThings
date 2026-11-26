@@ -3,7 +3,7 @@ import { readTimeline } from './timeline.js';
 import { sanitizeStoryBody } from './shared-body-wrappers.js';
 import { isUserIdentity } from './identities.js';
 
-export const STORY_SMS_PROMPT = '本楼实际新增的短信按[tmt|对话名|发信人]内容[/tmt]输出，原话逐条完整保留。本楼新创短信优先遵循人物明确标注的特殊语言和表达习惯；无此标注时正常使用句内和句末标点，空格或换行不替代标点；引用已发送或既有短信时，原话逐字保留。这是用户持有的手机，不随叙述视角或谁正在查看手机切换持有者。私聊对话名始终写用户的对方姓名，用户外发与对方回信使用同一个对话名；群聊写“群:群名”，仅限用户参与的群。发信人用户固定“我”，其他人写姓名；只记录已经发生的收发，不替用户编新发言，无短信不输出。手机参考里的短信已经发送，只承接，不重复输出短信块。实际转账用完整短信标记【微信转账：2000.00元】，金额写实际正数，说明另发一条；收款状态由手机处理，不在标记中编写。没有实际转账不输出此标记。不额外填写头像，不写CSS或JSON。例如：[tmt|朋友甲|我]我到了。[/tmt][tmt|朋友甲|朋友甲]收到，我来接你。[/tmt]。';
+export const STORY_SMS_PROMPT = '本楼每条实际新收发的短信，在叙事写到收发发生时就地以完整[tmt|对话名|发信人]原话[/tmt]呈现，原话逐条完整保留。同一条新短信的原话只在这一处标签内出现一次；正文照常写收发动作和反应，不在标签外重写原话，不在段尾或楼尾另附重复短信块。本楼新创短信优先遵循人物明确标注的特殊语言和表达习惯；无此标注时正常使用句内和句末标点，空格或换行不替代标点；引用已发送或既有短信时，原话逐字保留。这是用户持有的手机，不随叙述视角或谁正在查看手机切换持有者。私聊对话名始终写用户的对方姓名，用户外发与对方回信使用同一个对话名；群聊写“群:群名”，仅限用户参与的群。发信人用户固定“我”，其他人写姓名；只记录已经发生的收发，不替用户编新发言，无短信不输出。手机参考里的短信已经发送，只承接，不重复输出短信块。实际转账用完整短信标记【微信转账：2000.00元】，金额写实际正数，说明另发一条；收款状态由手机处理，不在标记中编写。没有实际转账不输出此标记。不额外填写头像，不写CSS或JSON。例如：我在门口停下，给朋友甲发去短信：[tmt|朋友甲|我]我到了。[/tmt]我收起伞，手机很快亮起：[tmt|朋友甲|朋友甲]收到，我来接你。[/tmt]我抬头望向大厅，等他出来。';
 const RULE_ID = 'two-more-things:story-sms-display';
 const ENTRY_FIELDS = { content: STORY_SMS_PROMPT, constant: true, disable: false, vectorized: false, position: 4, depth: 1, role: 0, probability: 100, useProbability: false, ignoreBudget: true };
 const avatarName = character => character.avatar.split('/').at(-1).replace(/\.[^.]+$/, '');

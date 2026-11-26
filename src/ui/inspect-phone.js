@@ -21,7 +21,7 @@ export function renderInspection(state, { ui, busy, inspectPhone, reducedMotion 
     return `<div class="inspect-loading" role="status" aria-label="正在打开手机"><img src="${escape(source)}" width="300" height="232" alt=""></div>`;
   }
   if (!owner) return empty('请选择手机主人');
-  if (ui.view === 'inspect-desktop') return renderDesktop(state, { owner, apps: [{ id: 'inspect-wechat', label: '微信', icon: 'messages', action: 'inspect-open-wechat' }] });
+  if (ui.view === 'inspect-desktop') return renderDesktop(state, { owner, apps: [{ id: 'inspect-wechat', label: '微信', icon: 'messages', action: 'inspect-open-wechat' }, { id: 'diary', label: '日记', action: 'inspect-open-diary' }] });
   const threads = inspectionThreads(state, owner.id, ui.defaultUser);
   const people = [...owners.filter(person => !person.needsName), ...inspectionData(state, owner.id).people, { ...state.userProfile, id: '@user', name: state.userProfile?.name || ui.defaultUser }];
   if (ui.view === 'inspect-chat') {

@@ -4,7 +4,7 @@ import { readPhotoWallImage } from '../photowall.js';
 import { cleanWallCrop } from '../wall-crop.js';
 import { imageSource } from '../image-files.js';
 
-const secondaryAppIds = ['inspect-phone', 'favorites'];
+const secondaryAppIds = ['inspect-phone', 'favorites', 'diary'];
 
 function realDateCalendar(now = new Date()) {
   const year = now.getFullYear(), month = now.getMonth(), date = now.getDate(), weekdays = ['一', '二', '三', '四', '五', '六', '日'];

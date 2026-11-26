@@ -1,3 +1,4 @@
+import { createDiaryService } from './diary/service.js';
 import { createCameraService } from './camera.js';
 import { createPhotoWallTemplateSettings } from './photowall-templates.js';
 import { createInspectPhoneService } from './inspect-phone.js';
@@ -108,6 +109,7 @@ export function initialize({ mode = 'standalone', host = createHostAdapter({ mod
       messages: createMessageService({ target, store, contextReader, modelClient }),
       camera: createCameraService({ store, contextReader, modelClient, legacyTemplates: { read: () => ({ ...createPhotoWallTemplateSettings({ host }).read(), explicit: Object.hasOwn(host.readSettings().pocketPhone || {}, 'photoWallTemplates') }) }, providers: imageProviders, assertEnabled: control.assertEnabled, isCurrentChat: () => { const current = host.captureChat(); return current.id === target.id && current.metadata === target.metadata; }, onBusyChange, readTime: () => readPhoneTime(target.messages) }),
       inspectPhone: createInspectPhoneService({ target, store, contextReader, modelClient }),
+      diary: createDiaryService({ store, contextReader, modelClient, isCurrentChat: () => { const current = host.captureChat(); return current.id === target.id && current.metadata === target.metadata; } }),
       groups: createGroupService({ target, store, contextReader, modelClient }),
       directory: createDirectoryService({ store, contextReader, modelClient }),
       forum: createForumService({ store, contextReader, modelClient }), sourcePermissions, apiSettings, calendar, storySmsInstaller: createStorySmsInstaller({ host }),

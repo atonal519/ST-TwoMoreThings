@@ -1,3 +1,4 @@
+import { appendDiaryEntry } from './diary/store.js';
 import { createUuid } from './uuid.js';
 import { normalizeStoryReferenceFloors } from './story-reference.js';
 import { captureFavorite, favoriteFor } from './favorites.js';
@@ -62,6 +63,9 @@ export function createPhoneStore({ target, assertEnabled = () => {}, isReading =
   }
   const store = {
     read,
+    appendDiary(ownerId, mode, entry, validate) {
+      return update(state => { assertEnabled(); validate?.(); return appendDiaryEntry(state, ownerId, mode, entry); });
+    },
     updateCamera(change) { return update(state => { assertEnabled(); return { ...state, camera: change(state) }; }); },
     setPhotoWall(value, crop, validate = () => {}) { return update(state => {
       assertEnabled(); validate(); const path = albumPhotoKey(value), photo = findAlbumPhoto(state, path);
